@@ -78,6 +78,20 @@ Antes de tudo, descubra como cada impressora térmica está ligada:
 - **Na rede (cabo ou Wi-Fi):** imprima a página de configuração da impressora (normalmente segure o botão de avanço ao ligar) e anote o **IP** (ex.: `192.168.0.51`).
 - **No USB do computador (Windows):** instale o driver do fabricante (Elgin, Epson, Bematech…). Depois, em *Configurações → Impressoras → [impressora] → Propriedades da impressora → Compartilhamento*, marque **Compartilhar** e dê um nome curto, sem espaço (ex.: `COZINHA`, `BAR`).
 
+### Impressoras da Amarílis: Control iD Print iD e Bematech
+
+As duas são térmicas de 80 mm (**48 colunas**). Pelo USB no computador do caixa:
+
+1. **Drivers:** instale o driver da **Control iD** (site controlid.com.br, área de suporte da Print iD) e o da **Bematech** (site da Bematech/Elgin, driver do modelo, ex.: MP-4200 TH). Ligue cada uma e confira se aparece em *Configurações → Impressoras*.
+2. **Compartilhe** cada uma com nome curto: Print iD → `COZINHA`, Bematech → `BAR` (ou o contrário, conforme o setor de cada uma).
+3. No `config.json` do agente (veja `config.exemplo.json`, que já vem com as duas), deixe `"comandos": "escpos"` nas duas.
+4. Imprima o **teste** de cada uma em Caixa > Impressão.
+   - **Saiu certo:** pronto.
+   - **Bematech imprimiu símbolos estranhos ou não cortou:** ela está no modo próprio da marca. Troque só na Bematech para `"comandos": "escbema"` e reinicie o agente. Se mesmo assim não sair, use o utilitário de configuração da Bematech para colocar a impressora no modo **ESC/POS** e volte para `"escpos"`.
+   - **Não saiu nada:** confira o nome do compartilhamento. Se o driver do fabricante não deixar passar os comandos, troque o driver dessa impressora para **"Generic / Text Only"** (Windows → Propriedades da impressora → Avançado → Driver) e teste de novo.
+
+Se alguma delas for a versão com **cabo de rede**, use `{ "tipo": "rede", "ip": "...", "porta": 9100 }` no lugar do compartilhamento. É até mais simples.
+
 ### Opção A: Agente de impressão (recomendado; sai sozinho e em cada impressora)
 
 1. Instale o **Node.js LTS** no computador do caixa (<https://nodejs.org>).
@@ -89,6 +103,7 @@ Antes de tudo, descubra como cada impressora térmica está ligada:
      - rede: `{ "tipo": "rede", "ip": "192.168.0.51", "porta": 9100 }`
      - USB compartilhada no Windows: `{ "tipo": "windows", "compartilhamento": "COZINHA" }`
      - `"colunas": 48` para bobina 80 mm, ou `32` para 58 mm.
+     - `"comandos": "escpos"` (padrão) ou `"escbema"` para Bematech no modo da marca.
    - `acentos`: `"sem-acentos"` (funciona em qualquer impressora). Se quiser acento, teste `"cp860"` ou `"cp850"`.
 4. Dê dois cliques em **`iniciar.bat`**. Na primeira vez ele instala o que precisa. A janela mostra cada cupom impresso.
 5. Para abrir sozinho quando o computador ligar: aperte `Win + R`, digite `shell:startup` e coloque ali um **atalho** para o `iniciar.bat`.

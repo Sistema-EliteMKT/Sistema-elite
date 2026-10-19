@@ -28,22 +28,26 @@ function texto(s, pagina) {
   return out;
 }
 
+// imp.comandos: "escpos" (padrão: Control iD Print iD, Epson, Elgin e Bematech no modo ESC/POS)
+//               "escbema" (Bematech configurada no modo próprio da marca, ESC/Bema)
 export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
   const pagina = imp.acentos || acentosPadrao;
   const largura = imp.colunas || 48;
+  const bema = imp.comandos === "escbema";
+  const negrito = (on) => (bema ? [ESC, on ? 0x45 : 0x46] : [ESC, 0x45, on ? 1 : 0]);
+  const grande = (on) => (bema ? [ESC, 0x57, on ? 1 : 0, ESC, 0x64, on ? 1 : 0] : [GS, 0x21, on ? 0x11 : 0x00]);
   const b = [ESC, 0x40]; // inicia
-  if (PAGINAS[pagina]) b.push(ESC, 0x74, PAGINAS[pagina].n);
+  if (PAGINAS[pagina] && !bema) b.push(ESC, 0x74, PAGINAS[pagina].n);
   for (const l of linhas) {
     if (l.sep) { b.push(...texto("-".repeat(largura), pagina), 0x0a); continue; }
     b.push(ESC, 0x61, l.c ? 1 : 0); // alinhamento
-    b.push(ESC, 0x45, l.b ? 1 : 0); // negrito
-    b.push(GS, 0x21, l.g ? 0x11 : 0x00); // altura e largura dupla
+    b.push(...negrito(l.b), ...grande(l.g));
     b.push(...texto(l.t, pagina), 0x0a);
   }
-  b.push(ESC, 0x61, 0, ESC, 0x45, 0, GS, 0x21, 0);
+  b.push(ESC, 0x61, 0, ...negrito(false), ...grande(false));
   b.push(...Array(imp.avanco ?? 4).fill(0x0a));
-  if (imp.corte !== false) b.push(GS, 0x56, 0x42, 0x00); // corte parcial
-  if (imp.bip) b.push(ESC, 0x42, 2, 2);
+  if (imp.corte !== false) b.push(...(bema ? [ESC, 0x6d] : [GS, 0x56, 0x42, 0x00])); // corte parcial
+  if (imp.bip && !bema) b.push(ESC, 0x42, 2, 2);
   return Buffer.from(b);
 }
 
