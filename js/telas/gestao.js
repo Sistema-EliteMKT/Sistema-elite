@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe } from "../regras.js";
+import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe } from "../regras.js";
 
 const CANAIS = [["todos", "Mesa e delivery"], ["mesa", "Só mesa"], ["delivery", "Só delivery/retirada"]];
 import { store, novoId } from "../store.js";
@@ -36,6 +36,54 @@ export function abaMotoboys(el) {
   $("#novoMb", el).onclick = () => editar();
   $$("[data-ed]", el).forEach((b) => (b.onclick = () => editar(D.motoboys.find((m) => m.id === b.dataset.ed))));
   $$("[data-at]", el).forEach((b) => (b.onchange = () => store.salvar("motoboys", b.dataset.at, { ativo: b.checked }).catch(erro)));
+}
+
+// -------------------------------------------------------------- Freelancers
+export function abaEquipe(el, { usuario, admin }) {
+  const vendas = vendasPorGarcom();
+  const pago = (nome) => D.saidas.filter((x) => x.nome === nome).reduce((s, x) => s + x.valor, 0);
+  const garcons = D.usuarios.filter((u) => u.ativo !== false && u.papel === "garcom");
+  // garçom que trabalhou hoje mas foi tirado do cadastro continua aparecendo
+  const nomes = new Set(garcons.map((u) => u.nome));
+  const extras = Object.keys(vendas).filter((n) => !nomes.has(n)).map((nome) => ({ nome, id: "", papel: "garcom" }));
+  const total = D.saidas.reduce((s, x) => s + x.valor, 0);
+  const sugestao = (u) => (Number(u.diaria) || 0) + ((vendas[u.nome]?.servico || 0) * (Number(u.pctServico) || 0)) / 100;
+  el.innerHTML = `<div class="kpis"><div class="kpi"><b>${brl(total)}</b><span>pago hoje à equipe</span></div>
+      <div class="kpi"><b>${D.saidas.length}</b><span>pagamentos</span></div></div>
+    <div class="linha-btn wrap"><button class="btn pri" id="outro">+ Pagar outra pessoa</button><span class="muted pq">Ajudante de cozinha, motoboy, extra… Cadastre garçons freelancers em Ajustes › Equipe.</span></div>
+    <div class="grade">${[...garcons, ...extras].map((u) => {
+      const v = vendas[u.nome] || { comandas: 0, vendas: 0, servico: 0 };
+      const ja = pago(u.nome);
+      return `<div class="card"><div class="card-h"><div><b>${esc(u.nome)}</b><small>Garçom${u.freelancer ? " · freelancer" : ""}${u.diaria ? ` · diária ${brl(u.diaria)}` : ""}${u.pctServico ? ` · ${u.pctServico}% do serviço` : ""}</small></div>${ja ? `<span class="pill ok">Pago ${brl(ja)}</span>` : ""}</div>
+        <div class="sum"><div><span>Comandas atendidas hoje</span><span>${v.comandas}</span></div><div><span>Vendas nas comandas</span><span>${brl(v.vendas)}</span></div>
+          <div><span>Taxa de serviço recebida</span><span>${brl(v.servico)}</span></div></div>
+        <button class="btn ${ja ? "ghost" : "ok"} cheio" data-pagar="${esc(u.nome)}" data-sug="${sugestao(u).toFixed(2)}" data-fun="Garçom">${ja ? "Pagar mais" : "Pagar"}${sugestao(u) ? ` · ${brl(sugestao(u))}` : ""}</button></div>`;
+    }).join("") || `<p class="vazio">Nenhum garçom cadastrado.</p>`}</div>
+    <div class="card"><b>Pagamentos de hoje</b>${D.saidas.map((x) => `<div class="cl"><div class="n"><b>${esc(x.nome)}</b><small>${hora(x.criadoEm)} · ${esc(x.funcao || "")} · ${esc(x.forma)}${x.obs ? " · " + esc(x.obs) : ""} · por ${esc(x.por)}</small></div>
+      <div class="v">${brl(x.valor)}${admin ? `<button class="mini-x" data-del="${x.id}" title="Apagar">×</button>` : ""}</div></div>`).join("") || `<p class="muted pq">Nenhum pagamento ainda.</p>`}</div>`;
+
+  const pagar = ({ nome = "", funcao = "Garçom", valor = 0 } = {}) => {
+    const formas = loja().formasPagamento || ["Dinheiro", "Pix"];
+    const s = abrirSheet(`${cabecalhoSheet("Pagar freelancer", "Sai do caixa e entra no fechamento do dia")}<div class="sh-b">
+      <label class="f" for="fn">Nome</label><input class="in" id="fn" value="${esc(nome)}">
+      <label class="f" for="ff">Função</label><select class="in" id="ff">${["Garçom", "Cozinha", "Pizzaiolo", "Bar", "Motoboy", "Limpeza", "Outro"].map((f) => `<option ${f === funcao ? "selected" : ""}>${f}</option>`).join("")}</select>
+      <div class="opts dois"><div><label class="f" for="fv">Valor (R$)</label><input class="in grande" id="fv" inputmode="decimal" value="${valor ? valorCampo(valor) : ""}"></div>
+        <div><label class="f" for="fp">Pago em</label><select class="in" id="fp">${formas.filter((f) => ["Dinheiro", "Pix"].includes(f)).concat(formas.filter((f) => !["Dinheiro", "Pix"].includes(f))).map((f) => `<option>${esc(f)}</option>`).join("")}</select></div></div>
+      <label class="f" for="fo">Observação (ex.: diária + 10%)</label><input class="in" id="fo">
+      <div class="err" id="ferr"></div><button class="btn ok cheio grande" id="ok">Registrar pagamento</button></div>`);
+    setTimeout(() => $(nome ? "#fv" : "#fn", s).focus(), 50);
+    $("#ok", s).onclick = async (ev) => {
+      const dados = { nome: $("#fn", s).value.trim(), funcao: $("#ff", s).value, valor: numero($("#fv", s).value), forma: $("#fp", s).value, obs: $("#fo", s).value.trim() };
+      if (!dados.nome || !(dados.valor > 0)) return ($("#ferr", s).textContent = "Coloque o nome e o valor.");
+      ev.currentTarget.disabled = true;
+      try { await pagarEquipe(dados, usuario); fecharSheet(); toast(`Pagamento de ${brl(dados.valor)} registrado ✓`, "bom"); } catch (e) { erro(e); ev.currentTarget.disabled = false; }
+    };
+  };
+  $("#outro", el).onclick = () => pagar({ funcao: "Cozinha" });
+  $$("[data-pagar]", el).forEach((b) => (b.onclick = () => pagar({ nome: b.dataset.pagar, funcao: b.dataset.fun, valor: Number(b.dataset.sug) })));
+  $$("[data-del]", el).forEach((b) => (b.onclick = async () => {
+    if (await confirmar("Apagar pagamento", "Apagar este pagamento? O valor volta para o caixa.", { ok: "Apagar", perigo: true })) store.apagar("saidas", b.dataset.del).catch(erro);
+  }));
 }
 
 // ---------------------------------------------------------------- Impressão
@@ -100,6 +148,9 @@ export function abaRelatorio(el, { usuario }) {
   const desconto = pags.reduce((s, p) => s + (p.desconto || 0), 0);
   const abertos = D.abertos.reduce((s, p) => s + (p.pago ? 0 : totalPedido(p)), 0);
   const nomesTipo = { mesa: "Mesas", entrega: "Entrega", retirada: "Retirada", balcao: "Balcão" };
+  const saidas = D.saidas.reduce((s, x) => s + x.valor, 0);
+  const saidasDinheiro = D.saidas.filter((x) => x.forma === "Dinheiro").reduce((s, x) => s + x.valor, 0);
+  const gaveta = (porForma.Dinheiro || 0) - saidasDinheiro;
   el.innerHTML = `<div class="kpis">
       <div class="kpi"><b>${brl(total)}</b><span>recebido hoje</span></div>
       <div class="kpi"><b>${pags.length}</b><span>contas recebidas</span></div>
@@ -110,6 +161,10 @@ export function abaRelatorio(el, { usuario }) {
       <div class="card"><b>Por tipo</b><div class="sum">${Object.entries(porTipo).map(([t, v]) => `<div><span>${nomesTipo[t] || t}</span><span>${brl(v)}</span></div>`).join("") || `<p class="vazio">—</p>`}
         <div><span>Taxa de serviço</span><span>${brl(servico)}</span></div><div><span>Descontos</span><span>${brl(desconto)}</span></div>
         <div><span>Cancelados</span><span>${cancel.length}</span></div></div></div>
+      <div class="card"><b>Caixa</b><div class="sum"><div><span>Dinheiro recebido</span><span>${brl(porForma.Dinheiro || 0)}</span></div>
+        <div><span>Pagamentos a freelancers</span><span>− ${brl(saidas)}</span></div>
+        <div class="t"><span>Dinheiro na gaveta</span><span>${brl(gaveta)}</span></div>
+        <div><span>Recebido − pagamentos</span><span>${brl(total - saidas)}</span></div></div></div>
       <div class="card"><b>Mais vendidos hoje</b><div class="sum">${top.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("") || `<p class="vazio">—</p>`}</div></div>
     </div>
     <div class="linha-btn"><button class="btn pri" id="fech">Imprimir fechamento do dia</button></div>
@@ -125,6 +180,8 @@ export function abaRelatorio(el, { usuario }) {
       ...Object.entries(porTipo).map(([t, v]) => ({ t: lado(nomesTipo[t] || t, r(v)) })),
       { t: lado("Serviço", r(servico)) }, { t: lado("Descontos", r(desconto)) }, { t: lado("Cancelados", String(cancel.length)) }, { sep: true },
       { t: lado("TOTAL RECEBIDO", r(total)), b: true, g: true }, { t: lado("Contas", String(pags.length)) }, { sep: true },
+      ...(D.saidas.length ? [{ t: "PAGAMENTOS A FREELANCERS", b: true }, ...D.saidas.map((x) => ({ t: lado(`${x.nome} (${x.forma})`, r(x.valor)) })), { t: lado("Total pago", r(saidas)), b: true }, { sep: true }] : []),
+      { t: lado("DINHEIRO NA GAVETA", r(gaveta)), b: true }, { sep: true },
       { t: "Sistema Elite · Elite MKT", c: true },
     ];
     store.lote([filaImpressao(loja().impressoraConta, "Fechamento do dia", linhas)]).then(() => toast("Fechamento enviado para impressão")).catch(erro);
@@ -260,7 +317,7 @@ export function abaAjustes(el) {
       <button class="btn pri" id="salvarImp">Salvar impressoras</button></div>
 
     <div class="card"><b>Equipe</b><p class="muted pq">Cada pessoa entra com o próprio PIN. Garçom só vê as mesas; caixa vê o painel; administrador vê também os Ajustes.</p>
-      ${D.usuarios.map((u) => `<div class="cl ${u.ativo === false ? "off" : ""}"><div class="n"><b>${esc(u.nome)}</b><small>${{ admin: "Administrador", caixa: "Caixa", garcom: "Garçom" }[u.papel] || u.papel}${u.ativo === false ? " · desativado" : ""}</small></div><div class="v"><button class="btn ghost sm" data-eu="${esc(u.id)}">Editar</button></div></div>`).join("")}
+      ${D.usuarios.map((u) => `<div class="cl ${u.ativo === false ? "off" : ""}"><div class="n"><b>${esc(u.nome)}</b><small>${{ admin: "Administrador", caixa: "Caixa", garcom: "Garçom" }[u.papel] || u.papel}${u.freelancer ? ` · freelancer${u.diaria ? " · diária " + brl(u.diaria) : ""}` : ""}${u.ativo === false ? " · desativado" : ""}</small></div><div class="v"><button class="btn ghost sm" data-eu="${esc(u.id)}">Editar</button></div></div>`).join("")}
       <button class="btn pri sm" id="novoU">+ Pessoa</button></div>
 
     <div class="card"><b>Cardápio online do cliente</b><p class="muted pq">Mande este link no WhatsApp, coloque na bio do Instagram ou imprima o QR Code na mesa.</p>
@@ -314,16 +371,22 @@ export function abaAjustes(el) {
       <label class="f" for="un">Nome</label><input class="in" id="un" value="${esc(u.nome || "")}">
       <label class="f" for="up">Função</label><select class="in" id="up"><option value="garcom">Garçom</option><option value="caixa">Caixa</option><option value="admin">Administrador</option></select>
       <label class="f" for="upin">PIN (4 a 6 números)</label><input class="in" id="upin" inputmode="numeric" maxlength="6" value="${esc(u.pin || "")}">
+      <label class="opt"><input type="checkbox" id="ufr" ${u.freelancer ? "checked" : ""}><span>Freelancer (recebe por dia)</span></label>
+      <div class="opts dois" id="ufrBox"><div><label class="f" for="udi">Diária (R$)</label><input class="in" id="udi" inputmode="decimal" value="${u.diaria ? valorCampo(u.diaria) : ""}"></div>
+        <div><label class="f" for="upc">% da taxa de serviço</label><input class="in" id="upc" type="number" min="0" max="100" value="${u.pctServico ?? ""}" placeholder="0"></div></div>
       <label class="opt"><input type="checkbox" id="ua" ${u.ativo === false ? "" : "checked"}><span>Ativo</span></label>
       <div class="linha-btn"><button class="btn pri" id="ok">Salvar</button></div></div>`);
     $("#up", s).value = u.papel;
+    const fr = () => ($("#ufrBox", s).hidden = !$("#ufr", s).checked);
+    $("#ufr", s).onchange = fr; fr();
     $("#ok", s).onclick = async () => {
       const nome = $("#un", s).value.trim(), pin = $("#upin", s).value.trim();
       if (!nome || !/^\d{4,6}$/.test(pin)) return toast("Coloque o nome e um PIN de 4 a 6 números.");
       if (D.usuarios.some((x) => x.pin === pin && x.id !== u.id && x.ativo !== false)) return toast("Esse PIN já é de outra pessoa.");
       const papel = $("#up", s).value, ativo = $("#ua", s).checked;
       if (u.papel === "admin" && (papel !== "admin" || !ativo) && D.usuarios.filter((x) => x.papel === "admin" && x.ativo !== false).length <= 1) return toast("Precisa ficar pelo menos um administrador.");
-      try { await store.salvar("usuarios", u.id || novoId(), { nome, papel, pin, ativo }); fecharSheet(); toast("Salvo ✓"); } catch (e) { erro(e); }
+      const extra = { freelancer: $("#ufr", s).checked, diaria: numero($("#udi", s).value), pctServico: Number($("#upc", s).value) || 0 };
+      try { await store.salvar("usuarios", u.id || novoId(), { nome, papel, pin, ativo, ...extra }); fecharSheet(); toast("Salvo ✓"); } catch (e) { erro(e); }
     };
   };
   $("#novoU", el).onclick = () => editarU();

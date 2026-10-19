@@ -33,9 +33,9 @@ service cloud.firestore {
       );
     }
 
-    // Equipe, motoboys, fila de impressão, pagamentos, clientes e travas de comanda: só a equipe.
+    // Equipe, motoboys, fila de impressão, pagamentos, clientes, travas de comanda e saídas do caixa: só a equipe.
     match /{colecao}/{id} {
-      allow read, write: if equipe() && colecao in ['usuarios', 'motoboys', 'impressoes', 'pagamentos', 'clientes', 'travas'];
+      allow read, write: if equipe() && colecao in ['usuarios', 'motoboys', 'impressoes', 'pagamentos', 'clientes', 'travas', 'saidas'];
     }
   }
 }

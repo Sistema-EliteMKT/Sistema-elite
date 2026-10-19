@@ -9,7 +9,7 @@ import { hoje } from "./ui.js";
 // ---------------------------------------------------------------------------
 export const D = {
   loja: null, categorias: [], produtos: [], usuarios: [], motoboys: [],
-  abertos: [], doDia: [], impressoes: [], pagamentos: [],
+  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [],
   get pedidos() {
     const m = new Map();
     for (const p of [...this.doDia, ...this.abertos]) m.set(p.id, p);
@@ -44,6 +44,7 @@ export function conectar({ publico = false } = {}) {
     store.ouvir("pedidos", (docs) => { D.doDia = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("impressoes", (docs) => { D.impressoes = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
     store.ouvir("pagamentos", (docs) => { D.pagamentos = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
+    store.ouvir("saidas", (docs) => { D.saidas = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
   );
   // Virou o dia com o sistema aberto: reconecta para pegar o dia novo.
   clearTimeout(conectar._t);
@@ -266,6 +267,33 @@ export async function registrarPagamento(pedidos, valores, quem) {
 
 // Pedido de entrega/retirada concluído (e pago) sai da tela de pedidos abertos.
 export const concluirPedido = (p) => store.salvar("pedidos", p.id, { status: "concluido", aberto: false, concluidoEm: Date.now() });
+
+// ---------------------------------------------------------------------------
+//  Equipe do dia (garçons e freelancers)
+// ---------------------------------------------------------------------------
+// Vendas e taxa de serviço de cada garçom hoje (pelo nome gravado na comanda).
+export function vendasPorGarcom() {
+  const r = {};
+  const linha = (nome) => (r[nome] ||= { nome, comandas: 0, vendas: 0, servico: 0 });
+  for (const c of D.pedidos) {
+    if (c.tipo !== "mesa" || c.status === "cancelada" || !c.garcom) continue;
+    const l = linha(c.garcom);
+    l.comandas++;
+    l.vendas += subtotal(c);
+  }
+  // Serviço pago é dividido entre as comandas da conta, pelo valor de cada uma.
+  for (const pg of D.pagamentos) {
+    if (!pg.servico || pg.tipo !== "mesa") continue;
+    const cs = pg.pedidos.map((id) => D.pedidos.find((p) => p.id === id)).filter(Boolean);
+    const soma = cs.reduce((s, c) => s + subtotal(c), 0) || 1;
+    for (const c of cs) if (c.garcom) linha(c.garcom).servico += (pg.servico * subtotal(c)) / soma;
+  }
+  return r;
+}
+
+// Pagamento a freelancer/equipe: sai do caixa e entra no fechamento.
+export const pagarEquipe = (dados, quem) =>
+  store.criar("saidas", { ...dados, valor: dinheiro(dados.valor), dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" });
 
 // ---------------------------------------------------------------------------
 //  Cupons (texto para impressora térmica)

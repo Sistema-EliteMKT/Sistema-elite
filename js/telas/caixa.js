@@ -9,10 +9,10 @@ import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { receber } from "./pagamento.js";
 import { servicoDe } from "./garcom.js";
-import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes } from "./gestao.js";
+import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
 
 const ABAS = [
-  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["motoboys", "Motoboys"], ["relatorio", "Resumo"],
+  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["motoboys", "Motoboys"], ["equipe", "Freelancers"], ["relatorio", "Resumo"],
   ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["ajustes", "Ajustes"],
 ];
 const TIPO = { entrega: "Delivery", retirada: "Retirada", balcao: "Balcão" };
@@ -68,7 +68,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     if (!el || (porDados && aba === "ajustes")) return;
     if (porDados && el.contains(document.activeElement) && document.activeElement.matches("input,select,textarea")) return;
     const ctx = { usuario, admin };
-    ({ pedidos: abaPedidos, mesas: abaMesas, motoboys: abaMotoboys, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
+    ({ pedidos: abaPedidos, mesas: abaMesas, motoboys: abaMotoboys, equipe: abaEquipe, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
   };
 
   // ------------------------------------------------------------------ Pedidos
@@ -284,15 +284,15 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
 
   function abrirMesaCaixa() {
     const s = abrirSheet(`${cabecalhoSheet("Abrir mesa", "Abre a comanda e já escolhe os itens")}<div class="sh-b">
-      <div class="opts dois"><div><label class="f" for="am">Mesa</label><input class="in grande" id="am" type="number" min="1" max="${loja().nMesas}" inputmode="numeric"></div>
-        <div><label class="f" for="ac">Nº da comanda</label><input class="in grande" id="ac" inputmode="numeric" maxlength="5"></div></div>
-      <label class="f" for="an">Nome (opcional)</label><input class="in" id="an">
+      <div class="opts dois"><div><label class="f" for="abMesa">Mesa</label><input class="in grande" id="abMesa" type="number" min="1" max="${loja().nMesas}" inputmode="numeric"></div>
+        <div><label class="f" for="abCom">Nº da comanda</label><input class="in grande" id="abCom" inputmode="numeric" maxlength="5"></div></div>
+      <label class="f" for="abNome">Nome (opcional)</label><input class="in" id="abNome">
       <div class="err" id="aerr"></div><button class="btn pri cheio" id="ok">Abrir e lançar itens</button></div>`);
-    setTimeout(() => $("#am", s).focus(), 50);
+    setTimeout(() => $("#abMesa", s).focus(), 50);
     $("#ok", s).onclick = async () => {
-      const mesa = Number($("#am", s).value);
+      const mesa = Number($("#abMesa", s).value);
       if (!mesa || mesa > Number(loja().nMesas)) return ($("#aerr", s).textContent = "Mesa não existe.");
-      try { const id = await abrirComanda(mesa, $("#ac", s).value, $("#an", s).value, usuario); lancarNaComanda(id, fecharSheet); }
+      try { const id = await abrirComanda(mesa, $("#abCom", s).value, $("#abNome", s).value, usuario); lancarNaComanda(id, fecharSheet); }
       catch (e) { $("#aerr", s).textContent = e.message; }
     };
   }
