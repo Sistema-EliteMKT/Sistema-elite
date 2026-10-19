@@ -1,0 +1,15 @@
+{
+  "firebase": {
+    "apiKey": "COLE_AQUI",
+    "authDomain": "COLE_AQUI.firebaseapp.com",
+    "projectId": "COLE_AQUI",
+    "appId": "COLE_AQUI"
+  },
+  "email": "loja@seudominio.com",
+  "senha": "SENHA_DA_CONTA_DA_LOJA",
+  "acentos": "sem-acentos",
+  "impressoras": {
+    "imp1": { "tipo": "windows", "compartilhamento": "COZINHA", "colunas": 48 },
+    "imp2": { "tipo": "rede", "ip": "192.168.0.51", "porta": 9100, "colunas": 48 }
+  }
+}

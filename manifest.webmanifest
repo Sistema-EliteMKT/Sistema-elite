@@ -1,0 +1,14 @@
+{
+  "name": "Sistema Elite",
+  "short_name": "Sistema Elite",
+  "description": "Cardápio, garçom, impressão por setor e caixa. Desenvolvido por Elite MKT.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBF7EA",
+  "theme_color": "#B00B16",
+  "icons": [
+    { "src": "assets/elite-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
