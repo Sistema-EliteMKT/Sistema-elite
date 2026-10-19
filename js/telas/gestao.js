@@ -1,6 +1,8 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao } from "../regras.js";
+import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe } from "../regras.js";
+
+const CANAIS = [["todos", "Mesa e delivery"], ["mesa", "Só mesa"], ["delivery", "Só delivery/retirada"]];
 import { store, novoId } from "../store.js";
 import { lerEstacao, gravarEstacao } from "../estacao.js";
 import { htmlCupom } from "../imprimir-navegador.js";
@@ -138,12 +140,13 @@ export function abaCardapio(el) {
   const prods = D.produtos.filter((p) => p.cat === catSel);
   const nomeSetor = (id) => lj.setores.find((s) => s.id === id)?.nome || id;
   el.innerHTML = `<div class="chips">${D.categorias.map((c) => `<button class="chip" data-cs="${esc(c.id)}" aria-pressed="${c.id === catSel}">${esc(c.nome)}</button>`).join("")}<button class="chip" id="novaCat">+ Categoria</button></div>
-    ${cat ? `<div class="card"><div class="card-h"><div><b>${esc(cat.nome)}</b><small>Setor: ${esc(nomeSetor(cat.setor))}${cat.grupoPizza ? " · monta pizza (meio a meio, borda)" : ""}</small></div><button class="btn ghost sm" id="edCat">Editar categoria</button></div>
+    ${cat ? `<div class="card"><div class="card-h"><div><b>${esc(cat.nome)}</b><small>Setor: ${esc(nomeSetor(cat.setor))}${cat.grupoPizza ? " · monta pizza (meio a meio, borda)" : ""}${cat.adicionais ? " · aceita adicionais na mesa" : ""}</small></div><button class="btn ghost sm" id="edCat">Editar categoria</button></div>
       <div class="linha-btn"><button class="btn pri sm" id="novoProd">+ Produto</button></div>
       ${prods.map((p) => `<div class="cl ${p.ativo === false ? "off" : ""}"><div class="n"><b>${esc(p.nome)}</b><small>${esc(p.desc || "")}</small>${p.ativo === false ? `<small class="ruim-txt">Esgotado / fora do cardápio</small>` : ""}</div>
-        <div class="v">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}<label class="sw" title="Disponível"><input type="checkbox" data-av="${esc(p.id)}" ${p.ativo === false ? "" : "checked"}><span></span></label><button class="btn ghost sm" data-ep="${esc(p.id)}">Editar</button></div></div>`).join("") || `<p class="vazio">Nenhum produto nesta categoria.</p>`}</div>` : ""}
+        <div class="v">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}<select class="in mini-sel" data-cn="${esc(p.id)}" aria-label="Onde vende">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select><label class="sw" title="Disponível"><input type="checkbox" data-av="${esc(p.id)}" ${p.ativo === false ? "" : "checked"}><span></span></label><button class="btn ghost sm" data-ep="${esc(p.id)}">Editar</button></div></div>`).join("") || `<p class="vazio">Nenhum produto nesta categoria.</p>`}</div>` : ""}
     <div class="grade">
       <div class="card"><div class="card-h"><b>Bordas (pizzas salgadas)</b><button class="btn ghost sm" id="edBordas">Editar</button></div>${(lj.bordas || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.preco)}</span></div>`).join("")}</div>
+      <div class="card"><div class="card-h"><b>Adicionais (só mesa)</b><button class="btn ghost sm" id="edAdic">Editar</button></div>${(lj.adicionais || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.preco)}</span></div>`).join("") || `<p class="muted pq">Nenhum adicional cadastrado.</p>`}</div>
       <div class="card"><div class="card-h"><b>Taxas de entrega</b><button class="btn ghost sm" id="edTaxas">Editar</button></div>${(lj.taxasEntrega || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.taxa)}</span></div>`).join("")}</div>
     </div>`;
   $$("[data-cs]", el).forEach((b) => (b.onclick = () => { sessionStorage.setItem("se_cat", b.dataset.cs); abaCardapio(el); }));
@@ -154,6 +157,9 @@ export function abaCardapio(el) {
   $("#novaCat", el).onclick = () => editarCategoria({});
   $("#edBordas", el).onclick = () => editarLista("Bordas", "bordas", "preco", "Preço");
   $("#edTaxas", el).onclick = () => editarLista("Taxas de entrega", "taxasEntrega", "taxa", "Taxa");
+  $("#edAdic", el).onclick = () => editarLista("Adicionais (lançados só na mesa)", "adicionais", "preco", "Preço");
+  $$("[data-cn]", el).forEach((b) => (b.onchange = () => store.salvar("produtos", b.dataset.cn, { canal: b.value, semEntrega: b.value === "mesa" })
+    .then(() => toast(`Agora: ${CANAIS.find(([v]) => v === b.value)[1]}`)).catch(erro)));
 }
 
 function editarProduto(p) {
@@ -167,7 +173,7 @@ function editarProduto(p) {
     <label class="f" for="ps">Setor de impressão</label><select class="in" id="ps"><option value="">O mesmo da categoria</option>${loja().setores.map((x) => `<option value="${esc(x.id)}" ${x.id === p.setor ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pz" ${p.tipo === "pizza" ? "checked" : ""}><span>É pizza (tamanho, meio a meio, borda)</span></label>
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
-    <label class="opt"><input type="checkbox" id="pe" ${p.semEntrega ? "checked" : ""}><span>Não vende para entrega</span></label>
+    <label class="f" for="pe">Onde vende</label><select class="in" id="pe">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pa" ${p.ativo === false ? "" : "checked"}><span>Disponível</span></label>
     <div class="linha-btn">${p.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
   $("#ok", s).onclick = async () => {
@@ -177,7 +183,7 @@ function editarProduto(p) {
     const dados = {
       nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null,
       opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null,
-      tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, semEntrega: $("#pe", s).checked, ativo: $("#pa", s).checked,
+      tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,
     };
     try { await store.salvar("produtos", p.id || novoId(), dados); fecharSheet(); toast("Salvo ✓"); } catch (e) { erro(e); }
@@ -195,6 +201,7 @@ function editarCategoria(c) {
     <label class="f" for="cp">Prefixo no cupom (ex.: "Esfiha ")</label><input class="in" id="cp" value="${esc(c.prefixo || "")}">
     <label class="f" for="cg">Pizzas desta categoria se misturam com</label><select class="in" id="cg">
       <option value="">Não é pizza</option><option value="salgada" ${c.grupoPizza === "salgada" ? "selected" : ""}>Pizzas salgadas (com borda)</option><option value="doce" ${c.grupoPizza === "doce" ? "selected" : ""}>Pizzas doces</option></select>
+    <label class="opt"><input type="checkbox" id="cad" ${c.adicionais ? "checked" : ""}><span>Aceita adicionais na mesa (ex.: + bacon)</span></label>
     <label class="f" for="co">Ordem no cardápio</label><input class="in" id="co" type="number" value="${c.ordem ?? D.categorias.length + 1}">
     <div class="linha-btn">${c.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
   $("#ok", s).onclick = async () => {
@@ -202,7 +209,7 @@ function editarCategoria(c) {
     if (!nome) return toast("Coloque o nome.");
     const id = c.id || nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || novoId();
     try {
-      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, ordem: Number($("#co", s).value) || 0 });
+      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, adicionais: $("#cad", s).checked, ordem: Number($("#co", s).value) || 0 });
       sessionStorage.setItem("se_cat", id); fecharSheet(); toast("Salvo ✓");
     } catch (e) { erro(e); }
   };

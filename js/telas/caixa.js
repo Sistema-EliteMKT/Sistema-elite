@@ -1,4 +1,4 @@
-// Painel do caixa: pedidos (entrega/retirada/balcão), mesas, motoboys, impressão, relatório e ajustes.
+// Painel do caixa: pedidos (entrega/retirada/balcão), mesas, motoboys, resumo, impressoras, cardápio e ajustes.
 import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
 import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
@@ -12,100 +12,119 @@ import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes } from "./gestao.js";
 
 const ABAS = [
-  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["motoboys", "Motoboys"],
-  ["impressao", "Impressão"], ["relatorio", "Relatório"], ["cardapio", "Cardápio"], ["ajustes", "Ajustes"],
+  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["motoboys", "Motoboys"], ["relatorio", "Resumo"],
+  ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["ajustes", "Ajustes"],
 ];
+const TIPO = { entrega: "Delivery", retirada: "Retirada", balcao: "Balcão" };
 
 export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   let aba = sessionStorage.getItem("se_aba") || "pedidos";
   const vistos = new Set();
   let primeira = true;
   const admin = usuario.papel === "admin";
+  const mbEscolhido = {}; // motoboy escolhido no cartão, antes de despachar
 
   const desenhar = () => {
     // Aviso sonoro de pedido online novo
     const novos = D.abertos.filter((p) => p.status === "novo");
     const chegaram = novos.filter((p) => !vistos.has(p.id));
     chegaram.forEach((p) => vistos.add(p.id));
-    if (chegaram.length && !primeira) { bip(3); toast(`Pedido novo pelo cardápio online!`, "bom"); }
-    const contaMesas = new Set(D.abertos.filter((p) => p.tipo === "mesa" && p.status === "conta").map((p) => p.mesa)).size;
-    const falhas = D.impressoes.filter((j) => j.status === "erro").length;
+    if (chegaram.length && !primeira) { bip(3); toast("Pedido novo pelo cardápio online!", "bom"); }
     primeira = false;
-    if (raiz.dataset.pronto) { atualizarAbas(novos.length, contaMesas, falhas); atualizarAba(true); return; }
-    raiz.dataset.pronto = "1";
-    const lj = loja();
-    raiz.innerHTML = `<div class="p-top"><div class="p-top-in">
-        <div class="p-loja">${lj.logo ? `<img src="${esc(lj.logo)}" alt="">` : ""}<div><b>${esc(lj.nome)}</b><small>${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</small></div></div>
-        <div class="p-quem"><button class="btn sec sm" id="novo">+ Novo pedido</button><button class="btn ghost sm" id="garcom">Modo garçom</button><span class="muted">${esc(usuario.nome)}</span><button class="btn ghost sm" id="sair">Sair</button></div>
-      </div></div>
-      <nav class="p-tabs chips" id="abas"></nav>
-      <div class="p-wrap" id="corpo"></div>
-      <div class="p-wrap">${rodapeMarca()}</div>`;
-    $("#sair", raiz).onclick = sair;
-    $("#garcom", raiz).onclick = modoGarcom;
-    $("#novo", raiz).onclick = () => novoPedido();
-    atualizarAbas(novos.length, contaMesas, falhas);
-    atualizarAba();
+    if (!raiz.dataset.pronto) {
+      raiz.dataset.pronto = "1";
+      const lj = loja();
+      raiz.innerHTML = `<header class="p-top"><div class="p-top-in">
+          <div class="p-loja">${lj.logo ? `<img src="${esc(lj.logo)}" alt="${esc(lj.nome)}">` : `<b>${esc(lj.nome)}</b>`}<span class="muted">${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</span></div>
+          <div class="p-quem"><button class="btn pri sm" id="novo">+ Novo pedido</button><button class="btn ghost sm" id="abrirMesa">+ Abrir mesa</button><button class="btn ghost sm" id="garcom">Modo garçom</button>
+            <span class="caixa-on"><i></i>${esc(usuario.nome)}</span><button class="btn ghost sm" id="sair">Sair</button></div>
+        </div></header>
+        <nav class="p-tabs chips" id="abas"></nav>
+        <main class="p-wrap" id="corpo"></main>
+        <div class="p-wrap">${rodapeMarca()}</div>`;
+      $("#sair", raiz).onclick = sair;
+      $("#garcom", raiz).onclick = modoGarcom;
+      $("#novo", raiz).onclick = () => novoPedido();
+      $("#abrirMesa", raiz).onclick = () => abrirMesaCaixa();
+      atualizarAba();
+    } else atualizarAba(true);
+    atualizarAbas();
   };
 
-  const atualizarAbas = (nNovos, nConta, nFalhas) => {
-    const cont = { pedidos: nNovos, mesas: nConta, impressao: nFalhas };
-    const vis = ABAS.filter(([k]) => admin || k !== "ajustes");
-    $("#abas", raiz).innerHTML = vis.map(([k, l]) => `<button class="chip" data-aba="${k}" aria-pressed="${aba === k}">${l}${cont[k] ? `<span class="badge">${cont[k]}</span>` : ""}</button>`).join("");
-    $$("[data-aba]", raiz).forEach((b) => (b.onclick = () => { aba = b.dataset.aba; sessionStorage.setItem("se_aba", aba); atualizarAbas(nNovos, nConta, nFalhas); atualizarAba(); }));
+  const atualizarAbas = () => {
+    const cont = {
+      pedidos: D.abertos.filter((p) => p.status === "novo").length,
+      mesas: new Set(D.abertos.filter((p) => p.tipo === "mesa" && p.status === "conta").map((p) => p.mesa)).size,
+      impressao: D.impressoes.filter((j) => j.status === "erro").length,
+    };
+    $("#abas", raiz).innerHTML = ABAS.filter(([k]) => admin || k !== "ajustes")
+      .map(([k, l]) => `<button class="chip" data-aba="${k}" aria-pressed="${aba === k}">${l}${cont[k] ? `<span class="badge">${cont[k]}</span>` : ""}</button>`).join("");
+    $$("[data-aba]", raiz).forEach((b) => (b.onclick = () => { aba = b.dataset.aba; sessionStorage.setItem("se_aba", aba); atualizarAbas(); atualizarAba(); }));
   };
 
-  // porDados = redesenho porque algo mudou no banco (e não porque a pessoa trocou de aba).
-  // Ajustes tem formulário aberto na tela: não redesenha por baixo de quem está digitando.
+  // porDados = redesenho porque algo mudou no banco. Ajustes tem formulário: não redesenha por baixo de quem digita.
   const atualizarAba = (porDados = false) => {
     const el = $("#corpo", raiz);
-    if (!el) return;
-    if (porDados && aba === "ajustes") return;
+    if (!el || (porDados && aba === "ajustes")) return;
+    if (porDados && el.contains(document.activeElement) && document.activeElement.matches("input,select,textarea")) return;
     const ctx = { usuario, admin };
-    if (aba === "pedidos") abaPedidos(el);
-    else if (aba === "mesas") abaMesas(el);
-    else if (aba === "motoboys") abaMotoboys(el, ctx);
-    else if (aba === "impressao") abaImpressao(el, ctx);
-    else if (aba === "relatorio") abaRelatorio(el, ctx);
-    else if (aba === "cardapio") abaCardapio(el, ctx);
-    else if (aba === "ajustes") abaAjustes(el, ctx);
+    ({ pedidos: abaPedidos, mesas: abaMesas, motoboys: abaMotoboys, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
   };
 
   // ------------------------------------------------------------------ Pedidos
+  const kpis = () => {
+    const vendido = D.pagamentos.reduce((s, p) => s + p.total, 0);
+    const andamento = D.abertos.filter((p) => p.tipo !== "mesa").length;
+    const n = Number(loja().nMesas) || 0;
+    const ocup = new Set(D.abertos.filter((p) => p.tipo === "mesa").map((p) => p.mesa)).size;
+    const rua = new Set(D.abertos.filter((p) => p.status === "saiu" && p.motoboy?.id).map((p) => p.motoboy.id)).size;
+    return `<div class="kpis"><div class="kpi"><b>${brl(vendido)}</b><span>vendido hoje</span></div>
+      <div class="kpi"><b>${andamento}</b><span>pedidos em andamento</span></div>
+      <div class="kpi"><b>${ocup}/${n}</b><span>mesas ocupadas</span></div>
+      <div class="kpi"><b>${rua}</b><span>motoboys na rua</span></div></div>`;
+  };
+
   function abaPedidos(el) {
     const ps = D.abertos.filter((p) => p.tipo !== "mesa");
-    const col = (titulo, lista, vazio) => `<div class="coluna"><h3>${titulo} <small>${lista.length}</small></h3>${lista.length ? lista.map(cartao).join("") : `<p class="vazio">${vazio}</p>`}</div>`;
     const por = (sts) => ps.filter((p) => sts.includes(p.status)).sort((a, b) => a.criadoEm - b.criadoEm);
-    const concluidos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0));
-    el.innerHTML = `<div class="colunas">
-      ${col("Novos (online)", por(["novo"]), "Nenhum pedido esperando.")}
-      ${col("Em preparo", por(["preparo"]), "Nada em preparo.")}
-      ${col("Prontos / em entrega", por(["pronto", "saiu"]), "Nada aguardando.")}
-      </div>
-      <details class="card"><summary>Concluídos e cancelados hoje (${concluidos.length})</summary>
-        ${concluidos.map((p) => `<div class="cl"><div class="n"><b>${esc(tituloPedido(p))} · ${esc(p.cliente?.nome || "")}</b><small>${ETAPAS[p.status]} · ${hora(p.criadoEm)}${p.motoboy?.nome ? " · " + esc(p.motoboy.nome) : ""}${p.motivo ? " · " + esc(p.motivo) : ""}</small></div><div class="v">${brl(totalPedido(p))}</div></div>`).join("") || `<p class="vazio">Nenhum ainda.</p>`}
-      </details>`;
-    $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.abertos.find((p) => p.id === b.dataset.id))));
+    const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
+    const col = (titulo, lista, vazio) => `<section class="coluna"><h3>${titulo}<span>${lista.length}</span></h3>${lista.length ? lista.map(cartao).join("") : `<p class="muted pq">${vazio}</p>`}</section>`;
+    el.innerHTML = `${kpis()}<div class="colunas">
+      ${col("Novos", por(["novo"]), "Nenhum.")}
+      ${col("Em preparo", por(["preparo"]), "Nenhum.")}
+      ${col("Pronto / na rua", por(["pronto", "saiu"]), "Nenhum.")}
+      ${col("Concluídos", feitos, "Nenhum ainda.")}</div>`;
+    $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.pedidos.find((p) => p.id === b.dataset.id))));
+    $$("[data-mb]", el).forEach((s) => (s.onchange = () => (mbEscolhido[s.dataset.mb] = s.value)));
   }
 
   const cartao = (p) => {
     const c = p.cliente || {};
-    const tipo = { entrega: "Entrega", retirada: "Retirada", balcao: "Balcão" }[p.tipo];
-    const acoes = {
-      novo: `<button class="btn ok sm" data-acao="aceitar" data-id="${p.id}">Aceitar e imprimir</button><button class="btn ghost sm" data-acao="recusar" data-id="${p.id}">Recusar</button>`,
-      preparo: `<button class="btn pri sm" data-acao="${p.tipo === "entrega" ? "despachar" : "pronto"}" data-id="${p.id}">${p.tipo === "entrega" ? "Despachar" : "Pronto"}</button>`,
-      pronto: `<button class="btn ok sm" data-acao="concluir" data-id="${p.id}">Retirado</button>`,
-      saiu: `<button class="btn ok sm" data-acao="concluir" data-id="${p.id}">Entregue</button>`,
+    const pg = p.pagamento || {};
+    const motos = D.motoboys.filter((m) => m.ativo !== false);
+    const principal = {
+      novo: `<button class="btn ok cheio" data-acao="aceitar" data-id="${p.id}">Aceitar e imprimir</button>`,
+      preparo: p.tipo === "entrega"
+        ? `<select class="in" data-mb="${p.id}" aria-label="Motoboy"><option value="">Escolher motoboy…</option>${motos.map((m) => `<option value="${m.id}" ${mbEscolhido[p.id] === m.id ? "selected" : ""}>${esc(m.nome)}</option>`).join("")}</select>
+           <button class="btn pri cheio" data-acao="despachar" data-id="${p.id}">Saiu para entrega</button>`
+        : `<button class="btn pri cheio" data-acao="pronto" data-id="${p.id}">Pronto</button>`,
+      pronto: `<button class="btn ok cheio" data-acao="concluir" data-id="${p.id}">${p.pago ? "Retirado" : "Retirado e pago"}</button>`,
+      saiu: `<button class="btn ok cheio" data-acao="concluir" data-id="${p.id}">${p.pago ? "Entregue" : "Entregue e pago"}</button>`,
     }[p.status] || "";
+    const fim = !p.aberto;
     return `<article class="pedido ${p.status === "novo" ? "alerta" : ""}">
-      <div class="pe-h"><b>${p.numero ? "#" + p.numero : "Online"} · ${esc(c.nome || tipo)}</b><span class="pill ${p.tipo}">${tipo}</span></div>
-      <small class="muted">${hora(p.criadoEm)} · há ${minutos(p.criadoEm)} min${p.origem === "online" ? " · cardápio online" : ""}${p.motoboy?.nome ? ` · 🛵 ${esc(p.motoboy.nome)}` : ""}</small>
-      ${p.tipo === "entrega" ? `<small>${esc(c.endereco || "")}${c.bairro ? " · " + esc(c.bairro) : ""}</small>` : ""}
-      ${c.telefone ? `<small><a href="https://wa.me/55${esc(c.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">${esc(c.telefone)}</a></small>` : ""}
-      <ul class="pe-itens">${itensValidos(p).map((i) => `<li>${i.qtd}x ${esc(i.nome)}${i.det?.length ? ` <small>(${esc(i.det.join(", "))})</small>` : ""}${i.obs ? ` <small class="obs">${esc(i.obs)}</small>` : ""}</li>`).join("")}</ul>
+      <div class="pe-h"><b>#${esc(p.numero || "—")}</b><span class="pill ${p.tipo}">${TIPO[p.tipo]}</span><span class="muted">${hora(p.criadoEm)}</span></div>
+      <b class="pe-nome">${esc(c.nome || TIPO[p.tipo])}</b>
+      ${p.tipo === "entrega" && c.endereco ? `<small class="muted">${esc(c.endereco)}${c.bairro ? " · " + esc(c.bairro) : ""}</small>` : ""}
+      <small class="muted">${esc(pg.forma || "")}${pg.trocoPara ? ` · troco p/ ${brl(pg.trocoPara)}` : ""}${p.origem === "online" ? " · pelo app" : ""}${!fim && p.status !== "novo" ? ` · há ${minutos(p.criadoEm)} min` : ""}</small>
+      <div class="pe-itens">${itensValidos(p).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}${i.det?.length ? `<small>${esc(i.det.join(" · "))}</small>` : ""}${i.obs ? `<small class="obs">${esc(i.obs)}</small>` : ""}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}
+        ${p.taxaEntrega ? `<div><span>Taxa de entrega</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}</div>
       ${p.obs ? `<small class="obs">Obs: ${esc(p.obs)}</small>` : ""}
-      <div class="pe-t"><span>${esc(p.pagamento?.forma || "")}${p.pagamento?.trocoPara ? ` · troco p/ ${brl(p.pagamento.trocoPara)}` : ""}${p.pago ? ` · <b class="ok-txt">PAGO</b>` : ""}</span><b>${brl(totalPedido(p))}</b></div>
-      <div class="pe-a">${acoes}${p.status !== "novo" ? `<button class="btn ghost sm" data-acao="via" data-id="${p.id}">Imprimir via</button>` : ""}<button class="btn ghost sm" data-acao="mais" data-id="${p.id}">⋯</button></div>
+      <div class="pe-t"><span>Total</span><b>${brl(totalPedido(p))}</b></div>
+      ${p.motoboy?.nome ? `<small class="muted">Motoboy: <b>${esc(p.motoboy.nome)}</b></small>` : ""}
+      ${fim ? `<div class="pe-fim">${p.status === "cancelado" ? `<span class="pill bad">Cancelado</span>` : `<span class="pill ok">Pago${p.pagamento?.forma ? " · " + esc(p.pagamento.forma) : ""}</span>`}</div>`
+        : `<div class="pe-a">${principal}</div>
+           <div class="pe-links">${p.status === "novo" ? `<button data-acao="recusar" data-id="${p.id}">Recusar</button>` : `<button data-acao="via" data-id="${p.id}">Imprimir via</button>`}<button data-acao="mais" data-id="${p.id}">Mais opções</button></div>`}
     </article>`;
   };
 
@@ -119,10 +138,15 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         await cancelarPedido(p, motivo || "Pedido cancelado pela loja.", usuario);
       }
       else if (acao === "pronto") await mudarEtapa(p, "pronto");
-      else if (acao === "despachar") despachar(p);
+      else if (acao === "despachar") {
+        const m = D.motoboys.find((x) => x.id === mbEscolhido[p.id]);
+        if (!m && D.motoboys.some((x) => x.ativo !== false)) return toast("Escolha o motoboy.");
+        await mudarEtapa(p, "saiu", { motoboy: m ? { id: m.id, nome: m.nome } : null });
+        toast("Saiu para entrega");
+      }
       else if (acao === "concluir") {
         if (!p.pago) {
-          const pag = await receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara, titulo: `Receber ${tituloPedido(p)}` });
+          const pag = await receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara, titulo: `Receber #${p.numero}` });
           if (!pag) return;
         }
         await concluirPedido(p);
@@ -132,22 +156,10 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     } catch (e) { erro(e); }
   }
 
-  function despachar(p) {
-    const ms = D.motoboys.filter((m) => m.ativo !== false);
-    const s = abrirSheet(`${cabecalhoSheet(`Despachar ${tituloPedido(p)}`, p.cliente?.endereco || "")}<div class="sh-b">
-      ${ms.length ? `<div class="opts">${ms.map((m) => {
-        const naRua = D.abertos.filter((x) => x.status === "saiu" && x.motoboy?.id === m.id).length;
-        return `<button class="opt" data-mb="${m.id}"><span>🛵 ${esc(m.nome)}</span><em>${naRua ? `${naRua} na rua` : "livre"}</em></button>`;
-      }).join("")}</div>` : `<p class="vazio">Nenhum motoboy cadastrado. Cadastre na aba Motoboys.</p>`}
-      <button class="btn ghost cheio" id="semMb">Despachar sem escolher motoboy</button></div>`);
-    const ir = async (m) => { try { await mudarEtapa(p, "saiu", { motoboy: m ? { id: m.id, nome: m.nome } : null }); fecharSheet(); toast("Saiu para entrega"); } catch (e) { erro(e); } };
-    $$("[data-mb]", s).forEach((b) => (b.onclick = () => ir(ms.find((m) => m.id === b.dataset.mb))));
-    $("#semMb", s).onclick = () => ir(null);
-  }
-
   function maisPedido(p) {
-    const s = abrirSheet(`${cabecalhoSheet(tituloPedido(p), p.cliente?.nome || "")}<div class="sh-b">
+    const s = abrirSheet(`${cabecalhoSheet(`Pedido #${p.numero || ""}`, p.cliente?.nome || "")}<div class="sh-b">
       ${(p.itens || []).map((i) => linhaItem(i, { acoes: !i.cancelado && p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : "" })).join("")}
+      ${p.cliente?.telefone ? `<p><a href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">WhatsApp ${esc(p.cliente.telefone)}</a></p>` : ""}
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
@@ -155,7 +167,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
       const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });
       if (motivo == null) return;
-      try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast("Item cancelado. Aviso enviado ao setor."); } catch (e) { erro(e); }
+      try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast("Item cancelado. Aviso enviado ao setor."); fecharSheet(); } catch (e) { erro(e); }
     }));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
     $("#voltarPreparo", s) && ($("#voltarPreparo", s).onclick = async () => { await mudarEtapa(p, "preparo"); fecharSheet(); });
@@ -175,8 +187,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const s = abrirSheet(`${cabecalhoSheet("Novo pedido", "Telefone, delivery, retirada ou balcão")}<div class="sh-b novo-ped">
       <div class="np-sel" id="sel"></div>
       <div class="np-form">
-        <div class="seg" id="tipo"><button data-t="entrega">Entrega</button><button data-t="retirada">Retirada</button><button data-t="balcao">Balcão</button></div>
-        <label class="f" for="tel">Telefone</label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Busca o cliente pelo telefone">
+        <div class="seg" id="tipo"><button data-t="entrega">Delivery</button><button data-t="retirada">Retirada</button><button data-t="balcao">Balcão</button></div>
+        <label class="f" for="tel">Telefone</label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Digite e o cliente aparece">
         <label class="f" for="nom">Nome</label><input class="in" id="nom">
         <div id="endBox"><label class="f" for="end">Endereço</label><input class="in" id="end">
           <label class="f" for="bai">Bairro / taxa</label><select class="in" id="bai">${(lj.taxasEntrega || []).map((t) => `<option value="${esc(t.nome)}">${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}<option value="">Outra taxa…</option></select>
@@ -187,7 +199,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         <label class="f" for="obs">Observação</label><input class="in" id="obs">
         <div class="grp">Itens</div><div id="itens"></div>
         <div class="sum" id="sum"></div><div class="err" id="err"></div>
-        <button class="btn ok cheio" id="criar">Lançar e imprimir</button>
+        <button class="btn ok cheio grande" id="criar">Lançar e imprimir</button>
       </div></div>`, { largo: true });
     const taxa = () => {
       if (tipo !== "entrega") return 0;
@@ -199,12 +211,12 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       $("#endBox", s).hidden = tipo !== "entrega";
       $("#taxaLivre", s).hidden = $("#bai", s).value !== "";
       $("#troco", s).hidden = $("#pg", s).value !== "Dinheiro";
-      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button>` })).join("") || `<p class="vazio">Escolha os produtos na lista.</p>`;
+      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button>` })).join("") || `<p class="vazio">Escolha os produtos ao lado.</p>`;
       $$("[data-rm]", s).forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.rm, 1); atualizar(); }));
       const sub = itens.reduce((x, i) => x + i.unit * i.qtd, 0);
       $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(sub)}</span></div>${tipo === "entrega" ? `<div><span>Entrega</span><span>${brl(taxa())}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(sub + taxa())}</span></div>`;
     };
-    seletorProdutos($("#sel", s), (item) => { itens.push(item); toast(`${item.qtd}x ${item.nome}`); atualizar(); }, { entrega: true });
+    seletorProdutos($("#sel", s), (item) => { itens.push(item); toast(`+ ${item.qtd}x ${item.nome}`); atualizar(); }, { onde: "delivery" });
     $$("[data-t]", s).forEach((b) => (b.onclick = () => { tipo = b.dataset.t; atualizar(); }));
     ["#bai", "#pg"].forEach((q) => ($(q, s).onchange = atualizar));
     $("#taxaLivre", s).oninput = atualizar;
@@ -235,7 +247,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         salvarCliente(dados);
         fecharSheet();
         toast("Pedido lançado e enviado para impressão ✓", "bom");
-        aba = "pedidos"; desenharTudo();
+        aba = "pedidos"; atualizarAbas(); atualizarAba();
       } catch (x) { erro(x); ev.currentTarget.disabled = false; }
     };
     atualizar();
@@ -244,32 +256,60 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   // -------------------------------------------------------------------- Mesas
   function abaMesas(el) {
     const n = Number(loja().nMesas) || 0;
-    const oc = Array.from({ length: n }, (_, i) => situacaoMesa(i + 1)).filter((s) => s.status !== "livre");
+    const oc = Array.from({ length: n }, (_, i) => ({ m: i + 1, ...situacaoMesa(i + 1) })).filter((s) => s.status !== "livre")
+      .sort((a, b) => (b.status === "conta") - (a.status === "conta") || a.desde - b.desde);
     el.innerHTML = `<div class="kpis"><div class="kpi"><b>${oc.length}/${n}</b><span>mesas ocupadas</span></div>
       <div class="kpi"><b>${brl(oc.reduce((s, m) => s + m.total, 0))}</b><span>em comandas abertas</span></div>
       <div class="kpi"><b>${oc.filter((m) => m.status === "conta").length}</b><span>pedindo a conta</span></div></div>
-      <div class="mesas grande">${Array.from({ length: n }, (_, i) => {
-        const m = i + 1, s = situacaoMesa(m);
-        return `<button class="mesa m-${s.status}" data-m="${m}"><b>${m}</b>${s.status !== "livre" ? `<small>${brl(s.total)}</small><small>${minutos(s.desde)} min · ${s.comandas.length} com.</small>` : `<small>livre</small>`}</button>`;
-      }).join("")}</div>`;
-    $$("[data-m]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.m)));
+      <div class="grade-mesas">${oc.map((s) => `<article class="card mesa-card ${s.status === "conta" ? "conta" : ""}">
+        <div class="card-h"><b class="mc-t">Mesa ${s.m}</b><span class="pill ${s.status === "conta" ? "bad" : "st-ocupada"}">${s.status === "conta" ? "Pediu a conta" : "Aberta"}</span></div>
+        <small class="muted">${esc(s.comandas[0].garcom || "")} · desde ${hora(s.desde)} · ${s.comandas.length} ${s.comandas.length > 1 ? "comandas" : "comanda"}</small>
+        <div class="pe-itens">${s.comandas.map((c) => `${s.comandas.length > 1 || c.nome ? `<div class="sub"><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><span>${brl(subtotal(c))}</span></div>` : ""}
+          ${itensValidos(c).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}`).join("")}</div>
+        <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
+        <button class="btn pri cheio" data-fechar="${s.m}">Fechar conta</button>
+        <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-det="${s.m}">Lançar / editar</button></div>
+      </article>`).join("") || `<p class="vazio">Nenhuma mesa aberta. Use “+ Abrir mesa” ou o app do garçom.</p>`}</div>`;
+    const cs = (m) => comandasDaMesa(+m);
+    $$("[data-fechar]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.fechar), "Fechar conta", (sel) =>
+      receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${b.dataset.fechar}` }))));
+    $$("[data-imp]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.imp), "Imprimir conta", async (sel) => {
+      await pedirConta(sel.map((c) => c.id));
+      await imprimirConta(sel, { servico: servicoDe(sel) });
+      toast("Conta enviada para impressão");
+      fecharSheet();
+    })));
+    $$("[data-det]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.det)));
+  }
+
+  function abrirMesaCaixa() {
+    const s = abrirSheet(`${cabecalhoSheet("Abrir mesa", "Abre a comanda e já escolhe os itens")}<div class="sh-b">
+      <div class="opts dois"><div><label class="f" for="am">Mesa</label><input class="in grande" id="am" type="number" min="1" max="${loja().nMesas}" inputmode="numeric"></div>
+        <div><label class="f" for="ac">Nº da comanda</label><input class="in grande" id="ac" inputmode="numeric" maxlength="5"></div></div>
+      <label class="f" for="an">Nome (opcional)</label><input class="in" id="an">
+      <div class="err" id="aerr"></div><button class="btn pri cheio" id="ok">Abrir e lançar itens</button></div>`);
+    setTimeout(() => $("#am", s).focus(), 50);
+    $("#ok", s).onclick = async () => {
+      const mesa = Number($("#am", s).value);
+      if (!mesa || mesa > Number(loja().nMesas)) return ($("#aerr", s).textContent = "Mesa não existe.");
+      try { const id = await abrirComanda(mesa, $("#ac", s).value, $("#an", s).value, usuario); lancarNaComanda(id, fecharSheet); }
+      catch (e) { $("#aerr", s).textContent = e.message; }
+    };
   }
 
   function detalheMesa(mesa) {
     const desenharMesa = () => {
       const cs = comandasDaMesa(mesa);
-      const s = abrirSheet(`${cabecalhoSheet(`Mesa ${mesa}`, cs.length ? `${cs.length} comanda(s) · ${brl(cs.reduce((x, c) => x + subtotal(c), 0))}` : "Livre")}<div class="sh-b">
-        ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(c.nome)}</b><small>Comanda ${c.numero || ""} · ${esc(c.garcom || "")} · ${hora(c.criadoEm)}${c.status === "conta" ? " · <span class='pill conta'>pediu a conta</span>" : ""}</small></div><b>${brl(subtotal(c))}</b></div>
+      if (!cs.length) return fecharSheet();
+      const s = abrirSheet(`${cabecalhoSheet(`Mesa ${mesa}`, `${cs.length} comanda(s) · ${brl(cs.reduce((x, c) => x + subtotal(c), 0))}`)}<div class="sh-b">
+        ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</b><small>${esc(c.garcom || "")} · ${hora(c.criadoEm)}</small></div><b>${brl(subtotal(c))}</b></div>
           ${(c.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="mini-x" data-ci="${c.id}|${i.key}" title="Cancelar item">×</button>${cs.length > 1 ? `<button class="mini-x" data-mv="${c.id}|${i.key}" title="Passar para outra comanda">⇄</button>` : ""}` })).join("") || `<p class="muted pq">Sem itens.</p>`}
           <div class="linha-btn wrap"><button class="btn sec sm" data-lc="${c.id}">+ Itens</button><button class="btn ghost sm" data-cc="${c.id}">Cancelar comanda</button></div></div>`).join("")}
-        <div class="linha-btn wrap">
-          <button class="btn sec" id="nova">+ Comanda</button>
-          ${cs.length ? `<button class="btn sec" id="impConta">Imprimir conta</button><button class="btn ok" id="fechar">Fechar conta</button>` : ""}
-        </div></div>`, { largo: true });
+        <button class="btn sec cheio" id="nova">+ Outra comanda nesta mesa</button></div>`, { largo: true });
       $("#nova", s).onclick = async () => {
-        const nome = await pedirTexto(`Nova comanda · mesa ${mesa}`, "Nome (deixe vazio para mesa inteira)", { ok: "Abrir" });
-        if (nome == null) return desenharMesa();
-        try { const id = await abrirComanda(mesa, nome || "Mesa inteira", usuario); lancarNaComanda(id, desenharMesa); } catch (e) { erro(e); }
+        const num = await pedirTexto(`Nova comanda · mesa ${mesa}`, "Número da comanda", { ok: "Abrir", tipo: "number" });
+        if (!num) return;
+        try { const id = await abrirComanda(mesa, num, "", usuario); lancarNaComanda(id, desenharMesa); } catch (e) { erro(e); }
       };
       $$("[data-lc]", s).forEach((b) => (b.onclick = () => lancarNaComanda(b.dataset.lc, desenharMesa)));
       $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
@@ -280,55 +320,42 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       }));
       $$("[data-mv]", s).forEach((b) => (b.onclick = () => {
         const [cid, key] = b.dataset.mv.split("|");
-        const outras = cs.filter((c) => c.id !== cid);
-        const s2 = abrirSheet(`${cabecalhoSheet("Passar item para…")}<div class="sh-b"><div class="opts">${outras.map((c) => `<button class="opt" data-dst="${c.id}"><span>${esc(c.nome)}</span></button>`).join("")}</div></div>`);
-        $$("[data-dst]", s2).forEach((d) => (d.onclick = async () => { try { await moverItem(cid, key, d.dataset.dst); } catch (e) { erro(e); } desenharMesa(); }));
-        $(".x", s2).onclick = desenharMesa;
+        const s2 = abrirSheet(`${cabecalhoSheet("Passar item para…")}<div class="sh-b"><div class="opts">${cs.filter((c) => c.id !== cid).map((c) => `<button class="opt" data-dst="${c.id}"><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span></button>`).join("")}</div></div>`, { nivel: 2 });
+        $$("[data-dst]", s2).forEach((d) => (d.onclick = async () => { fecharSheet(); try { await moverItem(cid, key, d.dataset.dst); } catch (e) { erro(e); } desenharMesa(); }));
       }));
       $$("[data-cc]", s).forEach((b) => (b.onclick = async () => {
         const motivo = await pedirTexto("Cancelar comanda inteira", "Motivo", { ok: "Cancelar comanda" });
         if (motivo != null) { try { await cancelarComanda(b.dataset.cc, motivo, usuario); toast("Comanda cancelada."); } catch (e) { erro(e); } }
         desenharMesa();
       }));
-      $("#impConta", s) && ($("#impConta", s).onclick = () => escolher(cs, "Imprimir conta", async (sel) => {
-        await pedirConta(sel.map((c) => c.id));
-        await imprimirConta(sel, { servico: servicoDe(sel) });
-        toast("Conta enviada para impressão");
-        desenharMesa();
-      }, desenharMesa));
-      $("#fechar", s) && ($("#fechar", s).onclick = () => escolher(cs, "Fechar conta", async (sel) => {
-        const pag = await receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${mesa}` });
-        if (pag && comandasDaMesa(mesa).filter((c) => !sel.some((x) => x.id === c.id)).length) desenharMesa();
-      }, desenharMesa));
     };
     desenharMesa();
   }
 
   // Escolhe quais comandas entram (juntas) na conta.
-  function escolher(cs, titulo, fn, voltar) {
-    if (cs.length === 1) return fn(cs).catch(erro);
+  function escolher(cs, titulo, fn) {
+    if (cs.length === 1) return Promise.resolve(fn(cs)).catch(erro);
     const s = abrirSheet(`${cabecalhoSheet(titulo, "Marque as comandas que entram juntas")}<div class="sh-b">
-      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(c.nome)}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
-      <button class="btn ok cheio" id="ok">Continuar</button></div>`);
-    $(".x", s).onclick = voltar;
+      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <button class="btn pri cheio" id="ok">Continuar</button></div>`);
     $("#ok", s).onclick = () => {
       const ids = $$("input:checked", s).map((i) => i.value);
       if (!ids.length) return toast("Marque pelo menos uma.");
-      fn(cs.filter((c) => ids.includes(c.id))).catch(erro);
+      Promise.resolve(fn(cs.filter((c) => ids.includes(c.id)))).catch(erro);
     };
   }
 
   function lancarNaComanda(id, voltar) {
     const itens = [];
-    const c = () => D.abertos.find((x) => x.id === id);
-    const s = abrirSheet(`${cabecalhoSheet(`Lançar · Mesa ${c()?.mesa} · ${c()?.nome || ""}`)}<div class="sh-b novo-ped">
+    const c = D.abertos.find((x) => x.id === id) || {};
+    const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa ?? ""} · Comanda ${c.numero ?? ""}`, "Escolha os itens e envie para a produção")}<div class="sh-b novo-ped">
       <div class="np-sel" id="sel"></div>
-      <div class="np-form"><div class="grp">Itens a enviar</div><div id="itens"></div><button class="btn ok cheio" id="env">Enviar para produção</button></div></div>`, { largo: true });
+      <div class="np-form"><div class="grp">Itens a enviar</div><div id="itens"></div><button class="btn ok cheio grande" id="env">Enviar para produção</button></div></div>`, { largo: true });
     const atualizar = () => {
       $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="mini-x" data-rm="${k}">×</button>` })).join("") || `<p class="vazio">Escolha os produtos.</p>`;
       $$("[data-rm]", s).forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.rm, 1); atualizar(); }));
     };
-    seletorProdutos($("#sel", s), (i) => { itens.push(i); atualizar(); });
+    seletorProdutos($("#sel", s), (i) => { itens.push(i); atualizar(); }, { onde: "mesa" });
     $(".x", s).onclick = voltar;
     $("#env", s).onclick = async () => {
       if (!itens.length) return toast("Escolha os itens.");
@@ -337,8 +364,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     atualizar();
   }
 
-  const desenharTudo = () => { delete raiz.dataset.pronto; desenhar(); };
   const parar = aoMudar(desenhar);
-  desenharTudo();
+  delete raiz.dataset.pronto;
+  desenhar();
   return parar;
 }

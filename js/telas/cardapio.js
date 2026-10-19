@@ -1,6 +1,6 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
 import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
-import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido } from "../regras.js";
+import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
 import { store } from "../store.js";
 import { montarItem } from "./item.js";
 
@@ -16,7 +16,7 @@ export function telaCardapio(raiz) {
 
   const desenhar = () => {
     const lj = loja();
-    const cats = D.categorias.filter((c) => D.produtos.some((p) => p.cat === c.id && p.ativo !== false));
+    const cats = D.categorias.filter((c) => D.produtos.some((p) => p.cat === c.id && vendeEm(p, "delivery")));
     cat = cat && cats.some((c) => c.id === cat) ? cat : cats[0]?.id;
     raiz.innerHTML = `
       <header class="c-hero"><div class="pat" aria-hidden="true"></div><div class="c-hero-in">
@@ -39,14 +39,14 @@ export function telaCardapio(raiz) {
     $$("[data-p]", raiz).forEach((b) => (b.onclick = () => {
       if (!loja().aceitaOnline) return toast("Estamos fechados para pedidos online agora.");
       const p = D.produtos.find((x) => x.id === b.dataset.p);
-      montarItem(p, (item) => { sacola.push(item); toast("Adicionado à sacola"); desenhar(); }, { entrega: true });
+      montarItem(p, (item) => { sacola.push(item); toast("Adicionado à sacola"); desenhar(); }, { onde: "delivery" });
     }));
     $("#verSacola", raiz) && ($("#verSacola", raiz).onclick = abrirSacola);
     desenharAcomp();
   };
 
   const secao = (c) => {
-    const itens = D.produtos.filter((p) => p.cat === c.id && p.ativo !== false);
+    const itens = D.produtos.filter((p) => p.cat === c.id && vendeEm(p, "delivery"));
     return `<section class="c-sec" id="sec-${esc(c.id)}"><h2>${esc(c.nome)}</h2>${c.nota ? `<p class="nota">${esc(c.nota)}</p>` : ""}
       ${itens.map((p) => `<button class="it" data-p="${esc(p.id)}"><span class="n"><b>${esc(p.nome)}${p.veg ? `<span class="veg" title="Vegetariana">V</span>` : ""}</b>${p.desc ? `<small>${esc(p.desc)}</small>` : ""}</span>
         <span class="p">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}</span><span class="plus" aria-hidden="true">+</span></button>`).join("")}</section>`;

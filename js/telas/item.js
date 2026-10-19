@@ -1,23 +1,26 @@
-// Janela de montar item (tamanho, sabores, borda, opção, observação, quantidade).
+// Janela de montar item (tamanho, sabores, borda, adicionais, opção, observação, quantidade).
 // Usada pelo cardápio do cliente, pelo garçom e pelo caixa.
+// onde: "mesa" (garçom/comanda) ou "delivery" (cardápio online, entrega, retirada, balcão).
 import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, categoria, setorDe, produto } from "../regras.js";
+import { D, loja, categoria, setorDe, produto, vendeEm } from "../regras.js";
 
 const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
-const saboresPossiveis = (p, entrega) =>
-  D.produtos.filter((x) => x.tipo === "pizza" && x.ativo !== false && grupo(x) === grupo(p) && !(entrega && x.semEntrega));
+const saboresPossiveis = (p, onde) =>
+  D.produtos.filter((x) => x.tipo === "pizza" && grupo(x) === grupo(p) && vendeEm(x, onde));
 
-export function montarItem(p, aoAdicionar, { entrega = false, rapido = false } = {}) {
+export function montarItem(p, aoAdicionar, { onde = "", rapido = false } = {}) {
+  const cat = categoria(p.cat);
+  // Adicionais só na mesa, e só nas categorias marcadas (pizza, esfiha, porções…).
+  const adicionais = onde === "mesa" && cat?.adicionais ? loja().adicionais || [] : [];
   // Item simples sem opções: no garçom/caixa entra direto com 1 toque.
-  if (rapido && p.tipo !== "pizza" && !(p.opcoes || []).length) {
+  if (rapido && p.tipo !== "pizza" && !(p.opcoes || []).length && !adicionais.length) {
     aoAdicionar(criar(p, { qtd: 1 }));
     return;
   }
   const pizza = p.tipo === "pizza";
   const broto = pizza && p.precoBroto;
   const bordas = grupo(p) === "salgada" ? loja().bordas || [] : [];
-  const outros = pizza ? saboresPossiveis(p, entrega).filter((x) => x.id !== p.id) : [];
-  const cat = categoria(p.cat);
+  const outros = pizza ? saboresPossiveis(p, onde).filter((x) => x.id !== p.id) : [];
   let qtd = 1;
 
   const s = abrirSheet(`${cabecalhoSheet(pizza ? `Pizza ${p.nome}` : (cat?.prefixo || "") + p.nome, p.desc)}<div class="sh-b">
@@ -36,6 +39,8 @@ export function montarItem(p, aoAdicionar, { entrega = false, rapido = false } =
     ` : ""}
     ${(p.opcoes || []).length ? `<div class="grp">Escolha</div><div class="opts dois">${p.opcoes.map((o, i) =>
       `<label class="opt"><input type="radio" name="op" value="${esc(o)}" ${i ? "" : "checked"}><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
+    ${adicionais.length ? `<div class="grp">Adicionais <small>pode marcar vários</small></div><div class="opts dois">${adicionais.map((a, i) =>
+      `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>`).join("")}</div>` : ""}
     <label class="f" for="obs">Observação</label>
     <input class="in" id="obs" placeholder="Ex.: sem cebola, bem passada" maxlength="120">
     <div class="addrow"><div class="qtd"><button id="qm" aria-label="Diminuir">−</button><span id="qv">1</span><button id="qp" aria-label="Aumentar">+</button></div>
@@ -44,15 +49,17 @@ export function montarItem(p, aoAdicionar, { entrega = false, rapido = false } =
   const val = (n) => $(`input[name="${n}"]:checked`, s)?.value;
   const ler = () => {
     const tam = broto ? val("tam") : "G";
-    const dois = val("ns") === "2";
-    const segundo = dois ? produto($("#s2sel", s)?.value) : null;
+    const segundo = val("ns") === "2" ? produto($("#s2sel", s)?.value) : null;
     const bi = val("bor");
-    return { tam, segundo, borda: bi === "" || bi == null ? null : bordas[+bi], opcao: val("op"), obs: $("#obs", s).value.trim(), qtd };
+    return {
+      tam, segundo, borda: bi === "" || bi == null ? null : bordas[+bi], opcao: val("op"),
+      extras: $$('input[name="ad"]:checked', s).map((i) => adicionais[+i.value]),
+      obs: $("#obs", s).value.trim(), qtd,
+    };
   };
   const atualizar = () => {
-    const o = ler();
     $("#qv", s).textContent = qtd;
-    $("#ap", s).textContent = brl(criar(p, o).unit * qtd);
+    $("#ap", s).textContent = brl(criar(p, ler()).unit * qtd);
     const s2 = $("#s2", s);
     if (s2) s2.hidden = val("ns") !== "2";
   };
@@ -64,17 +71,20 @@ export function montarItem(p, aoAdicionar, { entrega = false, rapido = false } =
 }
 
 // Monta a linha do pedido a partir do produto e das escolhas.
-export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", obs = "", qtd = 1 } = {}) {
+export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", extras = [], obs = "", qtd = 1 } = {}) {
   const cat = categoria(p.cat);
   const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [] };
+  const somaExtras = extras.reduce((t, a) => t + (Number(a.preco) || 0), 0);
+  const detExtras = extras.map((a) => `+ ${a.nome}`);
   if (p.tipo !== "pizza") {
-    return { ...base, nome: (cat?.prefixo || "") + p.nome + (opcao ? ` (${opcao})` : ""), unit: Number(p.preco) || 0 };
+    return { ...base, nome: (cat?.prefixo || "") + p.nome + (opcao ? ` (${opcao})` : ""), det: detExtras, unit: (Number(p.preco) || 0) + somaExtras };
   }
   const preco = (x) => (tam === "B" && x.precoBroto ? x.precoBroto : x.preco);
   const sabores = segundo ? [p, segundo] : [p];
-  let unit = Math.max(...sabores.map((x) => Number(preco(x)) || 0));
+  let unit = Math.max(...sabores.map((x) => Number(preco(x)) || 0)) + somaExtras;
   const det = segundo ? sabores.map((x) => `1/2 ${x.nome}`) : [];
   if (borda) { unit += Number(borda.preco) || 0; det.push(`Borda ${borda.nome}`); }
+  det.push(...detExtras);
   const tamanho = p.precoBroto ? (tam === "B" ? " brotinho" : " grande") : "";
   return { ...base, nome: `Pizza${tamanho}${segundo ? " meio a meio" : " " + p.nome}`, det, unit };
 }

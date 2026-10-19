@@ -1,7 +1,7 @@
 // Regras do negócio: estado ao vivo, totais, comandas, pedidos, pagamentos e cupons de impressão.
 import { store, novoId } from "./store.js";
 import { LOJA_INICIAL, EQUIPE_INICIAL, MARCA } from "./config.js";
-import { CATEGORIAS, PRODUTOS, BORDAS, TAXAS_ENTREGA } from "./cardapio-inicial.js";
+import { CATEGORIAS, PRODUTOS, BORDAS, TAXAS_ENTREGA, ADICIONAIS } from "./cardapio-inicial.js";
 import { hoje } from "./ui.js";
 
 // ---------------------------------------------------------------------------
@@ -57,12 +57,16 @@ export const categoria = (id) => D.categorias.find((c) => c.id === id);
 export const setorDe = (prod) => prod?.setor || categoria(prod?.cat)?.setor || "cozinha";
 export const nomeSetor = (id) => loja().setores.find((s) => s.id === id)?.nome || id;
 
+// Onde cada produto é vendido: "todos", "mesa" (só no salão) ou "delivery" (só entrega/retirada).
+export const canalDe = (p) => p?.canal || (p?.semEntrega ? "mesa" : "todos");
+export const vendeEm = (p, onde) => p.ativo !== false && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
+
 // Primeira vez: grava loja, cardápio e equipe iniciais.
 export async function semearSePreciso() {
   const atual = await store.obter("config", "loja");
   if (atual) return false;
   const ops = [
-    { tipo: "salvar", col: "config", id: "loja", dados: { ...LOJA_INICIAL, bordas: BORDAS, taxasEntrega: TAXAS_ENTREGA, criadoEm: Date.now() } },
+    { tipo: "salvar", col: "config", id: "loja", dados: { ...LOJA_INICIAL, bordas: BORDAS, taxasEntrega: TAXAS_ENTREGA, adicionais: ADICIONAIS, criadoEm: Date.now() } },
     ...CATEGORIAS.map((c) => ({ tipo: "salvar", col: "categorias", id: c.id, dados: (({ id, ...r }) => r)(c) })),
     ...PRODUTOS.map((p) => ({ tipo: "salvar", col: "produtos", id: p.id, dados: (({ id, ...r }) => r)(p) })),
     ...EQUIPE_INICIAL.map((u) => ({ tipo: "salvar", col: "usuarios", id: u.id, dados: { nome: u.nome, papel: u.papel, pin: u.pin, ativo: true } })),
@@ -94,13 +98,40 @@ export function situacaoMesa(mesa) {
   return { status: conta ? "conta" : "ocupada", comandas: cs, total, desde };
 }
 
-export async function abrirComanda(mesa, nome, garcom) {
-  const numero = await store.proximoNumero(hoje());
-  return store.criar("pedidos", {
-    tipo: "mesa", mesa, nome: nome || "Mesa inteira", numero, aberto: true, status: "aberta",
+export const comandaAberta = (numero) =>
+  D.abertos.find((p) => p.tipo === "mesa" && String(p.numero) === String(numero));
+
+// Abre a comanda (número do cartão físico). Uma comanda aberta não pode ser aberta
+// de novo em outra mesa: a "trava" garante isso mesmo com dois garçons ao mesmo tempo.
+export async function abrirComanda(mesa, numero, nome, garcom) {
+  numero = String(numero || "").trim();
+  if (!/^\d{1,5}$/.test(numero)) throw new Error("Digite o número da comanda.");
+  const travaId = `comanda-${numero}`;
+  const id = novoId();
+  const trava = { aberta: true, pedido: id, mesa, dia: hoje(), em: Date.now() };
+  let ocupada = null;
+  await store.transacao("travas", travaId, (t) => {
+    if (t?.aberta) { ocupada = t; return null; }
+    return trava;
+  });
+  if (ocupada) {
+    const p = await store.obter("pedidos", ocupada.pedido);
+    if (p?.aberto) throw Object.assign(new Error(`A comanda ${numero} já está aberta na mesa ${p.mesa}.`), { mesa: p.mesa, comanda: p.id });
+    // Trava esquecida (comanda já fechada): libera e usa.
+    await store.transacao("travas", travaId, (t) => {
+      if (t?.aberta && t.pedido !== ocupada.pedido) throw new Error(`A comanda ${numero} acabou de ser aberta em outra mesa.`);
+      return trava;
+    });
+  }
+  await store.salvar("pedidos", id, {
+    tipo: "mesa", mesa, numero, nome: (nome || "").trim(), aberto: true, status: "aberta",
     itens: [], garcom: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
   });
+  return id;
 }
+
+const liberarComandas = (pedidos) =>
+  pedidos.filter((p) => p.tipo === "mesa" && p.numero).map((p) => ({ tipo: "salvar", col: "travas", id: `comanda-${p.numero}`, dados: { aberta: false, pedido: p.id } }));
 
 // Lança itens numa comanda e manda para as impressoras dos setores.
 export async function lancarItens(comandaId, itens, quem) {
@@ -141,7 +172,11 @@ export async function moverItem(origemId, key, destinoId) {
 }
 
 export async function trocarMesa(comandaIds, novaMesa) {
-  await store.lote(comandaIds.map((id) => ({ tipo: "salvar", col: "pedidos", id, dados: { mesa: novaMesa } })));
+  const cs = D.abertos.filter((p) => comandaIds.includes(p.id));
+  await store.lote([
+    ...comandaIds.map((id) => ({ tipo: "salvar", col: "pedidos", id, dados: { mesa: novaMesa } })),
+    ...cs.filter((c) => c.numero).map((c) => ({ tipo: "salvar", col: "travas", id: `comanda-${c.numero}`, dados: { mesa: novaMesa } })),
+  ]);
 }
 
 export const pedirConta = (ids, sim = true) =>
@@ -149,7 +184,10 @@ export const pedirConta = (ids, sim = true) =>
 
 export async function cancelarComanda(id, motivo, quem) {
   const p = D.abertos.find((x) => x.id === id) || (await store.obter("pedidos", id));
-  await store.salvar("pedidos", id, { aberto: false, status: "cancelada", motivo, canceladoPor: quem?.nome || "", fechadoEm: Date.now() });
+  await store.lote([
+    { tipo: "salvar", col: "pedidos", id, dados: { aberto: false, status: "cancelada", motivo, canceladoPor: quem?.nome || "", fechadoEm: Date.now() } },
+    ...liberarComandas([p]),
+  ]);
   const enviados = itensValidos(p).filter((i) => i.enviadoEm);
   if (enviados.length) await imprimirProducao({ ...p, itens: enviados }, quem, { cancelamento: true });
 }
@@ -221,6 +259,7 @@ export async function registrarPagamento(pedidos, valores, quem) {
   await store.lote([
     { tipo: "criar", col: "pagamentos", id: pid, dados: pag },
     ...pedidos.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { pago: true, pagamentoId: pid, pagoEm: agora, ...fim(p) } })),
+    ...liberarComandas(pedidos),
   ]);
   return { id: pid, ...pag };
 }
@@ -246,7 +285,7 @@ const hh = (t = Date.now()) => new Date(t).toLocaleString("pt-BR", { day: "2-dig
 const rodape = () => [SEP, L(`${MARCA.sistema} · ${MARCA.empresa}`, { c: true })];
 
 const titulo = (p) => {
-  if (p.tipo === "mesa") return `MESA ${p.mesa}${p.nome && p.nome !== "Mesa inteira" ? " · " + p.nome : ""}`;
+  if (p.tipo === "mesa") return `MESA ${p.mesa} · COMANDA ${p.numero || "-"}${p.nome && p.nome !== "Mesa inteira" ? " · " + p.nome : ""}`;
   const n = p.numero ? ` #${p.numero}` : "";
   if (p.tipo === "entrega") return `ENTREGA${n}`;
   if (p.tipo === "retirada") return `RETIRADA${n}`;
@@ -270,9 +309,25 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false } = 
   linhas.push(L(nomeSetor(setor).toUpperCase(), { b: true, c: true }), SEP);
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
-  linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}${p.tipo === "mesa" && p.numero ? " · com." + p.numero : ""}`));
+  linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
   linhas.push(SEP, ...linhasItens(itens));
   if (cancelamento && itens[0]?.motivo) linhas.push(SEP, L(`Motivo: ${itens[0].motivo}`));
+  if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
+  linhas.push(...rodape());
+  return linhas;
+}
+
+// Vários setores no mesmo papel: cabeçalho uma vez, depois cada setor com seu título.
+function cupomJunto(p, grupos, quem, { cancelamento = false } = {}) {
+  const linhas = [];
+  if (cancelamento) linhas.push(L("*** CANCELADO ***", { b: true, g: true, c: true }));
+  linhas.push(L(titulo(p), { b: true, g: true }));
+  if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
+  linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
+  for (const [s, its] of grupos) {
+    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its));
+  }
+  if (cancelamento && grupos[0]?.[1][0]?.motivo) linhas.push(SEP, L(`Motivo: ${grupos[0][1][0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
   return linhas;
@@ -286,7 +341,7 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
   if (lj.endereco) linhas.push(L(lj.endereco, { c: true }));
   linhas.push(SEP, L(p0.tipo === "mesa" ? `CONTA · MESA ${p0.mesa}` : titulo(p0), { b: true, g: true }), L(hh()));
   for (const p of pedidos) {
-    if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.nome || titulo(p), { b: true }));
+    if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `Comanda ${p.numero}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
     else linhas.push(SEP);
     linhas.push(...linhasItens(itensValidos(p), { precos: true }));
     if (p.taxaEntrega) linhas.push(L(lado("Taxa de entrega", r$(p.taxaEntrega))));
@@ -361,14 +416,14 @@ export async function imprimirProducao(p, quem, opts = {}) {
   if (lj.papelPorSetor) {
     for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));
   } else {
-    // tudo junto por impressora, dividido por setor
+    // Um papel por impressora, com os setores separados por título.
     const porImp = new Map();
     for (const [s, its] of porSetor) {
       const imp = impressoraDoSetor(s);
       if (!porImp.has(imp)) porImp.set(imp, []);
-      porImp.get(imp).push(...cupomProducao(p, its, s, quem, opts).slice(0, -2), { sep: true });
+      porImp.get(imp).push([s, its]);
     }
-    for (const [imp, linhas] of porImp) ops.push(filaImpressao(imp, nome, [...linhas, ...rodape()], { pedido: p.id }));
+    for (const [imp, grupos] of porImp) ops.push(filaImpressao(imp, nome, cupomJunto(p, grupos, quem, opts), { pedido: p.id }));
   }
   await store.lote(ops);
 }
@@ -378,11 +433,12 @@ async function imprimirNovoPedido(p, quem) {
   await store.lote([filaImpressao(loja().impressoraConta, `Via ${titulo(p)}`, cupomEntrega(p), { pedido: p.id })]);
 }
 
+const tituloConta = (pedidos) => (pedidos[0].tipo === "mesa" && pedidos.length > 1 ? `MESA ${pedidos[0].mesa}` : titulo(pedidos[0]));
 export const imprimirConta = (pedidos, valores) =>
-  store.lote([filaImpressao(loja().impressoraConta, `Conta ${titulo(pedidos[0])}`, cupomConta(pedidos, valores))]);
+  store.lote([filaImpressao(loja().impressoraConta, `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
 
 export const imprimirComprovante = (pedidos, pag) =>
-  store.lote([filaImpressao(loja().impressoraConta, `Comprovante ${titulo(pedidos[0])}`, cupomConta(pedidos, { servico: pag.servico, desconto: pag.desconto, pagamento: pag }))]);
+  store.lote([filaImpressao(loja().impressoraConta, `Comprovante ${tituloConta(pedidos)}`, cupomConta(pedidos, { servico: pag.servico, desconto: pag.desconto, pagamento: pag }))]);
 
 export const imprimirVia = (p) =>
   store.lote([filaImpressao(loja().impressoraConta, `Via ${titulo(p)}`, cupomEntrega(p), { pedido: p.id })]);

@@ -12,12 +12,17 @@ Primeira loja: **Pizzaria Amarílis** (período de teste).
 
 ## O que o sistema faz
 
-- **Mesas e comandas.** O garçom abre a mesa com **uma comanda para a mesa inteira** ou **uma comanda por pessoa** (nome ou identificação). Dá para juntar comandas na hora de pagar, passar item de uma comanda para outra, trocar ou juntar mesas.
-- **Impressão por setor.** Quando o garçom envia o pedido, cada item sai na impressora do seu setor:
-  - Impressora 1 (cozinha): **pizzas e esfihas** e **cozinha** (pastéis, porções, pratos)
-  - Impressora 2 (bar): **bebidas, refrigerantes, cervejas e drinks**
+- **Mesas e comandas.** O garçom abre a mesa digitando o **número do cartão da comanda**: uma comanda para a mesa inteira, ou uma para cada pessoa (com nome, se quiser). **Uma comanda aberta não abre de novo em outra mesa**: se a 120 já está na mesa 10 e alguém tenta lançar 120 na mesa 11, o sistema avisa e leva para a mesa 10. Funciona mesmo com dois garçons ao mesmo tempo. Dá para juntar comandas na hora de pagar, passar item de uma comanda para outra, trocar ou juntar mesas, e achar a comanda pelo número.
+- **Impressão por setor (5 setores, 2 impressoras).** Cada pedido sai num papel por impressora, dividido por setor:
 
-  Cada setor sai num papel separado, ou tudo junto dividido por setor (você escolhe em Ajustes). Item cancelado imprime um aviso **CANCELADO** no setor.
+  | Impressora | Setores |
+  |---|---|
+  | **Cozinha** | Pizzas · Esfihas · Cozinha (porções, pastéis, pratos executivos) |
+  | **Bar** | Refrigerantes e cervejas (pegar e levar) · Sucos e drinks (preparar) |
+
+  Item cancelado imprime um aviso **CANCELADO** no setor. Em Ajustes dá para trocar setores de impressora ou imprimir um papel para cada setor.
+- **Adicionais só na mesa.** Ex.: frango com requeijão **+ bacon**. O garçom marca os adicionais ao lançar; eles não aparecem no delivery. A lista e os preços ficam em Caixa > Cardápio > Adicionais (**os preços iniciais são de exemplo: troque pela lista real**).
+- **Onde cada produto é vendido.** Cada produto pode ser **Mesa e delivery**, **Só mesa** (não aparece no cardápio online nem no pedido de entrega/retirada) ou **Só delivery/retirada** (não aparece para o garçom). Muda direto na lista do Cardápio.
 - **Caixa.** Pedidos de telefone, balcão e delivery; pedidos do cardápio online chegam com **aviso sonoro**; conta da mesa com **taxa de serviço** (10%, pode tirar); desconto; pagamento dividido em várias formas; troco; relatório do dia e **fechamento impresso**.
 - **Motoboys.** Cadastro, despacho do pedido para o motoboy, entregas do dia, taxas e dinheiro a acertar com cada um.
 - **Cardápio editável.** Produtos, preços, brotinho, meio a meio, bordas, opções (ex.: sabor do refrigerante), **esgotado** com um toque, taxas de entrega por bairro. Tudo pelo painel, sem mexer em código.
@@ -48,7 +53,7 @@ PINs iniciais: **Administrador 1234 · Caixa 1111 · Garçom 2222** (troque em A
 
 > Essas chaves podem ficar no código: elas não são senha. Quem protege os dados são as regras do passo 6 e a conta da loja.
 
-No **primeiro acesso** com a conta da loja, o sistema grava sozinho o cardápio inicial (139 produtos da Amarílis), as impressoras e a equipe.
+No **primeiro acesso** com a conta da loja, o sistema grava sozinho o cardápio inicial (139 produtos da Amarílis), os 5 setores, as impressoras e a equipe.
 
 ## 3. Colocar no ar (grátis)
 

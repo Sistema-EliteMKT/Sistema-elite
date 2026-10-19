@@ -1,73 +1,91 @@
-// App do garçom: mesas, comandas (mesa inteira ou por pessoa) e lançamento de itens.
-import { $, $$, esc, brl, minutos, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
-import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa } from "../regras.js";
+// App do garçom: mesas, comandas pelo número do cartão e lançamento de itens.
+import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
+import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 
 export function telaGarcom(raiz, usuario, sair) {
-  const V = { mesa: null, comanda: null, lancando: false, rascunho: [] };
+  const V = { mesa: null, comanda: null, rascunho: [] };
 
   const desenhar = () => {
-    if (V.lancando) return desenharLancar();
+    if (V.comanda) return desenharLancar();
     if (V.mesa != null) return desenharMesa();
     desenharMesas();
   };
 
-  const topo = (titulo, voltar = false) => `<div class="g-top">
-    ${voltar ? `<button class="btn ghost sm" id="voltar">‹ Voltar</button>` : `<div class="who"><small>Garçom</small><b>${esc(usuario.nome)}</b></div>`}
-    <b class="g-tit">${esc(titulo)}</b>
-    ${voltar ? "<span></span>" : `<button class="btn ghost sm" id="sair">Sair</button>`}</div>`;
+  const topo = () => `<header class="g-top"><div class="who"><small>Garçom</small><b>${esc(usuario.nome)}</b></div>
+    <button class="btn claro sm" id="sair">${usuario.papel === "garcom" ? "Sair" : "‹ Caixa"}</button></header>`;
+  const ligarTopo = () => ($("#sair", raiz).onclick = sair);
 
-  const ligarTopo = (voltar) => {
-    $("#sair", raiz) && ($("#sair", raiz).onclick = sair);
-    $("#voltar", raiz) && ($("#voltar", raiz).onclick = voltar);
+  // Abre direto a comanda pelo número (ex.: garçom pega o cartão 120 na mão).
+  const irParaComanda = (n) => {
+    const c = comandaAberta(n);
+    if (!c) return toast(`Comanda ${n} não está aberta.`);
+    V.mesa = c.mesa; V.comanda = c.id; V.rascunho = []; desenhar();
   };
 
   function desenharMesas() {
     const n = Number(loja().nMesas) || 0;
-    const mesas = Array.from({ length: n }, (_, i) => i + 1);
-    raiz.innerHTML = `${topo("Mesas")}<div class="g-wrap">
+    raiz.innerHTML = `${topo()}<div class="g-wrap">
+      <div class="g-titulo"><h2>Mesas</h2>
+        <form class="busca-com" id="buscaCom"><input class="in" id="numCom" inputmode="numeric" placeholder="Comanda nº" aria-label="Número da comanda"><button class="btn pri sm">Ir</button></form></div>
       <div class="legenda"><span class="m-livre">Livre</span><span class="m-ocupada">Ocupada</span><span class="m-conta">Pediu a conta</span></div>
-      <div class="mesas">${mesas.map((m) => {
-        const s = situacaoMesa(m);
-        return `<button class="mesa m-${s.status}" data-m="${m}"><b>${m}</b>${s.status !== "livre" ? `<small>${brl(s.total)}</small><small>${minutos(s.desde)} min${s.comandas.length > 1 ? ` · ${s.comandas.length} com.` : ""}</small>` : `<small>livre</small>`}</button>`;
+      <div class="mesas">${Array.from({ length: n }, (_, i) => {
+        const m = i + 1, s = situacaoMesa(m);
+        return `<button class="mesa m-${s.status}" data-m="${m}"><b>${m}</b><small>${s.status === "livre" ? "Livre" : s.status === "conta" ? "Conta" : brl(s.total)}</small></button>`;
       }).join("")}</div>${rodapeMarca()}</div>`;
     ligarTopo();
     $$("[data-m]", raiz).forEach((b) => (b.onclick = () => { V.mesa = +b.dataset.m; desenhar(); }));
+    $("#buscaCom", raiz).onsubmit = (e) => { e.preventDefault(); const v = $("#numCom", raiz).value.trim(); if (v) irParaComanda(v); };
   }
+
+  const formAbrir = (primeira) => `<div class="card abrir"><b>${primeira ? "Abrir a mesa" : "Nova comanda nesta mesa"}</b>
+      <p class="muted pq">${primeira ? "Uma comanda para a mesa inteira, ou uma para cada pessoa." : "Para quem vai pagar separado."}</p>
+      <form id="fAbrir" class="abrir-linha"><input class="in grande" id="fNum" inputmode="numeric" maxlength="5" placeholder="Nº da comanda" aria-label="Número da comanda" required>
+        <input class="in" id="fNome" placeholder="Nome (opcional)" aria-label="Nome"><button class="btn pri">Abrir</button></form>
+      <div class="err" id="fErr"></div></div>`;
+
+  const ligarAbrir = (focar) => {
+    const f = $("#fAbrir", raiz);
+    if (!f) return;
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const num = $("#fNum", raiz).value.trim();
+      $("#fErr", raiz).textContent = "";
+      try {
+        const id = await abrirComanda(V.mesa, num, $("#fNome", raiz).value, usuario);
+        V.comanda = id; V.rascunho = []; desenhar();
+      } catch (x) {
+        if (x.mesa) {
+          // Comanda já aberta em outra mesa: não duplica; oferece ir para ela.
+          $("#fErr", raiz).innerHTML = `${esc(x.message)} <button type="button" class="btn sec sm" id="irCom">Ir para a mesa ${x.mesa}</button>`;
+          $("#irCom", raiz).onclick = () => { V.mesa = x.mesa; V.comanda = x.comanda; V.rascunho = []; desenhar(); };
+        } else $("#fErr", raiz).textContent = x.message;
+      }
+    };
+    if (focar) setTimeout(() => $("#fNum", raiz)?.focus(), 50);
+  };
 
   function desenharMesa() {
     const cs = comandasDaMesa(V.mesa);
     const s = situacaoMesa(V.mesa);
-    raiz.innerHTML = `${topo(`Mesa ${V.mesa}`, true)}<div class="g-wrap">
-      ${!cs.length ? `<div class="abrir-mesa"><p>Mesa livre. Como vai ser a comanda?</p>
-          <button class="btn pri cheio" id="inteira">Uma comanda para a mesa inteira</button>
-          <button class="btn sec cheio" id="pessoa">Comanda por pessoa</button></div>`
-        : `${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(c.nome)}</b><small>Comanda ${c.numero || ""} · ${brl(subtotal(c))}${c.status === "conta" ? " · <span class='pill conta'>pediu a conta</span>" : ""}</small></div>
-            <button class="btn pri sm" data-lancar="${c.id}">+ Itens</button></div>
-            ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i)).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}</div>`).join("")}
-          <div class="g-acoes">
-            <button class="btn sec" id="pessoa">+ Comanda por pessoa</button>
-            <button class="btn sec" id="trocar">Trocar de mesa</button>
-            <button class="btn or" id="conta">${s.status === "conta" ? "Reimprimir conta" : "Pedir a conta"}</button>
-          </div>
-          <div class="total-mesa"><span>Total da mesa</span><b>${brl(s.total)}</b></div>`}
+    const status = { livre: "Livre", ocupada: "Aberta", conta: "Pediu a conta" }[s.status];
+    raiz.innerHTML = `${topo()}<div class="g-wrap">
+      <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesas</button><h2>Mesa ${V.mesa}</h2><span class="pill st-${s.status}">${status}</span></div>
+      ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}</p>` : ""}
+      ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
+        ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i)).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
+        <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button></div>`).join("")}
+      ${cs.length ? `<div class="g-acoes"><button class="btn sec" id="trocar">Trocar / juntar mesa</button><button class="btn sec" id="conta">${s.status === "conta" ? "Reimprimir conta" : "Pedir a conta"}</button></div>
+        <div class="total-mesa"><span>Total da mesa</span><b>${brl(s.total)}</b></div>` : ""}
+      ${formAbrir(!cs.length)}
       ${rodapeMarca()}</div>`;
-    ligarTopo(() => { V.mesa = null; desenhar(); });
-    const abrir = async (nome) => {
-      try {
-        const id = await abrirComanda(V.mesa, nome, usuario);
-        V.comanda = id; V.lancando = true; V.rascunho = []; desenhar();
-      } catch (e) { erro(e); }
-    };
-    $("#inteira", raiz) && ($("#inteira", raiz).onclick = () => abrir("Mesa inteira"));
-    $("#pessoa", raiz).onclick = async () => {
-      const nome = await pedirTexto("Comanda por pessoa", "Nome ou identificação (ex.: João, camisa azul)", { ok: "Abrir comanda" });
-      if (nome) abrir(nome);
-    };
-    $$("[data-lancar]", raiz).forEach((b) => (b.onclick = () => { V.comanda = b.dataset.lancar; V.lancando = true; V.rascunho = []; desenhar(); }));
+    ligarTopo();
+    ligarAbrir(!cs.length);
+    $("#voltar", raiz).onclick = () => { V.mesa = null; desenhar(); };
+    $$("[data-lancar]", raiz).forEach((b) => (b.onclick = () => { V.comanda = b.dataset.lancar; V.rascunho = []; desenhar(); }));
     $("#trocar", raiz) && ($("#trocar", raiz).onclick = async () => {
       const n = Number(await pedirTexto(`Trocar a mesa ${V.mesa}`, "Para qual mesa?", { tipo: "number", ok: "Trocar" }));
-      if (!n) return;
+      if (!n || n === V.mesa) return;
       if (n < 1 || n > Number(loja().nMesas)) return toast("Mesa não existe.");
       if (comandasDaMesa(n).length && !(await confirmar("Juntar mesas", `A mesa ${n} já está ocupada. Juntar as comandas da mesa ${V.mesa} com a mesa ${n}?`, { ok: "Juntar" }))) return;
       try { await trocarMesa(cs.map((c) => c.id), n); V.mesa = n; toast(`Agora é a mesa ${n}.`); desenhar(); } catch (e) { erro(e); }
@@ -80,13 +98,13 @@ export function telaGarcom(raiz, usuario, sair) {
       try {
         await pedirConta(sel.map((c) => c.id));
         await imprimirConta(sel, { servico: servicoDe(sel) });
-        toast("Conta enviada para impressão. O caixa já está vendo.");
+        toast("Conta enviada para impressão. O caixa já está vendo.", "bom");
         fecharSheet();
       } catch (e) { erro(e); }
     };
     if (cs.length === 1) return enviar(cs);
     const s = abrirSheet(`${cabecalhoSheet(`Conta da mesa ${V.mesa}`, "Marque as comandas que vão pagar agora")}<div class="sh-b">
-      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(c.nome)}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
       <button class="btn or cheio" id="ok">Imprimir conta</button></div>`);
     $("#ok", s).onclick = () => {
       const ids = $$("input:checked", s).map((i) => i.value);
@@ -97,38 +115,62 @@ export function telaGarcom(raiz, usuario, sair) {
 
   function desenharLancar() {
     const c = D.abertos.find((x) => x.id === V.comanda);
-    if (!c) { V.lancando = false; return desenhar(); }
-    const total = V.rascunho.reduce((s, i) => s + i.unit * i.qtd, 0);
-    raiz.innerHTML = `${topo(`Mesa ${c.mesa} · ${c.nome}`, true)}<div class="g-wrap lancar">
-      <div id="sel"></div>
-      </div>
-      <div class="gbar" ${V.rascunho.length ? "" : "hidden"}><div class="gbar-in">
-        <div class="rasc">${V.rascunho.map((i, k) => `<div class="r-it"><span>${i.qtd}x ${esc(i.nome)}${i.det.length ? ` <small>(${esc(i.det.join(", "))})</small>` : ""}${i.obs ? ` <small>· ${esc(i.obs)}</small>` : ""}</span><button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button></div>`).join("")}</div>
-        <button class="btn ok cheio" id="enviar"><span>Enviar para produção</span><span>${brl(total)}</span></button></div></div>`;
-    ligarTopo(async () => {
-      if (V.rascunho.length && !(await confirmar("Sair sem enviar?", "Os itens escolhidos ainda não foram para a cozinha/bar.", { ok: "Sair sem enviar", perigo: true }))) return;
-      V.lancando = false; V.rascunho = []; desenhar();
-    });
+    if (!c) { V.comanda = null; return desenhar(); }
+    raiz.innerHTML = `${topo()}<div class="g-wrap lancar">
+      <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesa ${c.mesa}</button><h2>Comanda ${esc(c.numero)}</h2>${c.nome ? `<span class="pill">${esc(c.nome)}</span>` : ""}</div>
+      <div id="sel"></div></div>
+      <div class="gbar"><button class="btn pri cheio" id="ver" ${V.rascunho.length ? "" : "disabled"}></button></div>`;
+    ligarTopo();
+    const barra = () => {
+      const n = V.rascunho.reduce((t, i) => t + i.qtd, 0);
+      const tot = V.rascunho.reduce((t, i) => t + i.unit * i.qtd, 0);
+      const b = $("#ver", raiz);
+      b.disabled = !n;
+      b.innerHTML = n ? `<span>Ver pedido (${n} ${n === 1 ? "item" : "itens"})</span><span>${brl(tot)}</span>` : "Escolha os itens";
+    };
+    $("#voltar", raiz).onclick = async () => {
+      if (V.rascunho.length && !(await confirmar("Sair sem enviar?", "Os itens escolhidos ainda não foram para a produção.", { ok: "Sair sem enviar", perigo: true }))) return;
+      V.comanda = null; V.rascunho = []; desenhar();
+    };
     seletorProdutos($("#sel", raiz), (item) => {
       const igual = V.rascunho.find((r) => r.produtoId === item.produtoId && r.nome === item.nome && !r.obs && !item.obs && !r.det.length && !item.det.length);
       if (igual) igual.qtd += item.qtd; else V.rascunho.push(item);
-      toast(`${item.qtd}x ${item.nome}`);
-      desenharLancar();
-    });
-    $$("[data-rm]", raiz).forEach((b) => (b.onclick = () => { V.rascunho.splice(+b.dataset.rm, 1); desenharLancar(); }));
-    $("#enviar", raiz) && ($("#enviar", raiz).onclick = async (ev) => {
-      ev.currentTarget.disabled = true;
-      try {
-        await lancarItens(c.id, V.rascunho, usuario);
-        toast("Enviado para a produção ✓", "bom");
-        V.rascunho = []; V.lancando = false; desenhar();
-      } catch (e) { erro(e); ev.currentTarget.disabled = false; }
-    });
+      toast(`+ ${item.qtd}x ${item.nome}`);
+      barra();
+    }, { onde: "mesa" });
+    $("#ver", raiz).onclick = () => verPedido(c, barra);
+    barra();
   }
 
-  // Na tela de lançar, só redesenha se a comanda sumir (evita perder a busca enquanto digita).
+  function verPedido(c, barra) {
+    const des = () => {
+      const tot = V.rascunho.reduce((t, i) => t + i.unit * i.qtd, 0);
+      const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa} · Comanda ${c.numero}`, "Confira antes de enviar")}<div class="sh-b">
+        ${V.rascunho.map((i, k) => `<div class="cl"><div class="n"><b>${esc(i.nome)}</b>${i.det.map((d) => `<small>${esc(d)}</small>`).join("")}${i.obs ? `<small class="obs">Obs: ${esc(i.obs)}</small>` : ""}<small>${brl(i.unit * i.qtd)}</small></div>
+          <div class="mini"><button data-menos="${k}" aria-label="Diminuir">−</button><span>${i.qtd}</span><button data-mais="${k}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Nada escolhido.</p>`}
+        <div class="sum"><div class="t"><span>Total</span><span>${brl(tot)}</span></div></div>
+        <button class="btn ok cheio grande" id="enviar" ${V.rascunho.length ? "" : "disabled"}>Enviar para produção</button>
+        <button class="btn ghost cheio" id="mais">Continuar escolhendo</button></div>`);
+      $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const i = V.rascunho[b.dataset.menos]; if (--i.qtd <= 0) V.rascunho.splice(b.dataset.menos, 1); barra(); des(); }));
+      $$("[data-mais]", s).forEach((b) => (b.onclick = () => { V.rascunho[b.dataset.mais].qtd++; barra(); des(); }));
+      $("#mais", s).onclick = fecharSheet;
+      $("#enviar", s).onclick = async (ev) => {
+        ev.currentTarget.disabled = true;
+        try {
+          await lancarItens(c.id, V.rascunho, usuario);
+          fecharSheet();
+          toast("Enviado para a produção ✓", "bom");
+          V.rascunho = []; V.comanda = null; desenhar();
+        } catch (e) { erro(e); ev.currentTarget.disabled = false; }
+      };
+    };
+    des();
+  }
+
+  // Na tela de lançar, só redesenha se a comanda sumir (não atrapalha quem está escolhendo).
   const parar = aoMudar(() => {
-    if (V.lancando) { if (!D.abertos.some((x) => x.id === V.comanda)) desenhar(); return; }
+    if (V.comanda) { if (!D.abertos.some((x) => x.id === V.comanda)) desenhar(); return; }
+    if (document.activeElement?.closest?.("#fAbrir, #buscaCom")) return; // digitando o número
     desenhar();
   });
   desenhar();
