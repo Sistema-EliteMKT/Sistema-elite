@@ -69,8 +69,9 @@ function telaLoginLoja() {
       try { await store.entrarLoja($("#le").value, $("#ls").value); } catch (e) { $("#lerr").textContent = e.message; $("#lok").disabled = false; }
     };
     $("#lok").onclick = ir;
-    $("#ls").onkeydown = (e) => e.key === "Enter" && ir();
-    $("#le").onkeydown = (e) => e.key === "Enter" && $("#ls").focus();
+    // Atenção: handler on* que devolve false cancela a tecla; por isso usamos if.
+    $("#ls").onkeydown = (e) => { if (e.key === "Enter") ir(); };
+    $("#le").onkeydown = (e) => { if (e.key === "Enter") $("#ls").focus(); };
   });
 }
 

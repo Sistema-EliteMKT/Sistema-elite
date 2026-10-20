@@ -81,7 +81,7 @@ export function pedirTexto(titulo, rotulo, { valor = "", ok = "Salvar", tipo = "
     const inp = $("#pt", s);
     setTimeout(() => inp.focus(), 50);
     const fim = (v) => { fecharSheet(); res(v); };
-    inp.onkeydown = (e) => e.key === "Enter" && fim(inp.value.trim());
+    inp.onkeydown = (e) => { if (e.key === "Enter") fim(inp.value.trim()); };
     $$("[data-r]", s).forEach((b) => (b.onclick = () => fim(b.dataset.r === "1" ? inp.value.trim() : null)));
     $(".x", s).onclick = () => fim(null);
   });
