@@ -10,10 +10,10 @@
 //    os dados ficam só neste navegador (abas do mesmo computador se falam).
 //    Veja o README.md para o passo a passo de como preencher.
 export const FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  appId: "",
+  apiKey: "AIzaSyDesM9QPiWOlhQhPkMvkSeaGvj4urlvXvY",
+  authDomain: "sistema-elite-amarilis.firebaseapp.com",
+  projectId: "sistema-elite-amarilis",
+  appId: "1:492577230327:web:0c80b61f8e2b1d1910f2f2",
 };
 
 // 2) MARCA DO SISTEMA (aparece em todas as telas e no fim de cada cupom)
