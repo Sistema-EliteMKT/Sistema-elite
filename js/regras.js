@@ -172,6 +172,34 @@ export async function lancarItens(comandaId, itens, quem) {
   await imprimirProducao({ ...pedido, itens: novos }, quem);
 }
 
+// Altera um item já lançado (quantidade, escolhas e/ou valor).
+// Se mudou o que foi pedido, imprime "ALTERADO" no setor com o antes e o agora; só valor não imprime.
+export async function alterarItem(pedidoId, key, novo, quem) {
+  const p = D.pedidos.find((x) => x.id === pedidoId) || (await store.obter("pedidos", pedidoId));
+  if (!p) throw new Error("Pedido não encontrado.");
+  if (p.tipo === "mesa" && !p.aberto) throw new Error("Essa comanda já foi fechada.");
+  if (p.pago) throw new Error("Esse pedido já foi pago. Cancele o pagamento antes de alterar.");
+  const antes = (p.itens || []).find((i) => i.key === key && !i.cancelado);
+  if (!antes) throw new Error("Item não encontrado.");
+  const item = {
+    ...antes, ...novo, key, enviadoEm: antes.enviadoEm, por: antes.por,
+    alteradoPor: quem?.nome || "", alteradoEm: Date.now(), ...(antes.unitOriginal == null && Number(novo.unit) !== Number(antes.unit) ? { unitOriginal: antes.unit } : {}),
+  };
+  // Transação: não apaga item que outro garçom lançou ao mesmo tempo. Sem internet, grava direto.
+  try {
+    if (!navigator.onLine) throw Object.assign(new Error("offline"), { offline: true });
+    await store.transacao("pedidos", pedidoId, (atual) => ({ itens: (atual?.itens || []).map((i) => (i.key === key ? item : i)) }));
+  } catch (e) {
+    if (!e.offline) throw e;
+    await store.salvar("pedidos", pedidoId, { itens: (p.itens || []).map((i) => (i.key === key ? item : i)) });
+  }
+  const assinatura = (i) => JSON.stringify([i.qtd, i.nome, i.det || [], i.obs || ""]);
+  if (antes.enviadoEm && assinatura(antes) !== assinatura(item)) {
+    await imprimirProducao({ ...p, itens: [item] }, quem, { alteracao: antes });
+  }
+  return item;
+}
+
 export async function cancelarItem(pedidoId, key, motivo, quem) {
   let item, pedido;
   await store.transacao("pedidos", pedidoId, (atual) => {
@@ -370,14 +398,18 @@ function linhasItens(itens, { precos = false } = {}) {
   return out;
 }
 
-export function cupomProducao(p, itens, setor, quem, { cancelamento = false } = {}) {
+// alteracao: o item como era antes (sai "ANTES: ..." embaixo do item novo)
+const linhasAntes = (a) => (a ? [SEP, L(`ANTES: ${a.qtd}x ${a.nome}`), ...(a.det || []).map((d) => L(`   ${d}`)), ...(a.obs ? [L(`   OBS: ${a.obs}`)] : [])] : []);
+
+export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alteracao = null } = {}) {
   const linhas = [];
   if (cancelamento) linhas.push(L("*** CANCELADO ***", { b: true, g: true, c: true }));
+  if (alteracao) linhas.push(L("*** ALTERADO ***", { b: true, g: true, c: true }));
   linhas.push(L(nomeSetor(setor).toUpperCase(), { b: true, c: true }), SEP);
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
-  linhas.push(SEP, ...linhasItens(itens));
+  linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasItens(itens), ...linhasAntes(alteracao));
   if (cancelamento && itens[0]?.motivo) linhas.push(SEP, L(`Motivo: ${itens[0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
@@ -385,14 +417,15 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false } = 
 }
 
 // Vários setores no mesmo papel: cabeçalho uma vez, depois cada setor com seu título.
-function cupomJunto(p, grupos, quem, { cancelamento = false } = {}) {
+function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null } = {}) {
   const linhas = [];
   if (cancelamento) linhas.push(L("*** CANCELADO ***", { b: true, g: true, c: true }));
+  if (alteracao) linhas.push(L("*** ALTERADO ***", { b: true, g: true, c: true }));
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
   for (const [s, its] of grupos) {
-    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its));
+    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its), ...linhasAntes(alteracao));
   }
   if (cancelamento && grupos[0]?.[1][0]?.motivo) linhas.push(SEP, L(`Motivo: ${grupos[0][1][0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
@@ -500,7 +533,7 @@ export async function imprimirProducao(p, quem, opts = {}) {
     porSetor.get(s).push(i);
   }
   const ops = [];
-  const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : ""}`;
+  const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : opts.alteracao ? " (alterado)" : ""}`;
   // separado: um papel para cada setor (padrão da loja em Ajustes, ou forçado pelo botão)
   if (opts.separado ?? lj.papelPorSetor) {
     for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s, p.tipo), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));

@@ -8,7 +8,7 @@ import {
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
-import { editarItem } from "./item.js";
+import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
 import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
@@ -161,13 +161,14 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
 
   function maisPedido(p) {
     const s = abrirSheet(`${cabecalhoSheet(`Pedido #${p.numero || ""}`, p.cliente?.nome || "")}<div class="sh-b">
-      ${(p.itens || []).map((i) => linhaItem(i, { acoes: !i.cancelado && p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : "" })).join("")}
+      ${(p.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado || p.pago ? "" : `<button class="btn ghost sm" data-edl="${i.key}">Editar</button>${p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : ""}` })).join("")}
       ${p.cliente?.telefone ? `<p><a href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">WhatsApp ${esc(p.cliente.telefone)}</a></p>` : ""}
       <div class="linha-btn wrap">
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
         <button class="btn perigo" id="cancelar">Cancelar pedido</button></div></div>`);
+    $$("[data-edl]", s).forEach((b) => (b.onclick = () => editarLancado(p, p.itens.find((i) => i.key === b.dataset.edl), usuario, "delivery", () => fecharSheet())));
     $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
       const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });
       if (motivo == null) return;
@@ -323,7 +324,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       if (!cs.length) return fecharSheet();
       const s = abrirSheet(`${cabecalhoSheet(`Mesa ${mesa}`, `${cs.length} comanda(s) · ${brl(cs.reduce((x, c) => x + subtotal(c), 0))}`)}<div class="sh-b">
         ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</b><small>${esc(c.garcom || "")} · ${hora(c.criadoEm)}</small></div><b>${brl(subtotal(c))}</b></div>
-          ${(c.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="mini-x" data-ci="${c.id}|${i.key}" title="Cancelar item">×</button>${cs.length > 1 ? `<button class="mini-x" data-mv="${c.id}|${i.key}" title="Passar para outra comanda">⇄</button>` : ""}` })).join("") || `<p class="muted pq">Sem itens.</p>`}
+          ${(c.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="btn ghost sm" data-edl="${c.id}|${i.key}">Editar</button><button class="mini-x" data-ci="${c.id}|${i.key}" title="Cancelar item">×</button>${cs.length > 1 ? `<button class="mini-x" data-mv="${c.id}|${i.key}" title="Passar para outra comanda">⇄</button>` : ""}` })).join("") || `<p class="muted pq">Sem itens.</p>`}
           <div class="linha-btn wrap"><button class="btn sec sm" data-lc="${c.id}">+ Itens</button><button class="btn ghost sm" data-rs="${c.id}">Imprimir por setor</button><button class="btn ghost sm" data-rj="${c.id}">Imprimir tudo junto</button><button class="btn ghost sm" data-cc="${c.id}">Cancelar comanda</button></div></div>`).join("")}
         <button class="btn sec cheio" id="nova">+ Outra comanda nesta mesa</button></div>`, { largo: true });
       $("#nova", s).onclick = async () => {
@@ -335,6 +336,11 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const comanda = (id) => cs.find((c) => c.id === id);
       $$("[data-rs]", s).forEach((b) => (b.onclick = () => imprimirPorSetor(comanda(b.dataset.rs), usuario).then(() => toast("Um papel para cada setor enviado")).catch(erro)));
       $$("[data-rj]", s).forEach((b) => (b.onclick = () => imprimirJunto(comanda(b.dataset.rj), usuario).then(() => toast("Papel com tudo enviado")).catch(erro)));
+      $$("[data-edl]", s).forEach((b) => (b.onclick = () => {
+        const [cid, key] = b.dataset.edl.split("|");
+        const c = cs.find((x) => x.id === cid);
+        editarLancado(c, c.itens.find((i) => i.key === key), usuario, "mesa", desenharMesa);
+      }));
       $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
         const [cid, key] = b.dataset.ci.split("|");
         const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });

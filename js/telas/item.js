@@ -1,8 +1,8 @@
 // Janela de montar item (tamanho, sabores, borda, adicionais, opção, observação, quantidade).
 // Usada pelo cardápio do cliente, pelo garçom e pelo caixa.
 // onde: "mesa" (garçom/comanda) ou "delivery" (cardápio online, entrega, retirada, balcão).
-import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, categoria, setorDe, produto, vendeEm } from "../regras.js";
+import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo, toast, erro } from "../ui.js";
+import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem } from "../regras.js";
 
 const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
 const saboresPossiveis = (p, onde) =>
@@ -78,7 +78,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   $("#add", s).onclick = () => {
     const semNome = $$("[data-livre]", s).find((t) => !t.hidden && !t.value.trim());
     if (semNome) { semNome.focus(); semNome.placeholder = "Escreva qual é o adicional"; semNome.classList.add("falta"); return; }
-    aoAdicionar(criar(p, ler())); fecharSheet();
+    const novo = criar(p, ler());
+    fecharSheet(); // fecha antes: quem recebe pode abrir outra janela (ex.: Alterar item)
+    aoAdicionar(novo);
   };
   if (inicial) $("#add span", s).textContent = "Salvar alteração";
   atualizar();
@@ -89,6 +91,43 @@ export function editarItem(item, onde, aoSalvar) {
   const p = produto(item.produtoId);
   if (!p) return;
   montarItem(p, aoSalvar, { onde, inicial: { ...(item.escolhas || {}), obs: item.obs, qtd: item.qtd } });
+}
+
+// Editar item JÁ LANÇADO (na comanda ou no pedido): quantidade, escolhas e valor.
+export function editarLancado(pedido, item, quem, onde, aoFim = () => {}) {
+  let rasc = { ...item };
+  const des = () => {
+    const s = abrirSheet(`${cabecalhoSheet("Alterar item", "Já foi para a produção: se mudar o pedido, sai um papel ALTERADO no setor")}<div class="sh-b">
+      <div class="cl"><div class="n"><b>${esc(rasc.nome)}</b>${(rasc.det || []).map((d) => `<small>${esc(d)}</small>`).join("")}${rasc.obs ? `<small class="obs">Obs: ${esc(rasc.obs)}</small>` : ""}</div></div>
+      <button class="btn sec cheio" id="esc">Mudar sabores, borda, adicionais ou observação</button>
+      <div class="opts dois"><div><label class="f">Quantidade</label><div class="qtd"><button id="qm" aria-label="Diminuir">−</button><span id="qv">${rasc.qtd}</span><button id="qp" aria-label="Aumentar">+</button></div></div>
+        <div><label class="f" for="vu">Valor de cada (R$)</label><input class="in" id="vu" inputmode="decimal" value="${valorCampo(rasc.unit)}"></div></div>
+      ${item.unitOriginal != null || Number(rasc.unit) !== Number(item.unit) ? `<small class="muted">Valor original: ${brl(item.unitOriginal ?? item.unit)}</small>` : ""}
+      <div class="sum"><div class="t"><span>Total do item</span><span id="tot">${brl(rasc.unit * rasc.qtd)}</span></div></div>
+      <div class="err" id="err"></div>
+      <button class="btn ok cheio grande" id="ok">Salvar alteração</button></div>`, { nivel: 2 });
+    const tot = () => { rasc.unit = numero($("#vu", s).value); $("#qv", s).textContent = rasc.qtd; $("#tot", s).textContent = brl(rasc.unit * rasc.qtd); };
+    $("#qm", s).onclick = () => { if (rasc.qtd > 1) { rasc.qtd--; tot(); } };
+    $("#qp", s).onclick = () => { rasc.qtd++; tot(); };
+    $("#vu", s).oninput = tot;
+    $("#esc", s).onclick = () => {
+      tot();
+      editarItem(rasc, onde, (novo) => { rasc = { ...rasc, ...novo }; des(); });
+    };
+    $("#ok", s).onclick = async (ev) => {
+      tot();
+      if (!(rasc.unit >= 0)) return ($("#err", s).textContent = "Valor inválido.");
+      ev.currentTarget.disabled = true;
+      try {
+        const { produtoId, setor, qtd, unit, nome, det, obs, escolhas } = rasc;
+        await alterarItem(pedido.id, item.key, { produtoId, setor, qtd, unit, nome, det: det || [], obs: obs || "", escolhas: escolhas || null }, quem);
+        fecharSheet();
+        toast("Item alterado ✓", "bom");
+        aoFim();
+      } catch (e) { $("#err", s).textContent = e.message; ev.currentTarget.disabled = false; }
+    };
+  };
+  des();
 }
 
 // Marca na janela as escolhas guardadas no item (para editar).

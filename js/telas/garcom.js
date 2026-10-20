@@ -2,7 +2,7 @@
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
 import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
-import { editarItem } from "./item.js";
+import { editarItem, editarLancado } from "./item.js";
 
 export function telaGarcom(raiz, usuario, sair) {
   // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
@@ -91,7 +91,7 @@ export function telaGarcom(raiz, usuario, sair) {
       <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesas</button><h2>Mesa ${V.mesa}</h2><span class="pill st-${s.status}">${status}</span></div>
       ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""}</p>` : ""}
       ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(rotuloComanda(c))}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
-        ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i)).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
+        ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="btn ghost sm" data-edl="${c.id}|${i.key}">Editar</button>` })).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
         <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button></div>`).join("")}
       ${cs.length ? `<div class="g-acoes"><button class="btn sec" id="trocar">Trocar / juntar mesa</button><button class="btn sec" id="conta">${s.status === "conta" ? "Reimprimir conta" : "Pedir a conta"}</button></div>
         <div class="total-mesa"><span>Total da mesa</span><b>${brl(s.total)}</b></div>` : ""}
@@ -100,6 +100,11 @@ export function telaGarcom(raiz, usuario, sair) {
     ligarTopo();
     ligarAbrir(!cs.length);
     $("#voltar", raiz).onclick = () => { V.mesa = null; desenhar(); };
+    $$("[data-edl]", raiz).forEach((b) => (b.onclick = () => {
+      const [cid, key] = b.dataset.edl.split("|");
+      const c = cs.find((x) => x.id === cid);
+      editarLancado(c, c.itens.find((i) => i.key === key), usuario, "mesa", desenhar);
+    }));
     $$("[data-lancar]", raiz).forEach((b) => (b.onclick = () => { V.comanda = b.dataset.lancar; V.rascunho = []; desenhar(); }));
     $("#trocar", raiz) && ($("#trocar", raiz).onclick = async () => {
       const n = Number(await pedirTexto(`Trocar a mesa ${V.mesa}`, "Para qual mesa?", { tipo: "number", ok: "Trocar" }));
