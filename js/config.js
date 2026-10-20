@@ -9,29 +9,18 @@
 //    Enquanto estiver vazio, o sistema roda em MODO DEMONSTRAÇÃO:
 //    os dados ficam só neste navegador (abas do mesmo computador se falam).
 //    Veja o README.md para o passo a passo de como preencher.
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDesM9QPiWOlhQhPkMvkSeaGvj4urlvXvY",
-  authDomain: "sistema-elite-amarilis.firebaseapp.com",
-  projectId: "sistema-elite-amarilis",
-  storageBucket: "sistema-elite-amarilis.firebasestorage.app",
-  messagingSenderId: "492577230327",
-  appId: "1:492577230327:web:0c80b61f8e2b1d1910f2f2"
+export const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  appId: "",
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 
 // 2) MARCA DO SISTEMA (aparece em todas as telas e no fim de cada cupom)
 export const MARCA = {
   sistema: "Sistema Elite",
   empresa: "Elite MKT",
-  logo: "assets/elite-logo.svg",
+  logo: "assets/elite-logo-128.png",
   site: "",          // ex.: "elitemkt.com.br" (aparece no rodapé, se preenchido)
   instagram: "@elitefilmsdigital",
 };

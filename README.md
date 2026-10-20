@@ -140,7 +140,7 @@ Nesse modo os cupons saem na **impressora padrão** do Windows, por isso serve p
 
 ## Trocar a marca/logo
 
-- Logo da **Elite MKT**: substitua `assets/elite-logo.svg` pelo arquivo oficial (mesmo nome), ou mude o caminho em `MARCA.logo` no `js/config.js`.
+- Logo da **Elite MKT**: `assets/elite-logo.png` (original, fundo transparente) e `assets/elite-logo-128.png` (rodapé, login e ícone da aba). Ícones do app: `assets/icon-*.png`.
 - Logo da loja: `assets/logo-cliente.png` (fundo claro) e `assets/logo-cliente-claro.png` (para o fundo vermelho do cardápio).
 
 ## Nota fiscal (NFC-e): próximo passo
