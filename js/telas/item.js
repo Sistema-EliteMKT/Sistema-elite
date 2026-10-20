@@ -8,6 +8,14 @@ const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
 const saboresPossiveis = (p, onde) =>
   D.produtos.filter((x) => x.tipo === "pizza" && grupo(x) === grupo(p) && vendeEm(x, onde));
 
+// Promoção em que o cliente escolhe N itens (ex.: 2 sabores): nomes digitados + produtos das categorias marcadas.
+export function itensDaEscolha(p) {
+  const e = p.escolha;
+  if (!e?.n) return [];
+  const dosCats = D.produtos.filter((x) => (e.cats || []).includes(x.cat) && x.ativo !== false).map((x) => x.nome);
+  return [...new Set([...(e.itens || []), ...dosCats])];
+}
+
 // inicial: escolhas de um item já montado (botão Editar), para abrir a janela preenchida.
 export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial = null } = {}) {
   const cat = categoria(p.cat);
@@ -15,7 +23,7 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   const grupoAd = p.grupoAdicional ?? cat?.grupoAdicional ?? "";
   const adicionais = onde === "mesa" && grupoAd ? (loja().adicionais || []).filter((a) => a.grupo === grupoAd) : [];
   // Item simples sem opções: no garçom/caixa entra direto com 1 toque.
-  if (rapido && !inicial && p.tipo !== "pizza" && !(p.opcoes || []).length && !adicionais.length) {
+  if (rapido && !inicial && p.tipo !== "pizza" && !(p.opcoes || []).length && !p.escolha?.n && !adicionais.length) {
     aoAdicionar(criar(p, { qtd: 1 }));
     return;
   }
@@ -39,6 +47,8 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
         <label class="opt"><input type="radio" name="bor" value="" checked><span>Sem borda</span></label>
         ${bordas.map((b, i) => `<label class="opt"><input type="radio" name="bor" value="${i}"><span>${esc(b.nome)}</span><em>+ ${brl(b.preco)}</em></label>`).join("")}</div>` : ""}
     ` : ""}
+    ${p.escolha?.n ? `<div class="grp">${esc(p.escolha.titulo || `Escolha ${p.escolha.n}`)} <small>marque ${p.escolha.n}${p.escolha.n > 1 ? "" : ""}</small></div><div class="opts dois">${itensDaEscolha(p).map((o) =>
+      `<label class="opt"><input type="checkbox" name="es" value="${esc(o)}"><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
     ${(p.opcoes || []).length ? `<div class="grp">Escolha</div><div class="opts dois">${p.opcoes.map((o, i) =>
       `<label class="opt"><input type="radio" name="op" value="${esc(o)}" ${i ? "" : "checked"}><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
     ${adicionais.length ? `<div class="grp">Adicionais <small>só na mesa · pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
@@ -56,6 +66,7 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     const bi = val("bor");
     return {
       tam, segundo, borda: bi === "" || bi == null ? null : bordas[+bi], opcao: val("op"),
+      escolhidos: $$('input[name="es"]:checked', s).map((i) => i.value),
       extras: $$('input[name="ad"]:checked', s).map((i) => {
         const a = adicionais[+i.value];
         const qual = a.livre ? $(`[data-livre="${i.value}"]`, s)?.value.trim() : "";
@@ -66,6 +77,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   };
   const atualizar = () => {
     $("#qv", s).textContent = qtd;
+    // Escolha de N itens: ao chegar em N, as outras caixas ficam travadas.
+    const n = p.escolha?.n;
+    if (n) { const marcados = $$('input[name="es"]:checked', s).length; $$('input[name="es"]', s).forEach((i) => (i.disabled = !i.checked && marcados >= n)); }
     $("#ap", s).textContent = brl(criar(p, ler()).unit * qtd);
     const s2 = $("#s2", s);
     if (s2) s2.hidden = val("ns") !== "2";
@@ -76,6 +90,8 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   $("#qm", s).onclick = () => { if (qtd > 1) { qtd--; atualizar(); } };
   $("#qp", s).onclick = () => { qtd++; atualizar(); };
   $("#add", s).onclick = () => {
+    const n = p.escolha?.n;
+    if (n && $$('input[name="es"]:checked', s).length !== n) return toast(`Marque ${n} ${n > 1 ? "opções" : "opção"} para a promoção.`);
     const semNome = $$("[data-livre]", s).find((t) => !t.hidden && !t.value.trim());
     if (semNome) { semNome.focus(); semNome.placeholder = "Escreva qual é o adicional"; semNome.classList.add("falta"); return; }
     const novo = criar(p, ler());
@@ -144,21 +160,22 @@ function preencher(s, e, { bordas, adicionais }) {
     const t = $(`[data-livre="${i}"]`, s);
     if (t && x.qual) t.value = x.qual;
   }
+  for (const nome of e.escolhidos || []) $$('input[name="es"]', s).forEach((i) => { if (i.value === nome) i.checked = true; });
   if (e.obs) $("#obs", s).value = e.obs;
 }
 
 // Monta a linha do pedido a partir do produto e das escolhas.
-export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", extras = [], obs = "", qtd = 1 } = {}) {
+export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", extras = [], obs = "", qtd = 1, escolhidos = [] } = {}) {
   const cat = categoria(p.cat);
   const escolhas = {
-    tam, segundo: segundo?.id || null, borda: borda?.nome || null, opcao: opcao || "", obs: obs || "", qtd,
+    tam, segundo: segundo?.id || null, borda: borda?.nome || null, opcao: opcao || "", obs: obs || "", qtd, escolhidos,
     extras: extras.map((a) => ({ nome: a.base || a.nome, qual: a.qual || "" })),
   };
   const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [], escolhas };
   const somaExtras = extras.reduce((t, a) => t + (Number(a.preco) || 0), 0);
   const detExtras = extras.map((a) => `+ ${a.nome}`);
   if (p.tipo !== "pizza") {
-    return { ...base, nome: (cat?.prefixo || "") + p.nome + (opcao ? ` (${opcao})` : ""), det: detExtras, unit: (Number(p.preco) || 0) + somaExtras };
+    return { ...base, nome: (cat?.prefixo || "") + p.nome + (opcao ? ` (${opcao})` : ""), det: [...escolhidos.map((x) => `• ${x}`), ...detExtras], unit: (Number(p.preco) || 0) + somaExtras };
   }
   const preco = (x) => (tam === "B" && x.precoBroto ? x.precoBroto : x.preco);
   const sabores = segundo ? [p, segundo] : [p];

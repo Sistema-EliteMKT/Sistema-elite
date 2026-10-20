@@ -334,3 +334,4 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .raio-lin .in{min-width:0}
 .fiscal-det{margin:10px 0;border:1px dashed var(--line);border-radius:12px;padding:8px 10px}.fiscal-det summary{cursor:pointer;font-weight:600;font-size:14px}
 .serv-lin{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.serv-lin label{display:flex;align-items:center;gap:8px;flex:1}.serv-lin .in{width:72px;padding:8px}.serv-lin em{margin-left:auto}
+.promo-dir{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}.promo.off{opacity:.65}

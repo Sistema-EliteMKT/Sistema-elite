@@ -11,13 +11,14 @@ import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
 import { abaFluxo } from "./fluxo.js";
+import { abaPromocoes } from "./promocoes.js";
 import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
 import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
 
 const ABAS = [
   ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["fluxo", "Caixa"], ["motoboys", "Motoboys"], ["equipe", "Freelancers"], ["relatorio", "Resumo"],
-  ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["ajustes", "Ajustes"],
+  ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["promocoes", "Promoções"], ["ajustes", "Ajustes"],
 ];
 const TIPO = { entrega: "Delivery", retirada: "Retirada", balcao: "Balcão" };
 
@@ -99,7 +100,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     if (!el || (porDados && aba === "ajustes")) return;
     if (porDados && el.contains(document.activeElement) && document.activeElement.matches("input,select,textarea")) return;
     const ctx = { usuario, admin };
-    ({ pedidos: abaPedidos, mesas: abaMesas, fluxo: abaFluxo, motoboys: abaMotoboys, equipe: abaEquipe, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
+    ({ pedidos: abaPedidos, mesas: abaMesas, fluxo: abaFluxo, promocoes: abaPromocoes, motoboys: abaMotoboys, equipe: abaEquipe, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
   };
 
   // ------------------------------------------------------------------ Pedidos

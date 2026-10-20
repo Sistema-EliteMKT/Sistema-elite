@@ -67,7 +67,22 @@ export const nomeSetor = (id) => loja().setores.find((s) => s.id === id)?.nome |
 
 // Onde cada produto é vendido: "todos", "mesa" (só no salão) ou "delivery" (só entrega/retirada).
 export const canalDe = (p) => p?.canal || (p?.semEntrega ? "mesa" : "todos");
-export const vendeEm = (p, onde) => p.ativo !== false && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
+// Promoção: produto com janela de validade (dias da semana, horário, período). Fora dela não aparece para vender.
+export function promoValida(p, d = new Date()) {
+  const r = p?.promo;
+  if (!r) return true;
+  if ((r.dias || []).length && !r.dias.includes(d.getDay())) return false;
+  const min = (h) => { const [a, b] = String(h).split(":"); return Number(a) * 60 + (Number(b) || 0); };
+  if (r.de && r.ate) {
+    const agora = d.getHours() * 60 + d.getMinutes(), a = min(r.de), b = min(r.ate);
+    if (a <= b ? agora < a || agora > b : agora < a && agora > b) return false; // horário que passa da meia-noite também vale
+  }
+  const dia = hoje(d.getTime());
+  if (r.inicio && dia < r.inicio) return false;
+  if (r.fim && dia > r.fim) return false;
+  return true;
+}
+export const vendeEm = (p, onde) => p.ativo !== false && promoValida(p) && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
 
 // Primeira vez: grava loja, cardápio e equipe iniciais.
 export async function semearSePreciso() {
