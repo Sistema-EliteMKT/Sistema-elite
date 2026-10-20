@@ -1,8 +1,9 @@
 // App do garçom: mesas, comandas pelo número do cartão e lançamento de itens.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
-import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda } from "../regras.js";
+import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda, cancelarItem, cancelarComanda } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
+import { receber } from "./pagamento.js";
 
 export function telaGarcom(raiz, usuario, sair) {
   // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
@@ -91,9 +92,11 @@ export function telaGarcom(raiz, usuario, sair) {
       <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesas</button><h2>Mesa ${V.mesa}</h2><span class="pill st-${s.status}">${status}</span></div>
       ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""}</p>` : ""}
       ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(rotuloComanda(c))}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
-        ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="btn ghost sm" data-edl="${c.id}|${i.key}">Editar</button>` })).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
-        <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button></div>`).join("")}
+        ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="btn ghost sm" data-edl="${c.id}|${i.key}">Editar</button><button class="btn ghost sm perigo" data-ci="${c.id}|${i.key}">Remover</button>` })).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
+        <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button>
+        <button class="btn ghost sm perigo g-cancelar" data-cc="${c.id}">Cancelar esta comanda</button></div>`).join("")}
       ${cs.length ? `<div class="g-acoes"><button class="btn sec" id="trocar">Trocar / juntar mesa</button><button class="btn sec" id="conta">${s.status === "conta" ? "Reimprimir conta" : "Pedir a conta"}</button></div>
+        <button class="btn ok cheio" id="fechar">Fechar conta (receber)</button>
         <div class="total-mesa"><span>Total da mesa</span><b>${brl(s.total)}</b></div>` : ""}
       ${formAbrir(!cs.length)}
       ${rodapeMarca()}</div>`;
@@ -114,6 +117,44 @@ export function telaGarcom(raiz, usuario, sair) {
       try { await trocarMesa(cs.map((c) => c.id), n); V.mesa = n; toast(`Agora é a mesa ${n}.`); desenhar(); } catch (e) { erro(e); }
     });
     $("#conta", raiz) && ($("#conta", raiz).onclick = () => escolherConta(cs));
+    // Remover item já lançado: sai um aviso de cancelamento na impressora do setor.
+    $$("[data-ci]", raiz).forEach((b) => (b.onclick = async () => {
+      const [cid, key] = b.dataset.ci.split("|");
+      const i = cs.find((x) => x.id === cid)?.itens.find((x) => x.key === key);
+      const motivo = await pedirTexto(`Remover ${i ? `${i.qtd}x ${i.nome}` : "item"}`, "Motivo (ex.: cliente desistiu, lançado errado)", { ok: "Remover item" });
+      if (motivo == null) return;
+      try { await cancelarItem(cid, key, motivo, usuario); toast("Item removido. Aviso enviado ao setor."); } catch (e) { erro(e); }
+      desenhar();
+    }));
+    $$("[data-cc]", raiz).forEach((b) => (b.onclick = async () => {
+      const c = cs.find((x) => x.id === b.dataset.cc);
+      const motivo = await pedirTexto(`Cancelar ${rotuloComanda(c)}`, "Motivo (a comanda é apagada e os setores são avisados)", { ok: "Cancelar comanda" });
+      if (motivo == null) return;
+      try { await cancelarComanda(c.id, motivo, usuario); toast("Comanda cancelada."); } catch (e) { erro(e); }
+      if (!comandasDaMesa(V.mesa).length) V.mesa = null;
+      desenhar();
+    }));
+    $("#fechar", raiz) && ($("#fechar", raiz).onclick = () => escolherComandas(cs, "Fechar conta", "Receber", async (sel) => {
+      const pag = await receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${V.mesa}` });
+      if (!pag) return;
+      if (!comandasDaMesa(V.mesa).length) V.mesa = null;
+      desenhar();
+    }));
+  }
+
+  // Mesa com várias comandas: pergunta quais (uma só vai direto).
+  function escolherComandas(cs, titulo, botao, fn) {
+    const vivas = cs.filter((c) => c.aberto !== false);
+    if (vivas.length === 1) return fn(vivas);
+    const s = abrirSheet(`${cabecalhoSheet(`${titulo} · mesa ${V.mesa}`, "Marque as comandas")}<div class="sh-b">
+      <div class="opts">${vivas.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <button class="btn ok cheio" id="ok">${esc(botao)}</button></div>`);
+    $("#ok", s).onclick = () => {
+      const ids = $$("input:checked", s).map((i) => i.value);
+      if (!ids.length) return toast("Marque pelo menos uma comanda.");
+      fecharSheet();
+      fn(vivas.filter((c) => ids.includes(c.id)));
+    };
   }
 
   async function escolherConta(cs) {

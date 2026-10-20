@@ -320,3 +320,4 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .desvio small{display:block;margin-top:6px}
 .aviso-desvio{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;background:var(--warn);color:#fff;font-weight:700;padding:10px 14px;border-radius:12px;margin:10px 0}
 .aviso-desvio .btn{background:#fff;color:#222;border-color:#fff}
+.g-cancelar{display:block;margin:8px 0 0 auto}
