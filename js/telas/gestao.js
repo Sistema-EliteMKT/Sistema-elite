@@ -108,7 +108,9 @@ export function abaImpressao(el, { admin }) {
         <div class="opts dois letra"><div><label class="f" for="tam-${imp.id}">Tamanho da letra</label><select class="in" id="tam-${imp.id}" data-tam="${imp.id}">
             ${[["grande", "Grande (dupla)"], ["medio", "Médio"], ["pequeno", "Pequeno"]].map(([v, l]) => `<option value="${v}" ${(imp.tamanho || "medio") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="fon-${imp.id}">Fonte</label><select class="in" id="fon-${imp.id}" data-fon="${imp.id}">
-            ${[["A", "Normal"], ["B", "Compacta (menor)"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "A") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+            ${[["A", "Normal"], ["B", "Compacta (menor)"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "A") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="col-${imp.id}">Letras por linha</label><select class="in" id="col-${imp.id}" data-col="${imp.id}">
+            ${[[48, "48 (80 mm)"], [42, "42 (Bematech 80 mm)"], [32, "32 (58 mm)"]].map(([v, l]) => `<option value="${v}" ${Number(imp.colunas || 48) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-teste="${imp.id}">Imprimir teste</button></div></div>`;
     }).join("")}</div>
     <div class="card"><b>Imprimir por este computador</b>
@@ -128,7 +130,8 @@ export function abaImpressao(el, { admin }) {
       { t: `Salão: ${lj.setores.filter((s) => s.impressora === imp.id).map((s) => s.nome).join(", ") || "-"}` },
       { t: `Delivery: ${lj.setores.filter((s) => (s.impressoraDelivery || s.impressora) === imp.id).map((s) => s.nome).join(", ") || "-"}` },
       { t: new Date().toLocaleString("pt-BR") }, { t: "Acentuação: ção ã é ü" }, { sep: true },
-      { t: "1x Coca-Cola 2 litros (Normal)", b: true, g: true }, { t: "1x Pizza grande meio a meio", b: true, g: true }, { t: "   1/2 Calabresa", b: true }, { sep: true }, { t: "Sistema Elite · Elite MKT", c: true },
+      { t: "1x Coca-Cola 2 litros (Normal)", b: true, g: true }, { t: "1x Pizza grande meio a meio", b: true, g: true }, { t: "   1/2 Calabresa", b: true },
+      { sep: true }, { t: "1x Pizza grande Calabresa  74,00", e: "1x Pizza grande Calabresa", d: "74,00" }, { t: "TOTAL R$  74,00", e: "TOTAL R$", d: "74,00", b: true }, { sep: true }, { t: "Sistema Elite · Elite MKT", c: true },
     ])]).then(() => toast("Teste enviado para a fila")).catch(erro);
   }));
   // Tamanho/fonte: salva na hora e vale para os próximos cupons dessa impressora.
@@ -136,6 +139,7 @@ export function abaImpressao(el, { admin }) {
     .then(() => toast("Salvo. Clique em Imprimir teste para conferir.", "bom")).catch(erro);
   $$("[data-tam]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.tam, "tamanho", e.value)));
   $$("[data-fon]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.fon, "fonte", e.value)));
+  $$("[data-col]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.col, "colunas", Number(e.value))));
   $$("[data-re]", el).forEach((b) => (b.onclick = () => reimprimir(D.impressoes.find((j) => j.id === b.dataset.re)).then(() => toast("Enviado de novo")).catch(erro)));
   $$("[data-ver]", el).forEach((b) => (b.onclick = () => {
     const j = D.impressoes.find((x) => x.id === b.dataset.ver);
@@ -186,17 +190,17 @@ export function abaRelatorio(el, { usuario }) {
     <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}</div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div>`;
   $("#fech", el).onclick = () => {
     const w = Number(loja().colunas) || 48;
-    const lado = (a, b) => a + " ".repeat(Math.max(1, w - a.length - b.length)) + b;
+    const lado = (a, b) => ({ t: a + " ".repeat(Math.max(1, w - a.length - b.length)) + b, e: a, d: b });
     const r = (v) => v.toFixed(2).replace(".", ",");
     const linhas = [
       { t: loja().nome, b: true, c: true }, { t: "FECHAMENTO DO DIA", b: true, g: true, c: true },
       { t: new Date().toLocaleString("pt-BR"), c: true }, { t: `Por: ${usuario.nome}`, c: true }, { sep: true },
-      ...Object.entries(porForma).map(([f, v]) => ({ t: lado(f, r(v)) })), { sep: true },
-      ...Object.entries(porTipo).map(([t, v]) => ({ t: lado(nomesTipo[t] || t, r(v)) })),
-      { t: lado("Serviço", r(servico)) }, { t: lado("Descontos", r(desconto)) }, { t: lado("Cancelados", String(cancel.length)) }, { sep: true },
-      { t: lado("TOTAL RECEBIDO", r(total)), b: true, g: true }, { t: lado("Contas", String(pags.length)) }, { sep: true },
-      ...(D.saidas.length ? [{ t: "PAGAMENTOS A FREELANCERS", b: true }, ...D.saidas.map((x) => ({ t: lado(`${x.nome} (${x.forma})`, r(x.valor)) })), { t: lado("Total pago", r(saidas)), b: true }, { sep: true }] : []),
-      { t: lado("DINHEIRO NA GAVETA", r(gaveta)), b: true }, { sep: true },
+      ...Object.entries(porForma).map(([f, v]) => lado(f, r(v))), { sep: true },
+      ...Object.entries(porTipo).map(([t, v]) => lado(nomesTipo[t] || t, r(v))),
+      lado("Serviço", r(servico)), lado("Descontos", r(desconto)), lado("Cancelados", String(cancel.length)), { sep: true },
+      { ...lado("TOTAL RECEBIDO", r(total)), b: true, g: true }, lado("Contas", String(pags.length)), { sep: true },
+      ...(D.saidas.length ? [{ t: "PAGAMENTOS A FREELANCERS", b: true }, ...D.saidas.map((x) => lado(`${x.nome} (${x.forma})`, r(x.valor))), { ...lado("Total pago", r(saidas)), b: true }, { sep: true }] : []),
+      { ...lado("DINHEIRO NA GAVETA", r(gaveta)), b: true }, { sep: true },
       { t: "Sistema Elite · Elite MKT", c: true },
     ];
     store.lote([filaImpressao(loja().impressoraConta, "Fechamento do dia", linhas)]).then(() => toast("Fechamento enviado para impressão")).catch(erro);

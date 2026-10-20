@@ -320,14 +320,16 @@ export const pagarEquipe = (dados, quem) =>
 //  Cupons (texto para impressora térmica)
 // ---------------------------------------------------------------------------
 // Cada linha: { t: texto, b: negrito, g: grande, c: centralizado } ou { sep: true }
-const L = (t, o = {}) => ({ t: String(t ?? ""), ...o });
+// Linha com texto à esquerda e valor à direita: guarda as duas partes (e, d) para cada
+// impressora alinhar na sua largura; "t" já vem alinhado em 48 colunas para quem não sabe.
+const L = (t, o = {}) => (t && typeof t === "object" ? { t: t.t, e: t.e, d: t.d, ...o } : { t: String(t ?? ""), ...o });
 const SEP = { sep: true };
 const larg = () => Number(loja().colunas) || 48;
 const lado = (a, b, w = larg()) => {
   a = String(a); b = String(b);
   const n = w - b.length;
-  if (a.length > n - 1) a = a.slice(0, n - 1);
-  return a + " ".repeat(Math.max(1, n - a.length)) + b;
+  const ac = a.length > n - 1 ? a.slice(0, n - 1) : a;
+  return { t: ac + " ".repeat(Math.max(1, n - ac.length)) + b, e: a, d: b };
 };
 const r$ = (v) => (Number(v) || 0).toFixed(2).replace(".", ",");
 const hh = (t = Date.now()) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -463,7 +465,7 @@ export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
   ultimoCupom = Math.max(Date.now(), ultimoCupom + 1);
   // tamanho/fonte escolhidos em Impressoras vão junto com o cupom (o agente usa direto)
   const imp = loja().impressoras.find((i) => i.id === impressora) || {};
-  const estilo = { tamanho: imp.tamanho || "medio", fonte: imp.fonte || "A" };
+  const estilo = { tamanho: imp.tamanho || "medio", fonte: imp.fonte || "A", ...(imp.colunas ? { colunas: Number(imp.colunas) } : {}) };
   return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra } };
 }
 

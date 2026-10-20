@@ -8,12 +8,13 @@ export function htmlCupom(linhas, colunas = 48) {
   const corpo = linhas.map((l) => {
     if (l.sep) return `<div class="sep"></div>`;
     const cls = [l.b && "b", l.g && "g", l.c && "c"].filter(Boolean).join(" ");
+    if (l.d != null) return `<div class="${cls} lr"><span>${esc(l.e ?? l.t)}</span><span>${esc(l.d)}</span></div>`;
     return `<div class="${cls}">${esc(l.t) || "&nbsp;"}</div>`;
   }).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @page{size:${mm}mm auto;margin:0}
     body{margin:0;padding:3mm 3mm 8mm;width:${mm - 6}mm;font:12px/1.3 "Courier New",ui-monospace,monospace;color:#000;white-space:pre-wrap;word-break:break-word}
-    .b{font-weight:700}.g{font-size:15px}.c{text-align:center}.sep{border-top:1px dashed #000;margin:4px 0}
+    .b{font-weight:700}.g{font-size:15px}.lr{display:flex;justify-content:space-between;gap:8px;white-space:normal}.c{text-align:center}.sep{border-top:1px dashed #000;margin:4px 0}
   </style></head><body>${corpo}</body></html>`;
 }
 
