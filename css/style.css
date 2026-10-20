@@ -131,6 +131,7 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .mini{display:flex;align-items:center;gap:2px}
 .mini button,.mini-x{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:transparent;font-weight:800;flex:none;line-height:1}
 .mini span{min-width:22px;text-align:center;font-weight:800}
+.mini .ed{width:auto;border-radius:9px;padding:0 10px;font-size:13px;margin-right:4px}
 
 /* marca Elite */
 .marca{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:12.5px;padding:22px 0 10px;text-align:center}
@@ -235,6 +236,8 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .sel-topo{position:sticky;top:58px;z-index:10;background:var(--bg);padding:8px 0 6px}
 .sel-topo .chips{margin-top:8px}
 .sel-lista .it:last-child{border-bottom:0}
+.sel-sec{font-family:var(--disp);font-weight:400;color:var(--accent-txt);font-size:22px;margin:18px 0 2px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.sel-sec:first-child{margin-top:6px}
 .np-sel .sel-topo{top:0;background:var(--surface)}
 .np-sel .sel-lista{max-height:56vh;overflow:auto;padding-right:4px}
 .gbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1.5px solid var(--line);padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px))}

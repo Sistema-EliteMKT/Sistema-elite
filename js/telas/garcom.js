@@ -2,6 +2,7 @@
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
 import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
+import { editarItem } from "./item.js";
 
 export function telaGarcom(raiz, usuario, sair) {
   // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
@@ -164,12 +165,13 @@ export function telaGarcom(raiz, usuario, sair) {
       const tot = V.rascunho.reduce((t, i) => t + i.unit * i.qtd, 0);
       const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa} · ${rotuloComanda(c)}`, "Confira antes de enviar")}<div class="sh-b">
         ${V.rascunho.map((i, k) => `<div class="cl"><div class="n"><b>${esc(i.nome)}</b>${i.det.map((d) => `<small>${esc(d)}</small>`).join("")}${i.obs ? `<small class="obs">Obs: ${esc(i.obs)}</small>` : ""}<small>${brl(i.unit * i.qtd)}</small></div>
-          <div class="mini"><button data-menos="${k}" aria-label="Diminuir">−</button><span>${i.qtd}</span><button data-mais="${k}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Nada escolhido.</p>`}
+          <div class="mini"><button class="ed" data-ed="${k}">Editar</button><button data-menos="${k}" aria-label="Diminuir">−</button><span>${i.qtd}</span><button data-mais="${k}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Nada escolhido.</p>`}
         <div class="sum"><div class="t"><span>Total</span><span>${brl(tot)}</span></div></div>
         <button class="btn ok cheio grande" id="enviar" ${V.rascunho.length ? "" : "disabled"}>Enviar para produção</button>
         <button class="btn ghost cheio" id="mais">Continuar escolhendo</button></div>`);
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const i = V.rascunho[b.dataset.menos]; if (--i.qtd <= 0) V.rascunho.splice(b.dataset.menos, 1); barra(); des(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { V.rascunho[b.dataset.mais].qtd++; barra(); des(); }));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(V.rascunho[b.dataset.ed], "mesa", (novo) => { V.rascunho[b.dataset.ed] = novo; barra(); des(); })));
       $("#mais", s).onclick = fecharSheet;
       $("#enviar", s).onclick = async (ev) => {
         ev.currentTarget.disabled = true;

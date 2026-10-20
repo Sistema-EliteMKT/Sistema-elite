@@ -8,6 +8,7 @@ import {
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
+import { editarItem } from "./item.js";
 import { receber } from "./pagamento.js";
 import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
@@ -215,8 +216,9 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       $("#endBox", s).hidden = tipo !== "entrega";
       $("#taxaLivre", s).hidden = $("#bai", s).value !== "";
       $("#troco", s).hidden = $("#pg", s).value !== "Dinheiro";
-      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button>` })).join("") || `<p class="vazio">Escolha os produtos ao lado.</p>`;
+      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="btn ghost sm" data-ed="${k}">Editar</button><button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button>` })).join("") || `<p class="vazio">Escolha os produtos ao lado.</p>`;
       $$("[data-rm]", s).forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.rm, 1); atualizar(); }));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(itens[b.dataset.ed], "delivery", (novo) => { itens[b.dataset.ed] = novo; atualizar(); })));
       const sub = itens.reduce((x, i) => x + i.unit * i.qtd, 0);
       $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(sub)}</span></div>${tipo === "entrega" ? `<div><span>Entrega</span><span>${brl(taxa())}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(sub + taxa())}</span></div>`;
     };
@@ -373,8 +375,9 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="np-sel" id="sel"></div>
       <div class="np-form"><div class="grp">Itens a enviar</div><div id="itens"></div><button class="btn ok cheio grande" id="env">Enviar para produção</button></div></div>`, { largo: true });
     const atualizar = () => {
-      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="mini-x" data-rm="${k}">×</button>` })).join("") || `<p class="vazio">Escolha os produtos.</p>`;
+      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="btn ghost sm" data-ed="${k}">Editar</button><button class="mini-x" data-rm="${k}">×</button>` })).join("") || `<p class="vazio">Escolha os produtos.</p>`;
       $$("[data-rm]", s).forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.rm, 1); atualizar(); }));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(itens[b.dataset.ed], "mesa", (novo) => { itens[b.dataset.ed] = novo; atualizar(); })));
     };
     seletorProdutos($("#sel", s), (i) => { itens.push(i); atualizar(); }, { onde: "mesa" });
     $(".x", s).onclick = voltar;

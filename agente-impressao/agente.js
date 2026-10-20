@@ -12,6 +12,8 @@ import { imprimir } from "./impressora.js";
 const pasta = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(pasta, "config.json"), "utf8"));
 const log = (...a) => console.log(new Date().toLocaleTimeString("pt-BR"), ...a);
+// Versão do agente: vai gravada em cada cupom impresso, para o sistema avisar se estiver desatualizado.
+export const VERSAO = "2026.10.20-3";
 
 // ------------------------------------------------------------------ fila
 const app = initializeApp(cfg.firebase);
@@ -22,7 +24,7 @@ if (cfg.emulador) { // só para testes do desenvolvedor
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
 }
 await signInWithEmailAndPassword(auth, cfg.email, cfg.senha);
-log("Conectado como", cfg.email, "· impressoras:", Object.keys(cfg.impressoras).join(", "));
+log(`Agente ${VERSAO} · conectado como`, cfg.email, "· impressoras:", Object.keys(cfg.impressoras).join(", "));
 
 const minhas = Object.keys(cfg.impressoras);
 const ocupado = new Set();
@@ -42,7 +44,7 @@ async function processar(id, job) {
     if (!pegou) return;
     const imp = cfg.impressoras[job.impressora];
     await imprimir(job, imp && { ...imp, ...(job.estilo || {}) }, cfg.acentos);
-    await updateDoc(ref, { status: "impresso", impressoEm: Date.now(), erro: null });
+    await updateDoc(ref, { status: "impresso", impressoEm: Date.now(), erro: null, agente: VERSAO });
     log("Impresso:", job.titulo, "→", job.impressora);
   } catch (e) {
     const tentativas = (job.tentativas || 0) + 1;

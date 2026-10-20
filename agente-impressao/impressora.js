@@ -33,6 +33,8 @@ function texto(s, pagina) {
 // imp.tamanho:  tamanho das linhas em destaque (itens e títulos)
 //               "grande"  = letra dupla (larga e alta) · "medio" = só mais alta · "pequeno" = normal, em negrito
 // imp.fonte:    "A" (normal, padrão) ou "B" (compacta, menor ainda) · só ESC/POS
+// imp.corte:    "total" (padrão: separa o papel) · "parcial" (deixa uma pontinha) · "compat" (comando antigo ESC i) · "nenhum"
+// imp.avanco:   linhas em branco antes do corte (padrão 4)
 // Quebra o texto em linhas de até "max" letras, sem cortar palavra no meio.
 // As linhas de continuação ganham recuo para ficar claro que é o mesmo item.
 function quebrar(t, max) {
@@ -86,8 +88,13 @@ export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
     for (const parte of l.d != null ? ladoALado(l.e ?? l.t, l.d, max) : quebrar(l.t, max)) b.push(...texto(parte, pagina), 0x0a);
   }
   b.push(ESC, 0x61, 0, ...negrito(false), ...grande(false));
-  b.push(...Array(imp.avanco ?? 4).fill(0x0a));
-  if (imp.corte !== false) b.push(...(bema ? [ESC, 0x6d] : [GS, 0x56, 0x42, 0x00])); // corte parcial
+  b.push(...Array(Number(imp.avanco ?? 4)).fill(0x0a));
+  const corte = imp.corte === false ? "nenhum" : imp.corte || "total";
+  if (corte !== "nenhum") {
+    if (bema) b.push(ESC, corte === "parcial" ? 0x6d : 0x77);          // ESC m parcial · ESC w total
+    else if (corte === "compat") b.push(ESC, 0x69);                     // ESC i (impressoras antigas)
+    else b.push(GS, 0x56, corte === "parcial" ? 0x42 : 0x41, 0x03);     // GS V: avança e corta
+  }
   if (imp.bip && !bema) b.push(ESC, 0x42, 2, 2);
   return Buffer.from(b);
 }

@@ -40,6 +40,9 @@ export function abaMotoboys(el) {
   $$("[data-at]", el).forEach((b) => (b.onchange = () => store.salvar("motoboys", b.dataset.at, { ativo: b.checked }).catch(erro)));
 }
 
+// Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
+const VERSAO_AGENTE = "2026.10.20-3";
+
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
   const vendas = vendasPorGarcom();
@@ -105,10 +108,16 @@ export function abaImpressao(el, { admin }) {
       return `<div class="card"><div class="card-h"><div><b>🖨️ ${esc(imp.nome)}</b><small>${setores.length ? esc(setores.join(", ")) : "nenhum setor"}${lj.impressoraConta === imp.id ? " · contas e vias" : ""}</small></div>
         <span class="pill ${fila ? "alerta" : "ok"}">${fila ? `${fila} na fila` : "em dia"}</span></div>
         <small class="muted">${ult ? `Último impresso às ${hora(ult.impressoEm || ult.criadoEm)}` : "Nada impresso hoje"}</small>
+        ${ult && ult.por !== "navegador" ? (ult.agente === VERSAO_AGENTE ? `<small class="ok-txt">Agente atualizado (${esc(ult.agente)})</small>`
+          : `<small class="ruim-txt"><b>Agente desatualizado${ult.agente ? ` (${esc(ult.agente)})` : ""}.</b> Troque os arquivos do agente no computador do caixa para o tamanho da letra e o corte funcionarem.</small>`) : ""}
         <div class="opts dois letra"><div><label class="f" for="tam-${imp.id}">Tamanho da letra</label><select class="in" id="tam-${imp.id}" data-tam="${imp.id}">
             ${[["grande", "Grande (dupla)"], ["medio", "Médio"], ["pequeno", "Pequeno"]].map(([v, l]) => `<option value="${v}" ${(imp.tamanho || "medio") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="fon-${imp.id}">Fonte</label><select class="in" id="fon-${imp.id}" data-fon="${imp.id}">
             ${[["A", "Normal"], ["B", "Compacta (menor)"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "A") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="cor-${imp.id}">Corte do papel</label><select class="in" id="cor-${imp.id}" data-cor="${imp.id}">
+            ${[["total", "Automático (separa)"], ["parcial", "Parcial (pontinha)"], ["compat", "Compatível (antigas)"], ["nenhum", "Sem corte"]].map(([v, l]) => `<option value="${v}" ${(imp.corte || "total") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="ava-${imp.id}">Espaço antes do corte</label><select class="in" id="ava-${imp.id}" data-ava="${imp.id}">
+            ${[2, 3, 4, 5, 6, 8].map((v) => `<option value="${v}" ${Number(imp.avanco ?? 4) === v ? "selected" : ""}>${v} linhas</option>`).join("")}</select></div>
           <div><label class="f" for="col-${imp.id}">Letras por linha</label><select class="in" id="col-${imp.id}" data-col="${imp.id}">
             ${[[48, "48 (80 mm)"], [42, "42 (Bematech 80 mm)"], [32, "32 (58 mm)"]].map(([v, l]) => `<option value="${v}" ${Number(imp.colunas || 48) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-teste="${imp.id}">Imprimir teste</button></div></div>`;
@@ -140,6 +149,8 @@ export function abaImpressao(el, { admin }) {
   $$("[data-tam]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.tam, "tamanho", e.value)));
   $$("[data-fon]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.fon, "fonte", e.value)));
   $$("[data-col]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.col, "colunas", Number(e.value))));
+  $$("[data-cor]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.cor, "corte", e.value)));
+  $$("[data-ava]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.ava, "avanco", Number(e.value))));
   $$("[data-re]", el).forEach((b) => (b.onclick = () => reimprimir(D.impressoes.find((j) => j.id === b.dataset.re)).then(() => toast("Enviado de novo")).catch(erro)));
   $$("[data-ver]", el).forEach((b) => (b.onclick = () => {
     const j = D.impressoes.find((x) => x.id === b.dataset.ver);

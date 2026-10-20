@@ -2,7 +2,7 @@
 import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
 import { store } from "../store.js";
-import { montarItem } from "./item.js";
+import { montarItem, editarItem } from "./item.js";
 
 const K = "se_cliente";
 const lerLocal = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch { return {}; } };
@@ -84,11 +84,12 @@ export function telaCardapio(raiz) {
       $("#end", s).hidden = modo !== "entrega";
       $("#trocoBox", s).hidden = $("#cp", s).value !== "Dinheiro";
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
-        <div class="mini"><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
+        <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
       $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${modo === "entrega" ? `<div><span>Entrega</span><span>${brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
       $("#enviar", s).disabled = !sacola.length;
     };
     $$("[data-m]", s).forEach((b) => (b.onclick = () => { modo = b.dataset.m; atualizar(); }));
