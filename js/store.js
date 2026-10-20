@@ -124,8 +124,12 @@ function criarStoreFirebase() {
 
   const traduzir = (e) => {
     const c = e?.code || "";
-    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-email"))
+    if (c.includes("missing-password")) return new Error("Digite a senha da loja.");
+    if (c.includes("missing-email") || c.includes("invalid-email")) return new Error("Digite o e-mail da loja.");
+    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found"))
       return new Error("E-mail ou senha da loja incorretos.");
+    if (c.includes("too-many-requests")) return new Error("Muitas tentativas. Espere alguns minutos e tente de novo.");
+    if (c.includes("unauthorized-domain")) return new Error("Este endereço não está autorizado no Firebase (Authentication › Domínios autorizados).");
     if (c.includes("permission-denied")) return new Error("Sem permissão. Entre com a conta da loja neste aparelho.");
     if (c.includes("network") || c.includes("unavailable")) return new Error("Sem conexão com a internet.");
     return new Error(e?.message || "Algo deu errado.");

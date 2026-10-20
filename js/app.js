@@ -63,11 +63,14 @@ function telaLoginLoja() {
       ${rodapeMarca()}</div></div>`;
     const ir = async () => {
       $("#lerr").textContent = "";
+      if (!$("#le").value.trim()) { $("#lerr").textContent = "Digite o e-mail da loja."; return $("#le").focus(); }
+      if (!$("#ls").value) { $("#lerr").textContent = "Digite a senha da loja."; return $("#ls").focus(); }
       $("#lok").disabled = true;
       try { await store.entrarLoja($("#le").value, $("#ls").value); } catch (e) { $("#lerr").textContent = e.message; $("#lok").disabled = false; }
     };
     $("#lok").onclick = ir;
     $("#ls").onkeydown = (e) => e.key === "Enter" && ir();
+    $("#le").onkeydown = (e) => e.key === "Enter" && $("#ls").focus();
   });
 }
 
