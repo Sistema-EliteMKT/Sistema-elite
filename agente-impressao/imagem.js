@@ -16,7 +16,7 @@ const par = pares.find(([r, b]) => existsSync(r) && existsSync(b));
 if (par) { GlobalFonts.registerFromPath(par[0], FAMILIA); GlobalFonts.registerFromPath(par[1], FAMILIA); }
 
 // Tamanho da letra em pontos da impressora (203 dpi): texto normal e linha em destaque.
-const TAMANHOS = { pequeno: [20, 24], medio: [23, 30], grande: [26, 38] };
+const TAMANHOS = { pequeno: [22, 28], medio: [26, 34], grande: [30, 42] };
 
 export function cupomImagem(linhas, imp) {
   const W = Math.floor((Number(imp.larguraPx) || 576) / 8) * 8;
@@ -66,9 +66,12 @@ export function cupomImagem(linhas, imp) {
   for (const o of ops) {
     if (o.sep) { for (let x = M; x < W - M; x += 10) ctx.fillRect(x, o.y, 6, 2); continue; }
     ctx.font = fonte(o.l);
-    if (o.l.c) { ctx.textAlign = "center"; ctx.fillText(o.t, W / 2, o.y); ctx.textAlign = "left"; }
-    else ctx.fillText(o.t, M, o.y);
-    if (o.dir) { ctx.textAlign = "right"; ctx.fillText(o.dir, W - M, o.y); ctx.textAlign = "left"; }
+    // Contorno fino por cima: no papel térmico a Arial fina some; assim a letra sai mais cheia.
+    ctx.strokeStyle = "#000"; ctx.lineWidth = o.l.b || o.l.g ? 1 : 0.8;
+    const escrever = (t, x) => { ctx.fillText(t, x, o.y); ctx.strokeText(t, x, o.y); };
+    if (o.l.c) { ctx.textAlign = "center"; escrever(o.t, W / 2); ctx.textAlign = "left"; }
+    else escrever(o.t, M);
+    if (o.dir) { ctx.textAlign = "right"; escrever(o.dir, W - M); ctx.textAlign = "left"; }
   }
 
   // Preto e branco + comando de imagem GS v 0, em faixas para não lotar a memória da impressora.
@@ -85,7 +88,7 @@ export function cupomImagem(linhas, imp) {
         for (let bit = 0; bit < 8; bit++) {
           const i = (yy * W + bx * 8 + bit) * 4;
           const lum = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-          if (lum < 150) byte |= 0x80 >> bit;
+          if (lum < 185) byte |= 0x80 >> bit;
         }
         out.push(byte);
       }

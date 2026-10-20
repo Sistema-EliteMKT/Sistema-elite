@@ -13,8 +13,8 @@ export function htmlCupom(linhas, colunas = 48) {
   }).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @page{size:${mm}mm auto;margin:0}
-    body{margin:0;padding:3mm 3mm 8mm;width:${mm - 6}mm;font:12px/1.3 "Courier New",ui-monospace,monospace;color:#000;white-space:pre-wrap;word-break:break-word}
-    .b{font-weight:700}.g{font-size:15px}.lr{display:flex;justify-content:space-between;gap:8px;white-space:normal}.c{text-align:center}.sep{border-top:1px dashed #000;margin:4px 0}
+    body{margin:0;padding:3mm 3mm 8mm;width:${mm - 6}mm;font:600 13px/1.35 Arial,"Liberation Sans",Helvetica,sans-serif;color:#000;white-space:pre-wrap;word-break:break-word}
+    .b{font-weight:700}.g{font-size:17px}.lr{display:flex;justify-content:space-between;gap:8px;white-space:normal}.c{text-align:center}.sep{border-top:1px dashed #000;margin:4px 0}
   </style></head><body>${corpo}</body></html>`;
 }
 

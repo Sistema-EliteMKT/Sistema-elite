@@ -4,7 +4,7 @@ import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
   abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta, imprimirPorSetor, imprimirJunto,
-  rotuloComanda,
+  rotuloComanda, desvioDe, desviarImpressora,
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
@@ -41,6 +41,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
           <div class="p-quem"><button class="btn pri sm" id="novo">+ Novo pedido</button><button class="btn ghost sm" id="abrirMesa">+ Criar comanda</button><button class="btn ghost sm" id="garcom">Modo garçom</button>
             <span class="caixa-on"><i></i>${esc(usuario.nome)}</span><button class="btn ghost sm" id="sair">Sair</button></div>
         </div></header>
+        <div class="p-wrap" id="avisoImp"></div>
         <nav class="p-tabs chips" id="abas"></nav>
         <main class="p-wrap" id="corpo"></main>
         <div class="p-wrap">${rodapeMarca()}</div>`;
@@ -59,9 +60,32 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       mesas: new Set(D.abertos.filter((p) => p.tipo === "mesa" && p.status === "conta").map((p) => p.mesa)).size,
       impressao: D.impressoes.filter((j) => j.status === "erro").length,
     };
+    avisoImpressora();
     $("#abas", raiz).innerHTML = ABAS.filter(([k]) => admin || k !== "ajustes")
       .map(([k, l]) => `<button class="chip" data-aba="${k}" aria-pressed="${aba === k}">${l}${cont[k] ? `<span class="badge">${cont[k]}</span>` : ""}</button>`).join("");
     $$("[data-aba]", raiz).forEach((b) => (b.onclick = () => { aba = b.dataset.aba; sessionStorage.setItem("se_aba", aba); atualizarAbas(); atualizarAba(); }));
+  };
+
+  // Aviso no topo: desvio de emergência ligado, ou impressora dando erro (com botão para desviar).
+  const avisoImpressora = () => {
+    const el = $("#avisoImp", raiz);
+    if (!el) return;
+    const lj = loja();
+    const nome = (id) => lj.impressoras.find((i) => i.id === id)?.nome || id;
+    const html = lj.impressoras.map((imp) => {
+      const para = desvioDe(imp.id);
+      if (para) return `<div class="aviso-desvio" role="status"><span>🚨 Desvio ligado: cupons da ${esc(nome(imp.id))} estão saindo na ${esc(nome(para))}.</span>
+        <button class="btn sm" data-desf="${imp.id}">Voltar ao normal</button></div>`;
+      const errs = D.impressoes.filter((j) => j.impressora === imp.id && j.status === "erro").length;
+      const outra = lj.impressoras.find((i) => i.id !== imp.id && !desvioDe(i.id));
+      if (!errs || !outra) return "";
+      return `<div class="aviso-desvio" role="alert"><span>⚠️ ${esc(nome(imp.id))} não está imprimindo (${errs} cupom${errs > 1 ? "s" : ""} com erro).</span>
+        <button class="btn sm" data-dsv="${imp.id}" data-para="${outra.id}">Mandar para a ${esc(nome(outra.id))}</button></div>`;
+    }).join("");
+    if (el.innerHTML !== html) el.innerHTML = html;
+    $$("[data-desf]", el).forEach((b) => (b.onclick = () => desviarImpressora(b.dataset.desf, "").then(() => toast("Desvio desligado", "bom")).catch(erro)));
+    $$("[data-dsv]", el).forEach((b) => (b.onclick = () => desviarImpressora(b.dataset.dsv, b.dataset.para)
+      .then((n) => toast(`Desvio ligado${n ? `: ${n} cupom${n > 1 ? "s" : ""} parado${n > 1 ? "s" : ""} já foi junto` : ""}`, "bom")).catch(erro)));
   };
 
   // porDados = redesenho porque algo mudou no banco. Ajustes tem formulário: não redesenha por baixo de quem digita.

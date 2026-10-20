@@ -3,6 +3,7 @@ import { store, novoId } from "./store.js";
 import { LOJA_INICIAL, EQUIPE_INICIAL, MARCA } from "./config.js";
 import { CATEGORIAS, PRODUTOS, BORDAS, TAXAS_ENTREGA, ADICIONAIS } from "./cardapio-inicial.js";
 import { hoje } from "./ui.js";
+import { temInternet } from "./rede.js";
 
 // ---------------------------------------------------------------------------
 //  Estado ao vivo (o que está no banco, sempre atualizado)
@@ -116,7 +117,7 @@ export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "",
   const trava = { aberta: true, pedido: id, mesa, dia: hoje(), em: Date.now() };
   let ocupada = null;
   try {
-    if (!navigator.onLine) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
+    if (!temInternet()) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
     await store.transacao("travas", travaId, (t) => {
       if (t?.aberta) { ocupada = t; return null; }
       return trava;
@@ -187,7 +188,7 @@ export async function alterarItem(pedidoId, key, novo, quem) {
   };
   // Transação: não apaga item que outro garçom lançou ao mesmo tempo. Sem internet, grava direto.
   try {
-    if (!navigator.onLine) throw Object.assign(new Error("offline"), { offline: true });
+    if (!temInternet()) throw Object.assign(new Error("offline"), { offline: true });
     await store.transacao("pedidos", pedidoId, (atual) => ({ itens: (atual?.itens || []).map((i) => (i.key === key ? item : i)) }));
   } catch (e) {
     if (!e.offline) throw e;
@@ -261,7 +262,7 @@ export const ETAPAS = {
 // Sem internet, numera pelo que este aparelho já viu hoje (o caixa é quem numera).
 async function numeroDoPedido() {
   try {
-    if (!navigator.onLine) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
+    if (!temInternet()) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
     return await store.proximoNumero(hoje());
   }
   catch (e) {
@@ -510,15 +511,49 @@ export function impressoraDoSetor(setor, tipo = "mesa") {
 
 // criadoEm sempre crescente: a impressora imprime na ordem em que os papéis foram pedidos.
 let ultimoCupom = 0;
+// Desvio de emergência (aba Impressoras): se uma impressora parar, os cupons dela vão para outra.
+export const desvioDe = (id) => {
+  const para = loja().desvios?.[id];
+  return para && para !== id && loja().impressoras.some((i) => i.id === para) ? para : null;
+};
+const nomeImpressora = (id) => loja().impressoras.find((i) => i.id === id)?.nome || id;
+const cabecalhoDesvio = (de) => [{ t: `** DESVIADO: ERA DA ${nomeImpressora(de).toUpperCase()} **`, b: true, c: true }, { sep: true }];
+
+// Sem internet, o computador do caixa pode imprimir na hora pelo navegador (veja estacao.js).
+let imprimirLocal = null;
+export const aoImprimirSemInternet = (fn) => (imprimirLocal = fn);
+
 export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
   ultimoCupom = Math.max(Date.now(), ultimoCupom + 1);
+  const para = desvioDe(impressora);
+  if (para) { extra = { ...extra, desviadoDe: impressora }; linhas = [...cabecalhoDesvio(impressora), ...linhas]; impressora = para; }
   // tamanho/fonte escolhidos em Impressoras vão junto com o cupom (o agente usa direto)
   const imp = loja().impressoras.find((i) => i.id === impressora) || {};
   const estilo = {
     tamanho: imp.tamanho || "medio", fonte: imp.fonte || "arial", corte: imp.corte || "total", avanco: Number(imp.avanco ?? 4),
     ...(imp.colunas ? { colunas: Number(imp.colunas) } : {}),
   };
-  return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra } };
+  const dados = { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra };
+  // Já sai impresso daqui: quando a internet voltar, o agente não imprime de novo.
+  if (imprimirLocal?.(dados)) Object.assign(dados, { status: "impresso", por: "navegador", impressoEm: Date.now() });
+  return { tipo: "criar", col: "impressoes", dados };
+}
+
+// Liga/desliga o desvio e leva junto o que ficou parado na fila da impressora que parou.
+export async function desviarImpressora(de, para) {
+  const lj = loja();
+  const desvios = { ...(lj.desvios || {}) };
+  desvios[de] = para && para !== de ? para : ""; // "" desliga (apagar a chave não funciona com gravação parcial)
+  await store.salvar("config", "loja", { desvios });
+  if (!para || para === de) return 0;
+  const imp = lj.impressoras.find((i) => i.id === para) || {};
+  const parados = D.impressoes.filter((j) => j.impressora === de && ["pendente", "erro"].includes(j.status));
+  await Promise.all(parados.map((j) => store.salvar("impressoes", j.id, {
+    impressora: para, status: "pendente", erro: null, tentativas: 0, desviadoDe: de,
+    linhas: [...cabecalhoDesvio(de), ...j.linhas],
+    estilo: { ...(j.estilo || {}), tamanho: imp.tamanho || "medio", fonte: imp.fonte || "arial", ...(imp.colunas ? { colunas: Number(imp.colunas) } : {}) },
+  })));
+  return parados.length;
 }
 
 // p.itens = só os itens que devem sair agora (novos ou cancelados)

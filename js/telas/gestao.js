@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe } from "../regras.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -41,7 +41,7 @@ export function abaMotoboys(el) {
 }
 
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
-const VERSAO_AGENTE = "2026.10.20-4";
+const VERSAO_AGENTE = "2026.10.20-5";
 
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
@@ -120,16 +120,30 @@ export function abaImpressao(el, { admin }) {
             ${[2, 3, 4, 5, 6, 8].map((v) => `<option value="${v}" ${Number(imp.avanco ?? 4) === v ? "selected" : ""}>${v} linhas</option>`).join("")}</select></div>
           <div><label class="f" for="col-${imp.id}">Letras por linha</label><select class="in" id="col-${imp.id}" data-col="${imp.id}">
             ${[[48, "48 (80 mm)"], [42, "42 (Bematech 80 mm)"], [32, "32 (58 mm)"]].map(([v, l]) => `<option value="${v}" ${Number(imp.colunas || 48) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+        <div class="desvio ${desvioDe(imp.id) ? "on" : ""}"><label class="f" for="dsv-${imp.id}">🚨 Emergência: se esta impressora parar, mandar os cupons para</label>
+          <select class="in" id="dsv-${imp.id}" data-dsv="${imp.id}"><option value="">Não desviar (normal)</option>
+            ${lj.impressoras.filter((o) => o.id !== imp.id).map((o) => `<option value="${o.id}" ${desvioDe(imp.id) === o.id ? "selected" : ""}>${esc(o.nome)}</option>`).join("")}</select>
+          ${desvioDe(imp.id) ? `<small><b>Desvio ligado.</b> Os cupons saem na ${esc(nomeImp(desvioDe(imp.id)))} com o aviso "DESVIADO". Volte para "Não desviar" quando ela voltar a funcionar.</small>` : ""}</div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-teste="${imp.id}">Imprimir teste</button></div></div>`;
     }).join("")}</div>
     <div class="card"><b>Imprimir por este computador</b>
       <p class="muted pq">Use se o agente de impressão não estiver instalado. Deixe esta tela aberta no computador ligado às impressoras. Para sair sem janela de confirmação, abra o Chrome com <code>--kiosk-printing</code> (veja o manual).</p>
       <label class="opt"><input type="checkbox" id="estAt" ${est.ativo ? "checked" : ""}><span>Este computador imprime os cupons</span></label>
       <div class="opts dois">${lj.impressoras.map((i) => `<label class="opt"><input type="checkbox" data-ei="${i.id}" ${est.impressoras.includes(i.id) ? "checked" : ""}><span>${esc(i.nome)}</span></label>`).join("")}</div></div>
+    <div class="card"><b>Se a internet cair (computador do caixa)</b>
+      <p class="muted pq">Marque só no computador do caixa. Sem internet, o agente não recebe os cupons; com esta opção, tudo o que for lançado <b>neste computador</b> sai na hora pela impressora do Windows (escolha a Bematech na janela de impressão). Os celulares dos garçons guardam os pedidos e mandam quando a internet voltar.</p>
+      <label class="opt"><input type="checkbox" id="estSi" ${est.semInternet ? "checked" : ""}><span>Sem internet, imprimir por este computador</span></label></div>
     <div class="card"><b>Cupons de hoje</b>
       ${D.impressoes.slice(0, 80).map((j) => `<div class="cl"><div class="n"><b>${esc(j.titulo)}</b><small>${hora(j.criadoEm)} · ${esc(nomeImp(j.impressora))} · ${st[j.status] || j.status}${j.erro ? " · " + esc(j.erro) : ""}</small></div>
         <div class="v"><button class="btn ghost sm" data-ver="${j.id}">Ver</button><button class="btn ghost sm" data-re="${j.id}">Reimprimir</button></div></div>`).join("") || `<p class="vazio">Nenhum cupom hoje.</p>`}</div>`;
-  const salvarEst = () => gravarEstacao({ ativo: $("#estAt", el).checked, impressoras: $$("[data-ei]", el).filter((i) => i.checked).map((i) => i.dataset.ei) });
+  const salvarEst = () => gravarEstacao({ ativo: $("#estAt", el).checked, semInternet: $("#estSi", el).checked, impressoras: $$("[data-ei]", el).filter((i) => i.checked).map((i) => i.dataset.ei) });
+  $("#estSi", el).onchange = () => { salvarEst(); toast($("#estSi", el).checked ? "Sem internet, este computador imprime" : "Desligado"); };
+  $$("[data-dsv]", el).forEach((e) => (e.onchange = async () => {
+    try {
+      const n = await desviarImpressora(e.dataset.dsv, e.value);
+      toast(e.value ? `Desvio ligado: cupons vão para a ${nomeImp(e.value)}${n ? ` (${n} parado${n > 1 ? "s" : ""} na fila foram junto)` : ""}` : "Desvio desligado: tudo volta ao normal", "bom");
+    } catch (x) { erro(x); }
+  }));
   $("#estAt", el).onchange = () => { salvarEst(); toast($("#estAt", el).checked ? "Este computador vai imprimir" : "Impressão por este computador desligada"); };
   $$("[data-ei]", el).forEach((i) => (i.onchange = salvarEst));
   $$("[data-teste]", el).forEach((b) => (b.onclick = () => {

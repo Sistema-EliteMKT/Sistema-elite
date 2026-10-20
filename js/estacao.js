@@ -1,11 +1,12 @@
 // Estação de impressão pelo navegador: este computador pega os cupons pendentes
 // das impressoras escolhidas e imprime. (O agente de impressão faz o mesmo, sem janela.)
 import { store } from "./store.js";
-import { D, aoMudar, loja } from "./regras.js";
+import { D, aoMudar, loja, aoImprimirSemInternet } from "./regras.js";
+import { temInternet } from "./rede.js";
 import { imprimirNoNavegador } from "./imprimir-navegador.js";
 
 const K = "se_estacao";
-export const lerEstacao = () => { try { return JSON.parse(localStorage.getItem(K)) || { ativo: false, impressoras: [] }; } catch { return { ativo: false, impressoras: [] }; } };
+export const lerEstacao = () => { try { return JSON.parse(localStorage.getItem(K)) || { ativo: false, impressoras: [], semInternet: false }; } catch { return { ativo: false, impressoras: [], semInternet: false }; } };
 export const gravarEstacao = (v) => { try { localStorage.setItem(K, JSON.stringify(v)); } catch {} };
 
 const emAndamento = new Set();
@@ -35,5 +36,11 @@ let ligado = false;
 export function iniciarEstacao() {
   if (ligado) return;
   ligado = true;
+  // Internet caiu: o que for lançado neste computador sai na hora pela impressora do Windows.
+  aoImprimirSemInternet((j) => {
+    if (!lerEstacao().semInternet || temInternet()) return false;
+    imprimirNoNavegador(j.linhas, j.estilo?.colunas || loja().colunas);
+    return true;
+  });
   aoMudar(processar);
 }
