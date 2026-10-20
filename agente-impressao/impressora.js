@@ -30,13 +30,21 @@ function texto(s, pagina) {
 
 // imp.comandos: "escpos" (padrão: Control iD Print iD, Epson, Elgin e Bematech no modo ESC/POS)
 //               "escbema" (Bematech configurada no modo próprio da marca, ESC/Bema)
+// imp.tamanho:  tamanho das linhas em destaque (itens e títulos)
+//               "grande"  = letra dupla (larga e alta) · "medio" = só mais alta · "pequeno" = normal, em negrito
+// imp.fonte:    "A" (normal, padrão) ou "B" (compacta, menor ainda) · só ESC/POS
 export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
   const pagina = imp.acentos || acentosPadrao;
   const largura = imp.colunas || 48;
   const bema = imp.comandos === "escbema";
   const negrito = (on) => (bema ? [ESC, on ? 0x45 : 0x46] : [ESC, 0x45, on ? 1 : 0]);
-  const grande = (on) => (bema ? [ESC, 0x57, on ? 1 : 0, ESC, 0x64, on ? 1 : 0] : [GS, 0x21, on ? 0x11 : 0x00]);
+  const tam = imp.tamanho || "grande";
+  const grande = (on) => {
+    const larga = on && tam === "grande", alta = on && tam !== "pequeno";
+    return bema ? [ESC, 0x57, larga ? 1 : 0, ESC, 0x64, alta ? 1 : 0] : [GS, 0x21, (larga ? 0x10 : 0) | (alta ? 0x01 : 0)];
+  };
   const b = [ESC, 0x40]; // inicia
+  if (!bema && imp.fonte === "B") b.push(ESC, 0x4d, 1); // fonte compacta
   if (PAGINAS[pagina] && !bema) b.push(ESC, 0x74, PAGINAS[pagina].n);
   for (const l of linhas) {
     if (l.sep) { b.push(...texto("-".repeat(largura), pagina), 0x0a); continue; }

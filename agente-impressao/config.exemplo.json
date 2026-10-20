@@ -10,6 +10,6 @@
   "acentos": "sem-acentos",
   "impressoras": {
     "imp1": { "nome": "Caixa - Bematech MP-4200 TH (USB)", "tipo": "windows", "compartilhamento": "CAIXA", "colunas": 48, "comandos": "escpos" },
-    "imp2": { "nome": "Bar - Control iD Print iD (rede)", "tipo": "rede", "ip": "192.168.0.100", "porta": 9100, "colunas": 48, "comandos": "escpos" }
+    "imp2": { "nome": "Bar - Control iD Print iD (rede)", "tipo": "rede", "ip": "192.168.0.100", "porta": 9100, "colunas": 48, "comandos": "escpos", "tamanho": "medio", "fonte": "A" }
   }
 }

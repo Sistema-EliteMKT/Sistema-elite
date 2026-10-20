@@ -115,6 +115,8 @@ Se alguma delas for a versão com **cabo de rede**, use `{ "tipo": "rede", "ip":
      - `"colunas": 48` para bobina 80 mm, ou `32` para 58 mm.
      - `"comandos": "escpos"` (padrão) ou `"escbema"` para Bematech no modo da marca.
    - `acentos`: `"sem-acentos"` (funciona em qualquer impressora). Se quiser acento, teste `"cp860"` ou `"cp850"`.
+   - `tamanho` (opcional): letra dos itens e títulos. `"grande"` (dupla), `"medio"` (só mais alta) ou `"pequeno"` (normal, em negrito).
+   - `fonte` (opcional): `"A"` (normal) ou `"B"` (compacta, ainda menor).
 4. Dê dois cliques em **`iniciar.bat`**. Na primeira vez ele instala o que precisa. A janela mostra cada cupom impresso.
 5. Para abrir sozinho quando o computador ligar: aperte `Win + R`, digite `shell:startup` e coloque ali um **atalho** para o `iniciar.bat`.
 6. No painel: **Caixa > Impressão > Imprimir teste** em cada impressora.
