@@ -12,18 +12,38 @@ export function distanciaKm(a, b) {
   const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(x));
 }
-export const kmTxt = (v) => v.toFixed(1).replace(".", ",") + " km";
+export const kmTxt = (v) => (v == null ? "" : v.toFixed(1).replace(".", ",") + " km");
 
 // Raios da loja, do menor para o maior: [{ km, taxa }]
 export const raiosDe = (lj) => (lj.raios || []).filter((r) => Number(r.km) > 0).map((r) => ({ km: Number(r.km), taxa: Number(r.taxa) || 0 })).sort((a, b) => a.km - b.km);
 export const lojaPonto = (lj) => (Number.isFinite(Number(lj.entregaLat)) && lj.entregaLat !== "" && lj.entregaLat != null && lj.entregaLng != null ? [Number(lj.entregaLat), Number(lj.entregaLng)] : null);
-export const entregaPorRaio = (lj) => !!lojaPonto(lj) && raiosDe(lj).length > 0;
+// Áreas desenhadas no mapa: [{ nome, taxa, pontos: [{ lat, lng }, ...] }] (o Firestore não guarda lista dentro de lista, por isso objetos).
+export const zonasDe = (lj) => (lj.zonas || []).filter((z) => (z.pontos || []).length >= 3).map((z) => ({ nome: z.nome || "Área", taxa: Number(z.taxa) || 0, pontos: z.pontos }));
+// Usa o mapa quando há pelo menos uma área, ou raios com a pizzaria marcada.
+export const entregaPorMapa = (lj) => zonasDe(lj).length > 0 || (!!lojaPonto(lj) && raiosDe(lj).length > 0);
+export const entregaPorRaio = entregaPorMapa;
 
-// Taxa para um ponto: { km, taxa } ou { km, fora: true } quando passa do último raio.
+// Ponto dentro do polígono (traçado de raio).
+export function dentroDe(ponto, pontos) {
+  const [y, x] = ponto;
+  let dentro = false;
+  for (let i = 0, j = pontos.length - 1; i < pontos.length; j = i++) {
+    const yi = pontos[i].lat, xi = pontos[i].lng, yj = pontos[j].lat, xj = pontos[j].lng;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+// Taxa para um ponto: primeiro as áreas desenhadas, depois os raios. Retorna
+// { taxa, area?, km?, ate? } ou { fora: true, km?, max? } quando não cai em nada.
 export function taxaDoPonto(lj, ponto) {
-  const km = distanciaKm(lojaPonto(lj), ponto);
-  const r = raiosDe(lj).find((x) => km <= x.km + 1e-9);
-  return r ? { km, taxa: r.taxa, ate: r.km } : { km, fora: true, max: Math.max(...raiosDe(lj).map((x) => x.km)) };
+  const loja = lojaPonto(lj);
+  const km = loja ? distanciaKm(loja, ponto) : null;
+  const z = zonasDe(lj).find((x) => dentroDe(ponto, x.pontos));
+  if (z) return { km, taxa: z.taxa, area: z.nome };
+  const r = loja && raiosDe(lj).find((x) => km <= x.km + 1e-9);
+  if (r) return { km, taxa: r.taxa, ate: r.km };
+  return { km, fora: true, max: raiosDe(lj).length ? Math.max(...raiosDe(lj).map((x) => x.km)) : null };
 }
 
 // ---------------------------------------------------------------- buscas
@@ -93,15 +113,21 @@ export async function novoMapa(el, centro = CENTRO_PADRAO) {
   return { L, mapa };
 }
 const CORES = ["#2E7D32", "#F9A825", "#EF6C00", "#C62828", "#6A1B9A", "#1565C0"];
-export function desenharRaios(L, mapa, grupo, lj) {
+export function desenharRaios(L, mapa, grupo, lj, { pino = true } = {}) {
   grupo.clearLayers();
   const p = lojaPonto(lj);
-  if (!p) return;
-  raiosDe(lj).slice().reverse().forEach((r, i, tudo) => {
-    const cor = CORES[(tudo.length - 1 - i) % CORES.length];
-    L.circle(p, { radius: r.km * 1000, color: cor, weight: 2, fillColor: cor, fillOpacity: 0.07 }).bindTooltip(`até ${kmTxt(r.km)} · ${brl(r.taxa)}`, { sticky: true }).addTo(grupo);
+  if (p) {
+    raiosDe(lj).slice().reverse().forEach((r, i, tudo) => {
+      const cor = CORES[(tudo.length - 1 - i) % CORES.length];
+      L.circle(p, { radius: r.km * 1000, color: cor, weight: 2, fillColor: cor, fillOpacity: 0.07 }).bindTooltip(`até ${kmTxt(r.km)} · ${brl(r.taxa)}`, { sticky: true }).addTo(grupo);
+    });
+    if (pino) L.marker(p, { title: "Pizzaria" }).addTo(grupo);
+  }
+  zonasDe(lj).forEach((z, i) => {
+    const cor = CORES[(i + 3) % CORES.length];
+    L.polygon(z.pontos.map((q) => [q.lat, q.lng]), { color: cor, weight: 2, dashArray: "6 4", fillColor: cor, fillOpacity: 0.16 })
+      .bindTooltip(`${z.nome} · ${brl(z.taxa)}`, { sticky: true }).addTo(grupo);
   });
-  L.marker(p, { title: "Pizzaria" }).addTo(grupo);
 }
 
 // ---------------------------------------------------------------- localizador (cliente e caixa)
@@ -109,6 +135,8 @@ export function desenharRaios(L, mapa, grupo, lj) {
 // aoMudar({ ponto, km, taxa, fora, rua, bairro, cidade, cep }) a cada mudança; aoMudar(null) se limpar.
 export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotuloCaixa = false } = {}) {
   const loja = lojaPonto(lj);
+  const z0 = zonasDe(lj)[0];
+  const base = loja || (z0 ? [z0.pontos[0].lat, z0.pontos[0].lng] : CENTRO_PADRAO.slice(0, 2));
   el.innerHTML = `<div class="loc">
     <button type="button" class="btn sec cheio" data-geo>📍 Usar minha localização</button>
     <div class="loc-ou">ou procure pelo CEP</div>
@@ -122,8 +150,9 @@ export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotulo
 
   const aplicar = (ponto) => {
     const r = taxaDoPonto(lj, ponto);
-    msg(r.fora ? `📍 A ${kmTxt(r.km)} da pizzaria. <b>Fora da nossa área de entrega</b> (vamos até ${kmTxt(r.max)}).`
-      : `📍 A ${kmTxt(r.km)} da pizzaria · <b>Entrega ${brl(r.taxa)}</b>`, !!r.fora);
+    const dist = r.km != null ? `A ${kmTxt(r.km)} da pizzaria · ` : "";
+    msg(r.fora ? `📍 ${dist}<b>Fora da nossa área de entrega</b>${r.max ? ` (vamos até ${kmTxt(r.max)})` : ""}.`
+      : `📍 ${dist}${r.area ? `Área ${esc(r.area)} · ` : ""}<b>Entrega ${brl(r.taxa)}</b>`, !!r.fora);
     aoMudar({ ponto, ...r, ...dados });
   };
   const mostrar = async (ponto, zoom = 16) => {
@@ -144,8 +173,8 @@ export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotulo
     aplicar(ponto);
   };
   // Sem achar o endereço: abre o mapa na loja para a pessoa tocar onde está.
-  const manual = async (aviso) => { msg(aviso, true); if (!mp) { try { const m = await novoMapa(q("[data-mapa]"), [...(loja || CENTRO_PADRAO.slice(0, 2)), 13]); mp = m; mp.grupo = m.L.layerGroup().addTo(m.mapa); desenharRaios(m.L, m.mapa, mp.grupo, lj);
-      marcador = m.L.marker(loja, { draggable: true, icon: m.L.divIcon({ className: "pino-cli", html: "📍", iconSize: [30, 30], iconAnchor: [15, 28] }) }); marcador.on("dragend", () => aplicar([marcador.getLatLng().lat, marcador.getLatLng().lng]));
+  const manual = async (aviso) => { msg(aviso, true); if (!mp) { try { const m = await novoMapa(q("[data-mapa]"), [...base, 13]); mp = m; mp.grupo = m.L.layerGroup().addTo(m.mapa); desenharRaios(m.L, m.mapa, mp.grupo, lj);
+      marcador = m.L.marker(base, { draggable: true, icon: m.L.divIcon({ className: "pino-cli", html: "📍", iconSize: [30, 30], iconAnchor: [15, 28] }) }); marcador.on("dragend", () => aplicar([marcador.getLatLng().lat, marcador.getLatLng().lng]));
       m.mapa.on("click", (e) => { if (!m.mapa.hasLayer(marcador)) marcador.addTo(m.mapa); marcador.setLatLng(e.latlng); aplicar([e.latlng.lat, e.latlng.lng]); }); } catch (e) { msg(e.message, true); } } };
 
   q("[data-geo]").onclick = async (ev) => {

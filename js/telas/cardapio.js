@@ -102,7 +102,7 @@ export function telaCardapio(raiz) {
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
-      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "informe o endereço" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
+      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "informe o endereço" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
       $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
@@ -112,7 +112,7 @@ export function telaCardapio(raiz) {
     $$("select", s).forEach((x) => (x.onchange = atualizar));
     $("#enviar", s).onclick = async () => {
       const c = { nome: $("#cn", s).value.trim(), telefone: $("#ct", s).value.trim(), endereco: $("#ce", s).value.trim(), bairro: porRaio ? loc?.bairro || "" : $("#cb", s)?.value || "", referencia: $("#cr", s).value.trim() };
-      if (porRaio && loc && !loc.fora) Object.assign(c, { lat: loc.ponto[0], lng: loc.ponto[1], distanciaKm: Math.round(loc.km * 10) / 10, cep: loc.cep || "" });
+      if (porRaio && loc && !loc.fora) Object.assign(c, { lat: loc.ponto[0], lng: loc.ponto[1], distanciaKm: loc.km != null ? Math.round(loc.km * 10) / 10 : null, area: loc.area || "", cep: loc.cep || "" });
       const e = $("#err", s);
       if (!c.nome) return (e.textContent = "Coloque seu nome.");
       if (c.telefone.replace(/\D/g, "").length < 10) return (e.textContent = "Coloque um WhatsApp com DDD.");

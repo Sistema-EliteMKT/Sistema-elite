@@ -601,6 +601,7 @@ export function cupomEntrega(p) {
   if (p.tipo === "entrega") {
     linhas.push(L(c.endereco || "", { b: true }));
     if (c.bairro) linhas.push(L(`Bairro: ${c.bairro}`, { b: true }));
+    if (c.area) linhas.push(L(`Área de entrega: ${c.area}`));
     if (c.distanciaKm) linhas.push(L(`Distância: ${String(c.distanciaKm).replace(".", ",")} km`));
     if (c.referencia) linhas.push(L(`Complemento/ref.: ${c.referencia}`));
   }

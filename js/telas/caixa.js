@@ -269,8 +269,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       } });
       $("#usarTaxa", s2).onclick = () => {
         $("#bai", s).value = ""; $("#taxaLivre", s).value = String(achou.taxa).replace(".", ",");
-        geo = { lat: achou.ponto[0], lng: achou.ponto[1], distanciaKm: Math.round(achou.km * 10) / 10, cep: achou.cep || "", bairro: achou.bairro || "" };
-        $("#mapaInfo", s).textContent = ` ${kmTxt(achou.km)} da pizzaria`;
+        geo = { lat: achou.ponto[0], lng: achou.ponto[1], distanciaKm: achou.km != null ? Math.round(achou.km * 10) / 10 : null, area: achou.area || "", cep: achou.cep || "", bairro: achou.bairro || "" };
+        $("#mapaInfo", s).textContent = achou.area ? ` Área ${achou.area}` : ` ${kmTxt(achou.km)} da pizzaria`;
         fecharSheet(); atualizar();
       };
     });
@@ -291,7 +291,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const e = $("#err", s);
       if (!itens.length) return (e.textContent = "Coloque pelo menos um item.");
       const cliente = { nome: $("#nom", s).value.trim(), telefone: $("#tel", s).value.trim() };
-      if (tipo === "entrega") Object.assign(cliente, { endereco: $("#end", s).value.trim(), bairro: $("#bai", s).value || geo?.bairro || "", referencia: $("#ref", s).value.trim() }, geo ? { lat: geo.lat, lng: geo.lng, distanciaKm: geo.distanciaKm, cep: geo.cep } : {});
+      if (tipo === "entrega") Object.assign(cliente, { endereco: $("#end", s).value.trim(), bairro: $("#bai", s).value || geo?.bairro || "", referencia: $("#ref", s).value.trim() }, geo ? { lat: geo.lat, lng: geo.lng, distanciaKm: geo.distanciaKm, area: geo.area, cep: geo.cep } : {});
       if (tipo === "entrega" && !cliente.endereco) return (e.textContent = "Coloque o endereço.");
       const forma = $("#pg", s).value;
       ev.currentTarget.disabled = true;
