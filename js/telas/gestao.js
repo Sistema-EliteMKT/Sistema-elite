@@ -41,7 +41,7 @@ export function abaMotoboys(el) {
 }
 
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
-const VERSAO_AGENTE = "2026.10.20-3";
+const VERSAO_AGENTE = "2026.10.20-4";
 
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
@@ -113,7 +113,7 @@ export function abaImpressao(el, { admin }) {
         <div class="opts dois letra"><div><label class="f" for="tam-${imp.id}">Tamanho da letra</label><select class="in" id="tam-${imp.id}" data-tam="${imp.id}">
             ${[["grande", "Grande (dupla)"], ["medio", "Médio"], ["pequeno", "Pequeno"]].map(([v, l]) => `<option value="${v}" ${(imp.tamanho || "medio") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="fon-${imp.id}">Fonte</label><select class="in" id="fon-${imp.id}" data-fon="${imp.id}">
-            ${[["A", "Normal"], ["B", "Compacta (menor)"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "A") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+            ${[["arial", "Arial (igual ao sistema antigo)"], ["A", "Da impressora"], ["B", "Da impressora, compacta"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "arial") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="cor-${imp.id}">Corte do papel</label><select class="in" id="cor-${imp.id}" data-cor="${imp.id}">
             ${[["total", "Automático (separa)"], ["parcial", "Parcial (pontinha)"], ["compat", "Compatível (antigas)"], ["nenhum", "Sem corte"]].map(([v, l]) => `<option value="${v}" ${(imp.corte || "total") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="ava-${imp.id}">Espaço antes do corte</label><select class="in" id="ava-${imp.id}" data-ava="${imp.id}">

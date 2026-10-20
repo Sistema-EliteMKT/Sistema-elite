@@ -88,7 +88,14 @@ export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
     for (const parte of l.d != null ? ladoALado(l.e ?? l.t, l.d, max) : quebrar(l.t, max)) b.push(...texto(parte, pagina), 0x0a);
   }
   b.push(ESC, 0x61, 0, ...negrito(false), ...grande(false));
-  b.push(...Array(Number(imp.avanco ?? 4)).fill(0x0a));
+  b.push(...fimDeCupom(imp));
+  return Buffer.from(b);
+}
+
+// Avança o papel e corta (igual para texto e imagem).
+function fimDeCupom(imp) {
+  const bema = imp.comandos === "escbema";
+  const b = [...Array(Number(imp.avanco ?? 4)).fill(0x0a)];
   const corte = imp.corte === false ? "nenhum" : imp.corte || "total";
   if (corte !== "nenhum") {
     if (bema) b.push(ESC, corte === "parcial" ? 0x6d : 0x77);          // ESC m parcial · ESC w total
@@ -96,7 +103,21 @@ export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
     else b.push(GS, 0x56, corte === "parcial" ? 0x42 : 0x41, 0x03);     // GS V: avança e corta
   }
   if (imp.bip && !bema) b.push(ESC, 0x42, 2, 2);
-  return Buffer.from(b);
+  return b;
+}
+
+// Fonte "arial": desenha o cupom como imagem (igual ao sistema antigo). Só no modo ESC/POS.
+async function cupomEmImagem(linhas, imp, acentosPadrao) {
+  let cupomImagem;
+  try { ({ cupomImagem } = await import("./imagem.js")); }
+  catch (e) {
+    // Faltou instalar a parte de desenho: imprime em texto para não parar a cozinha.
+    console.log("Aviso: fonte Arial indisponível (rode o iniciar.bat de novo com internet). Imprimindo em texto.", e.message);
+    return escpos(linhas, { ...imp, fonte: "A" }, acentosPadrao);
+  }
+  const larguraPx = imp.larguraPx || ((Number(imp.colunas) || 48) <= 32 ? 384 : 576);
+  const { bytes } = cupomImagem(linhas, { ...imp, larguraPx });
+  return Buffer.from([ESC, 0x40, ESC, 0x61, 0, ...bytes, ...fimDeCupom(imp)]);
 }
 
 // ------------------------------------------------------------------ envio
@@ -128,7 +149,7 @@ function enviarArquivo(imp, dados) {
 
 export async function imprimir(job, imp, acentosPadrao) {
   if (!imp) throw new Error(`impressora "${job.impressora}" não está no config.json`);
-  const dados = escpos(job.linhas, imp, acentosPadrao);
+  const dados = imp.fonte === "arial" && imp.comandos !== "escbema" ? await cupomEmImagem(job.linhas, imp, acentosPadrao) : escpos(job.linhas, imp, acentosPadrao);
   if (imp.tipo === "rede") return enviarRede(imp, dados);
   if (imp.tipo === "windows") return enviarWindows(imp, dados);
   if (imp.tipo === "arquivo") return enviarArquivo(imp, dados);
