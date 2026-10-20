@@ -4,7 +4,7 @@
 import { $, esc, brl } from "./ui.js";
 
 const BASE = new URL("../assets/leaflet/", import.meta.url).href;
-export const CENTRO_PADRAO = [-22.9, -47.06, 11]; // só até a loja ser marcada em Ajustes
+export const CENTRO_PADRAO = [-22.5727, -47.1727, 14]; // Artur Nogueira, só até a loja ser marcada em Ajustes
 
 export function distanciaKm(a, b) {
   const rad = (g) => (g * Math.PI) / 180, R = 6371;

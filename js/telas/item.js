@@ -28,8 +28,8 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   const s = abrirSheet(`${cabecalhoSheet(pizza ? `Pizza ${p.nome}` : (cat?.prefixo || "") + p.nome, p.desc)}<div class="sh-b">
     ${pizza ? `
       ${broto ? `<div class="grp">Tamanho</div><div class="opts dois">
-        <label class="opt"><input type="radio" name="tam" value="G" checked><span>Grande<br><em>${brl(p.preco)}</em></span></label>
-        <label class="opt"><input type="radio" name="tam" value="B"><span>Brotinho<br><em>${brl(p.precoBroto)}</em></span></label></div>` : ""}
+        <label class="opt"><input type="radio" name="tam" value="G" checked><span>Grande (8 pedaços)<br><em>${brl(p.preco)}</em></span></label>
+        <label class="opt"><input type="radio" name="tam" value="B"><span>Média (4 pedaços)<br><em>${brl(p.precoBroto)}</em></span></label></div>` : ""}
       ${outros.length ? `<div class="grp">Sabores <small>vale o preço do mais caro</small></div>
       <div class="opts dois"><label class="opt"><input type="radio" name="ns" value="1" checked><span>1 sabor</span></label>
         <label class="opt"><input type="radio" name="ns" value="2"><span>Meio a meio</span></label></div>
@@ -166,6 +166,6 @@ export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", 
   const det = segundo ? sabores.map((x) => `1/2 ${x.nome}`) : [];
   if (borda) { unit += Number(borda.preco) || 0; det.push(`Borda ${borda.nome}`); }
   det.push(...detExtras);
-  const tamanho = p.precoBroto ? (tam === "B" ? " brotinho" : " grande") : "";
+  const tamanho = p.precoBroto ? (tam === "B" ? " média" : " grande") : "";
   return { ...base, nome: `Pizza${tamanho}${segundo ? " meio a meio" : " " + p.nome}`, det, unit };
 }

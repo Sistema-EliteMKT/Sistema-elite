@@ -279,7 +279,7 @@ function editarProduto(p) {
     <label class="f" for="pd">Descrição</label><input class="in" id="pd" value="${esc(p.desc || "")}">
     <label class="f" for="pc">Categoria</label><select class="in" id="pc">${D.categorias.map((c) => `<option value="${esc(c.id)}" ${c.id === p.cat ? "selected" : ""}>${esc(c.nome)}</option>`).join("")}</select>
     <div class="opts dois"><div><label class="f" for="pp">Preço (R$)</label><input class="in" id="pp" inputmode="decimal" value="${p.preco != null ? valorCampo(p.preco) : ""}"></div>
-      <div><label class="f" for="pb">Preço brotinho (só pizza)</label><input class="in" id="pb" inputmode="decimal" value="${p.precoBroto ? valorCampo(p.precoBroto) : ""}"></div></div>
+      <div><label class="f" for="pb">Preço média, 4 pedaços (só pizza)</label><input class="in" id="pb" inputmode="decimal" value="${p.precoBroto ? valorCampo(p.precoBroto) : ""}"></div></div>
     <label class="f" for="po">Opções para escolher (separe por vírgula, ex.: Coca-Cola, Guaraná)</label><input class="in" id="po" value="${esc((p.opcoes || []).join(", "))}">
     <label class="f" for="pad">Adicionais na mesa</label><select class="in" id="pad"><option value="__cat" ${p.grupoAdicional == null ? "selected" : ""}>Os da categoria</option>${opcoesGrupo(p.grupoAdicional === "" ? "" : p.grupoAdicional, "Nenhum").replace('<option value="">Nenhum</option>', `<option value="" ${p.grupoAdicional === "" ? "selected" : ""}>Nenhum</option>`)}</select>
     <label class="f" for="ps">Setor de impressão</label><select class="in" id="ps"><option value="">O mesmo da categoria</option>${loja().setores.map((x) => `<option value="${esc(x.id)}" ${x.id === p.setor ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
