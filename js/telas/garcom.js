@@ -4,7 +4,9 @@ import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirCom
 import { seletorProdutos, linhaItem } from "./seletor.js";
 
 export function telaGarcom(raiz, usuario, sair) {
-  const V = { mesa: null, comanda: null, rascunho: [] };
+  // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
+  const V = { mesa: null, comanda: null, rascunho: [], nova: null };
+  const comandaAtual = () => D.abertos.find((x) => x.id === V.comanda) || (V.nova?.id === V.comanda ? V.nova : null);
 
   const desenhar = () => {
     if (V.comanda) return desenharLancar();
@@ -64,6 +66,7 @@ export function telaGarcom(raiz, usuario, sair) {
       $("#fErr", raiz).textContent = "";
       try {
         const id = await abrirComanda(V.mesa, num, $("#fNome", raiz).value, usuario, { atendente: $("#fAt", raiz).value, pessoas: $("#fPes", raiz).value });
+        V.nova = { id, mesa: V.mesa, numero: num, nome: $("#fNome", raiz).value.trim(), aberto: true, itens: [] };
         V.comanda = id; V.rascunho = []; desenhar();
       } catch (x) {
         if (x.mesa) {
@@ -125,7 +128,7 @@ export function telaGarcom(raiz, usuario, sair) {
   }
 
   function desenharLancar() {
-    const c = D.abertos.find((x) => x.id === V.comanda);
+    const c = comandaAtual();
     if (!c) { V.comanda = null; return desenhar(); }
     raiz.innerHTML = `${topo()}<div class="g-wrap lancar">
       <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesa ${c.mesa}</button><h2>Comanda ${esc(c.numero)}</h2>${c.nome ? `<span class="pill">${esc(c.nome)}</span>` : ""}</div>
@@ -180,7 +183,7 @@ export function telaGarcom(raiz, usuario, sair) {
 
   // Na tela de lançar, só redesenha se a comanda sumir (não atrapalha quem está escolhendo).
   const parar = aoMudar(() => {
-    if (V.comanda) { if (!D.abertos.some((x) => x.id === V.comanda)) desenhar(); return; }
+    if (V.comanda) { if (!comandaAtual()) desenhar(); return; }
     if (document.activeElement?.closest?.("#fAbrir, #buscaCom")) return; // digitando o número
     desenhar();
   });

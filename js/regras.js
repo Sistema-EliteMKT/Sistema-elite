@@ -113,12 +113,21 @@ export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "",
   const id = novoId();
   const trava = { aberta: true, pedido: id, mesa, dia: hoje(), em: Date.now() };
   let ocupada = null;
-  await store.transacao("travas", travaId, (t) => {
-    if (t?.aberta) { ocupada = t; return null; }
-    return trava;
-  });
+  try {
+    if (!navigator.onLine) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
+    await store.transacao("travas", travaId, (t) => {
+      if (t?.aberta) { ocupada = t; return null; }
+      return trava;
+    });
+  } catch (e) {
+    if (!e.offline) throw e;
+    // Sem internet: confere com o que este aparelho já sabe e abre mesmo assim.
+    const ja = comandaAberta(numero);
+    if (ja) throw Object.assign(new Error(`A comanda ${numero} já está aberta na mesa ${ja.mesa}.`), { mesa: ja.mesa, comanda: ja.id });
+    await store.salvar("travas", travaId, trava);
+  }
   if (ocupada) {
-    const p = await store.obter("pedidos", ocupada.pedido);
+    const p = D.abertos.find((x) => x.id === ocupada.pedido) || (await store.obter("pedidos", ocupada.pedido));
     if (p?.aberto) throw Object.assign(new Error(`A comanda ${numero} já está aberta na mesa ${p.mesa}.`), { mesa: p.mesa, comanda: p.id });
     // Trava esquecida (comanda já fechada): libera e usa.
     await store.transacao("travas", travaId, (t) => {
@@ -140,12 +149,10 @@ const liberarComandas = (pedidos) =>
 export async function lancarItens(comandaId, itens, quem) {
   const agora = Date.now();
   const novos = itens.map((i) => ({ ...i, key: i.key || novoId(), enviadoEm: agora, por: quem?.nome || "" }));
-  let pedido;
-  await store.transacao("pedidos", comandaId, (atual) => {
-    if (!atual || !atual.aberto) throw new Error("Essa comanda já foi fechada.");
-    pedido = { id: comandaId, ...atual };
-    return { itens: [...(atual.itens || []), ...novos], status: atual.status === "conta" ? "aberta" : atual.status };
-  });
+  const pedido = D.abertos.find((x) => x.id === comandaId) || (await store.obter("pedidos", comandaId));
+  if (!pedido || !pedido.aberto) throw new Error("Essa comanda já foi fechada.");
+  // arrayUnion: funciona sem internet e não apaga o que outro garçom lançou ao mesmo tempo.
+  await store.adicionarItens("pedidos", comandaId, novos, pedido.status === "conta" ? { status: "aberta" } : {});
   await imprimirProducao({ ...pedido, itens: novos }, quem);
 }
 
@@ -207,6 +214,18 @@ export const ETAPAS = {
   cancelado: "Cancelado",
 };
 
+// Sem internet, numera pelo que este aparelho já viu hoje (o caixa é quem numera).
+async function numeroDoPedido() {
+  try {
+    if (!navigator.onLine) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
+    return await store.proximoNumero(hoje());
+  }
+  catch (e) {
+    if (!e.offline) throw e;
+    return Math.max(0, ...D.doDia.filter((p) => p.tipo !== "mesa").map((p) => Number(p.numero) || 0)) + 1;
+  }
+}
+
 export async function criarPedido(dados, quem) {
   const online = dados.origem === "online";
   const base = {
@@ -214,14 +233,14 @@ export async function criarPedido(dados, quem) {
     status: online ? "novo" : "preparo",
     itens: dados.itens.map((i) => ({ ...i, key: i.key || novoId(), enviadoEm: online ? null : Date.now() })),
   };
-  if (!online) base.numero = await store.proximoNumero(hoje());
+  if (!online) base.numero = await numeroDoPedido();
   const id = await store.criar("pedidos", base);
   if (!online) await imprimirNovoPedido({ id, ...base }, quem);
   return id;
 }
 
 export async function aceitarPedido(p, quem) {
-  const numero = p.numero || (await store.proximoNumero(hoje()));
+  const numero = p.numero || (await numeroDoPedido());
   const itens = p.itens.map((i) => ({ ...i, enviadoEm: Date.now() }));
   await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now() });
   await imprimirNovoPedido({ ...p, numero, itens }, quem);

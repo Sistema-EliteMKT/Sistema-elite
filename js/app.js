@@ -153,5 +153,16 @@ $("#scrim").onclick = fecharSheet;
     const id = pessoaSalva();
     if (id && !D.usuarios.some((u) => u.id === id && u.ativo !== false)) { salvarPessoa(null); rota(); }
   });
+  // Aviso de internet: sem rede, tudo fica guardado no aparelho e sobe quando voltar.
+  const faixa = document.createElement("div");
+  faixa.className = "sem-rede";
+  faixa.setAttribute("role", "status");
+  faixa.textContent = "Sem internet. Pode continuar lançando: os pedidos ficam guardados neste aparelho e são enviados (e impressos) quando a internet voltar.";
+  document.body.appendChild(faixa);
+  const rede = () => faixa.classList.toggle("on", !navigator.onLine);
+  window.addEventListener("online", () => { rede(); toast("Internet de volta. Enviando o que ficou guardado…", "bom"); });
+  window.addEventListener("offline", rede);
+  rede();
+  window.addEventListener("se-erro-gravacao", (e) => { if (!e.detail?.offline) erro(e.detail); });
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

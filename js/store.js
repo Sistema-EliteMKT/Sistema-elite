@@ -95,6 +95,13 @@ function criarStoreLocal() {
       gravar(col);
       return mud;
     },
+    async adicionarItens(col, id, itens, extra = {}) {
+      delete cache[col];
+      const d = ler(col)[id];
+      if (!d) throw new Error("Comanda não encontrada.");
+      ler(col)[id] = { ...d, ...extra, itens: [...(d.itens || []), ...structuredClone(itens)] };
+      gravar(col);
+    },
     async lote(ops) {
       for (const op of ops) {
         if (op.tipo === "criar") ler(op.col)[op.id || novoId()] = structuredClone(op.dados);
@@ -131,11 +138,15 @@ function criarStoreFirebase() {
     if (c.includes("too-many-requests")) return new Error("Muitas tentativas. Espere alguns minutos e tente de novo.");
     if (c.includes("unauthorized-domain")) return new Error("Este endereço não está autorizado no Firebase (Authentication › Domínios autorizados).");
     if (c.includes("permission-denied")) return new Error("Sem permissão. Entre com a conta da loja neste aparelho.");
-    if (c.includes("network") || c.includes("unavailable")) return new Error("Sem conexão com a internet.");
+    if (c.includes("network") || c.includes("unavailable") || c.includes("deadline")) return Object.assign(new Error("Sem conexão com a internet."), { offline: true });
     return new Error(e?.message || "Algo deu errado.");
   };
+  // Transação precisa falar com o servidor; sem internet ela não termina. Desiste em 6 s.
+  const comPrazo = (promessa) => Promise.race([promessa, new Promise((_, nao) => setTimeout(() => nao({ code: "unavailable" }), 6000))]);
   const tentar = async (fn) => { try { return await fn(); } catch (e) { throw traduzir(e); } };
   const ref = (col, id) => fb.doc(db, col, id);
+  // Erro de permissão aparece no console; falta de internet só atrasa o envio.
+  const semEsperar = (promessa) => promessa.catch((e) => { console.error(e); window.dispatchEvent(new CustomEvent("se-erro-gravacao", { detail: traduzir(e) })); });
 
   return {
     modo: "online",
@@ -186,20 +197,26 @@ function criarStoreFirebase() {
       const s = await fb.getDocs(fb.collection(db, col));
       return s.docs.map((d) => ({ id: d.id, ...d.data() }));
     }),
-    salvar: (col, id, dados) => tentar(() => fb.setDoc(ref(col, id), dados, { merge: true })),
-    criar: (col, dados) => tentar(async () => {
+    // Gravações não esperam o servidor responder: o Firestore guarda no aparelho e envia
+    // assim que tiver internet. A tela já mostra a mudança na hora.
+    salvar: (col, id, dados) => tentar(() => { semEsperar(fb.setDoc(ref(col, id), dados, { merge: true })); }),
+    criar: (col, dados) => tentar(() => {
       const r = fb.doc(fb.collection(db, col));
-      await fb.setDoc(r, dados);
+      semEsperar(fb.setDoc(r, dados));
       return r.id;
     }),
     apagar: (col, id) => tentar(() => fb.deleteDoc(ref(col, id))),
-    transacao: (col, id, fn) => tentar(() => fb.runTransaction(db, async (t) => {
+    // Junta itens na comanda sem precisar de internet na hora (fica na fila e sobe quando voltar).
+    adicionarItens: (col, id, itens, extra = {}) => tentar(() => {
+      semEsperar(fb.updateDoc(ref(col, id), { ...extra, itens: fb.arrayUnion(...itens) }));
+    }),
+    transacao: (col, id, fn) => tentar(() => comPrazo(fb.runTransaction(db, async (t) => {
       const s = await t.get(ref(col, id));
       const mud = fn(s.exists() ? s.data() : null);
       if (!mud) return null;
       t.set(ref(col, id), mud, { merge: true });
       return mud;
-    })),
+    }))),
     lote: (ops) => tentar(async () => {
       // O Firestore aceita até 500 operações por lote.
       for (let i = 0; i < ops.length; i += 450) {
@@ -209,18 +226,18 @@ function criarStoreFirebase() {
           else if (op.tipo === "salvar") b.set(ref(op.col, op.id), op.dados, { merge: true });
           else if (op.tipo === "apagar") b.delete(ref(op.col, op.id));
         }
-        await b.commit();
+        semEsperar(b.commit());
       }
     }),
     // Número do pedido/comanda: recomeça do 1 a cada dia.
-    proximoNumero: (dia) => tentar(() => fb.runTransaction(db, async (t) => {
+    proximoNumero: (dia) => tentar(() => comPrazo(fb.runTransaction(db, async (t) => {
       const r = ref("config", "contador");
       const s = await t.get(r);
       const d = s.exists() ? s.data() : {};
       const n = (d.dia === dia ? d.n || 0 : 0) + 1;
       t.set(r, { dia, n });
       return n;
-    })),
+    }))),
   };
 }
 

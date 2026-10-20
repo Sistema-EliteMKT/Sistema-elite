@@ -69,6 +69,9 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .toast.bom{background:var(--ok);color:#fff}
 .toast.ruim{background:var(--bad);color:#fff}
 
+.sem-rede{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:95;width:min(560px,calc(100% - 16px));background:var(--warn);color:#fff;font-weight:700;font-size:13.5px;line-height:1.35;text-align:center;padding:8px 12px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);transform:translate(-50%,-150%);transition:transform .2s;pointer-events:none}
+.sem-rede.on{transform:translate(-50%,0)}
+
 /* janelas */
 .scrim{position:fixed;inset:0;background:rgba(20,4,5,.6);z-index:70;opacity:0;pointer-events:none;transition:opacity .2s}
 .scrim.on{opacity:1;pointer-events:auto}
