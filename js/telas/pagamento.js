@@ -1,6 +1,6 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
 import { $, $$, esc, brl, numero, valorCampo, toast, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante } from "../regras.js";
+import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
 export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0 } = {}) {
@@ -10,9 +10,13 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
     const sub = dinheiro(pedidos.reduce((s, p) => s + totalPedido(p), 0));
     const linhas = [{ forma: forma || formas[0], valor: 0 }];
     let comServico = servico > 0;
+    // Serviço pela porcentagem escolhida na hora (padrão: a da loja); o valor sugerido já vem arredondado.
+    const valorServ = () => (comServico ? dinheiro((sub * Math.min(30, Math.max(0, Number($("#spct", s)?.value) || 0))) / 100) : 0);
     const s = abrirSheet(`${cabecalhoSheet(titulo, pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean).join(", "))}<div class="sh-b">
       <div class="sum"><div><span>Subtotal</span><span>${brl(sub)}</span></div></div>
-      ${servico > 0 ? `<label class="opt"><input type="checkbox" id="serv" checked><span>Taxa de serviço (${lj.taxaServico}%)</span><em>${brl(servico)}</em></label>` : ""}
+      ${!D.caixa ? `<p class="ruim-txt pq">⚠️ O caixa está fechado. Abra na aba Caixa para o recebimento entrar no fechamento.</p>` : ""}
+      ${servico > 0 ? `<div class="opt serv-lin"><label><input type="checkbox" id="serv" checked><span>Taxa de serviço</span></label>
+        <input class="in" id="spct" type="number" min="0" max="30" step="0.5" value="${Number(lj.taxaServico) || 0}" aria-label="Porcentagem do serviço"><span>%</span><em id="servV">${brl(servico)}</em></div>` : ""}
       <label class="f" for="desc">Desconto (R$)</label><input class="in" id="desc" inputmode="decimal" placeholder="0,00">
       <div class="grp">Formas de pagamento <small>pode dividir</small></div>
       <div id="formas"></div>
@@ -23,7 +27,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       <label class="opt"><input type="checkbox" id="comp"><span>Imprimir comprovante</span></label>
       <div class="err" id="err"></div>
       <button class="btn ok cheio" id="ok">Confirmar recebimento</button></div>`);
-    const total = () => dinheiro(sub + (comServico ? servico : 0) - numero($("#desc", s).value));
+    const total = () => dinheiro(sub + valorServ() - numero($("#desc", s).value));
     const pago = () => dinheiro(linhas.reduce((x, l) => x + (Number(l.valor) || 0), 0));
     const desenharFormas = () => {
       $("#formas", s).innerHTML = linhas.map((l, i) => `<div class="forma"><select class="in" data-f="${i}">${formas.map((f) => `<option ${f === l.forma ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>
@@ -44,7 +48,9 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
         <div><span>Recebido</span><span>${brl(p)}</span></div>
         ${p > t ? `<div class="troco"><span>Troco</span><span>${brl(p - t)}</span></div>` : p < t ? `<div class="falta"><span>Falta</span><span>${brl(t - p)}</span></div>` : ""}`;
     };
-    $("#serv", s) && ($("#serv", s).onchange = (e) => { comServico = e.target.checked; completar(); });
+    const mostrarServ = () => { $("#servV", s) && ($("#servV", s).textContent = brl(valorServ())); };
+    $("#serv", s) && ($("#serv", s).onchange = (e) => { comServico = e.target.checked; mostrarServ(); completar(); });
+    $("#spct", s) && ($("#spct", s).oninput = () => { mostrarServ(); completar(); });
     $("#desc", s).oninput = completar;
     $("#maisForma", s).onclick = () => { linhas.push({ forma: formas.find((f) => !linhas.some((l) => l.forma === f)) || formas[0], valor: 0 }); completar(); };
     $$("[data-div]", s).forEach((b) => (b.onclick = () => {
@@ -57,7 +63,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       btn.disabled = true;
       try {
         const pag = await registrarPagamento(pedidos, {
-          servico: comServico ? servico : 0, desconto: numero($("#desc", s).value),
+          servico: valorServ(), desconto: numero($("#desc", s).value),
           pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""),
         }, quem);
         if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag);

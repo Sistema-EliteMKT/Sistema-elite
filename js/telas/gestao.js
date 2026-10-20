@@ -7,6 +7,8 @@ const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${grupo
 const CANAIS = [["todos", "Mesa e delivery"], ["mesa", "Só mesa"], ["delivery", "Só delivery/retirada"]];
 import { store, novoId } from "../store.js";
 import { lerEstacao, gravarEstacao } from "../estacao.js";
+import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
+import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, CENTRO_PADRAO } from "../entrega.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
 // ----------------------------------------------------------------- Motoboys
@@ -263,6 +265,14 @@ export function abaCardapio(el) {
     .then(() => toast(`Agora: ${CANAIS.find(([v]) => v === b.value)[1]}`)).catch(erro)));
 }
 
+// Tributação para a nota fiscal. Vazio = usa o padrão (do contador) de cima.
+const blocoFiscal = (f = {}, pre, de) => `<details class="fiscal-det"><summary>Dados fiscais (nota) · vazio = padrão ${de}</summary>
+  <div class="opts dois"><div><label class="f" for="${pre}n">NCM</label><input class="in" id="${pre}n" inputmode="numeric" maxlength="8" placeholder="${FISCAL_PADRAO.ncm}" value="${esc(f.ncm || "")}"></div>
+    <div><label class="f" for="${pre}c">CFOP</label><input class="in" id="${pre}c" inputmode="numeric" maxlength="4" placeholder="${FISCAL_PADRAO.cfop}" value="${esc(f.cfop || "")}"></div>
+    <div><label class="f" for="${pre}s">CSOSN / CST</label><input class="in" id="${pre}s" maxlength="3" placeholder="${FISCAL_PADRAO.csosn}" value="${esc(f.csosn || "")}"></div>
+    <div><label class="f" for="${pre}u">Unidade</label><input class="in" id="${pre}u" maxlength="3" placeholder="${FISCAL_PADRAO.unidade}" value="${esc(f.unidade || "")}"></div></div></details>`;
+const lerFiscal = (s, pre) => ({ ncm: $(`#${pre}n`, s).value.replace(/\D/g, ""), cfop: $(`#${pre}c`, s).value.replace(/\D/g, ""), csosn: $(`#${pre}s`, s).value.trim(), unidade: $(`#${pre}u`, s).value.trim().toUpperCase() });
+
 function editarProduto(p) {
   const s = abrirSheet(`${cabecalhoSheet(p.id ? "Editar produto" : "Novo produto")}<div class="sh-b">
     <label class="f" for="pn">Nome</label><input class="in" id="pn" value="${esc(p.nome || "")}">
@@ -277,6 +287,7 @@ function editarProduto(p) {
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
     <label class="f" for="pe">Onde vende</label><select class="in" id="pe">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pa" ${p.ativo === false ? "" : "checked"}><span>Disponível</span></label>
+    ${blocoFiscal(p.fiscal, "pf", "da categoria")}
     <div class="linha-btn">${p.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
   $("#ok", s).onclick = async () => {
     const nome = $("#pn", s).value.trim();
@@ -287,6 +298,7 @@ function editarProduto(p) {
       opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null, grupoAdicional: $("#pad", s).value === "__cat" ? null : $("#pad", s).value,
       tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,
+      fiscal: lerFiscal(s, "pf"),
     };
     try { await store.salvar("produtos", p.id || novoId(), dados); fecharSheet(); toast("Salvo ✓"); } catch (e) { erro(e); }
   };
@@ -305,13 +317,14 @@ function editarCategoria(c) {
       <option value="">Não é pizza</option><option value="salgada" ${c.grupoPizza === "salgada" ? "selected" : ""}>Pizzas salgadas (com borda)</option><option value="doce" ${c.grupoPizza === "doce" ? "selected" : ""}>Pizzas doces</option></select>
     <label class="f" for="cad">Adicionais que o garçom pode lançar</label><select class="in" id="cad">${opcoesGrupo(c.grupoAdicional, "Nenhum")}</select>
     <label class="f" for="co">Ordem no cardápio</label><input class="in" id="co" type="number" value="${c.ordem ?? D.categorias.length + 1}">
+    ${blocoFiscal(c.fiscal, "cf", "da loja")}
     <div class="linha-btn">${c.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
   $("#ok", s).onclick = async () => {
     const nome = $("#cn", s).value.trim();
     if (!nome) return toast("Coloque o nome.");
     const id = c.id || nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || novoId();
     try {
-      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0 });
+      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0, fiscal: lerFiscal(s, "cf") });
       sessionStorage.setItem("se_cat", id); fecharSheet(); toast("Salvo ✓");
     } catch (e) { erro(e); }
   };
@@ -394,8 +407,101 @@ export function abaAjustes(el) {
       <input class="in" readonly value="${esc(linkCardapio)}" id="link"><div class="linha-btn wrap"><button class="btn sec sm" id="copiar">Copiar link</button><a class="btn sec sm" href="${esc(linkCardapio)}" target="_blank" rel="noopener">Abrir</a>
       <a class="btn sec sm" target="_blank" rel="noopener" href="https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(linkCardapio)}">QR Code</a></div></div>
 
-    <div class="card"><b>Nota fiscal (NFC-e)</b><p class="muted pq">Ainda não ligada. Quando a loja tiver certificado digital A1, CSC da SEFAZ e os dados fiscais dos produtos (do contador), a emissão entra aqui no fechamento da conta. O CPF digitado no recebimento já fica guardado.</p></div>
+    <div class="card inteiro" id="cardRaio"><b>Taxa de entrega por distância (mapa)</b>
+      <p class="muted pq">Marque onde fica a pizzaria e defina até quantos km cada taxa vale. O cliente informa o CEP (ou usa a localização do celular) e a taxa é calculada sozinha, pela distância em linha reta. Passou do último raio: o app avisa que está fora da área. Sem raios, vale a lista de bairros.</p>
+      <div class="loc-cep"><input class="in" id="rBusca" placeholder="CEP ou endereço da pizzaria" value="${esc(lj.endereco || "")}"><span></span><button class="btn ghost" id="rAchar">Buscar</button></div>
+      <div class="loc-msg" id="rMsg"></div>
+      <div class="mapa-entrega grande" id="rMapa"></div>
+      <div class="grp">Raios e taxas <small>até quantos km · taxa</small></div><div id="rLin"></div>
+      <div class="linha-btn wrap"><button class="btn ghost sm" id="rMais">+ Raio</button><button class="btn pri" id="rSalvar">Salvar entrega por distância</button></div></div>
+
+    <div class="card inteiro" id="cardFiscal"><b>Nota fiscal (NFC-e) · preparação</b>
+      <p class="muted pq">A emissão entra na próxima etapa. Já deixamos tudo preparado: cada recebimento guarda os itens com NCM/CFOP/CSOSN, a forma de pagamento no código da nota e o CPF. Preencha com os dados do contador. Esses dados ficam num cadastro só da equipe (o CSC não aparece para o cliente).</p>
+      <div id="fiscalForm"><p class="muted">Carregando…</p></div></div>
+
   </div>`;
+
+  // Entrega por distância: mapa com a pizzaria e os raios desenhados
+  {
+    let ponto = lojaPonto(lj);
+    const raios = structuredClone(lj.raios || []);
+    let mp = null;
+    const atual = () => ({ entregaLat: ponto?.[0] ?? null, entregaLng: ponto?.[1] ?? null, raios: raios.filter((r) => Number(r.km) > 0) });
+    const refazer = () => mp && desenharRaios(mp.L, mp.mapa, mp.grupo, atual());
+    const linhas = () => {
+      $("#rLin", el).innerHTML = raios.map((r, k) => `<div class="raio-lin"><label>até <input class="in" data-rk="${k}" inputmode="decimal" value="${r.km ?? ""}" aria-label="Quilômetros"> km</label><label>R$ <input class="in" data-rt="${k}" inputmode="decimal" value="${r.taxa ?? ""}" aria-label="Taxa"></label><button class="mini-x" data-rx="${k}" aria-label="Tirar">×</button></div>`).join("") || `<p class="muted pq">Nenhum raio ainda. Ex.: até 2 km R$ 5, até 4 km R$ 8…</p>`;
+      $$("[data-rk]", el).forEach((e) => (e.oninput = () => { raios[e.dataset.rk].km = numero(e.value); refazer(); }));
+      $$("[data-rt]", el).forEach((e) => (e.oninput = () => { raios[e.dataset.rt].taxa = numero(e.value); refazer(); }));
+      $$("[data-rx]", el).forEach((e) => (e.onclick = () => { raios.splice(+e.dataset.rx, 1); linhas(); refazer(); }));
+    };
+    const colocar = (p, zoom = 14) => {
+      ponto = p;
+      if (!mp) return;
+      mp.marcador ? mp.marcador.setLatLng(p) : (mp.marcador = mp.L.marker(p, { draggable: true }).addTo(mp.mapa).on("dragend", () => { const l = mp.marcador.getLatLng(); ponto = [l.lat, l.lng]; refazer(); }));
+      mp.mapa.setView(p, zoom); refazer();
+    };
+    (async () => {
+      try {
+        const c = ponto || CENTRO_PADRAO;
+        mp = await novoMapa($("#rMapa", el), [c[0], c[1], ponto ? 13 : CENTRO_PADRAO[2]]);
+        mp.grupo = mp.L.layerGroup().addTo(mp.mapa);
+        mp.mapa.on("click", (e) => { ponto = [e.latlng.lat, e.latlng.lng]; colocar(ponto, mp.mapa.getZoom()); });
+        if (ponto) { refazer(); mp.marcador = mp.L.marker(ponto, { draggable: true }).addTo(mp.mapa).on("dragend", () => { const l = mp.marcador.getLatLng(); ponto = [l.lat, l.lng]; refazer(); }); }
+        else $("#rMsg", el).textContent = "Busque o endereço ou toque no mapa para marcar a pizzaria.";
+      } catch (e) { $("#rMsg", el).innerHTML = `<span class="ruim-txt">${esc(e.message)}</span>`; }
+    })();
+    $("#rAchar", el).onclick = async () => {
+      const t = $("#rBusca", el).value.trim();
+      if (!t) return;
+      $("#rMsg", el).textContent = "Procurando…";
+      try {
+        let a;
+        if (/^\d{5}-?\d{3}$/.test(t)) { const c = await buscarCep(t); a = await achar({ ...c, numero: "" }); }
+        else a = await achar({ texto: t });
+        if (!a) return ($("#rMsg", el).innerHTML = `<span class="ruim-txt">Não achei. Toque no mapa onde fica a pizzaria.</span>`);
+        $("#rMsg", el).innerHTML = `<span class="ok-txt">Achei: ${esc(a.nome)}. Arraste o pino se precisar ajustar.</span>`;
+        colocar(a.ponto, 15);
+      } catch (e) { $("#rMsg", el).innerHTML = `<span class="ruim-txt">${esc(e.message)}</span>`; }
+    };
+    $("#rMais", el).onclick = () => { const ult = raios[raios.length - 1]; raios.push({ km: ult ? Number(ult.km) + 2 : 2, taxa: ult ? Number(ult.taxa) + 3 : 5 }); linhas(); refazer(); };
+    $("#rSalvar", el).onclick = () => {
+      if (!ponto) return toast("Marque a pizzaria no mapa primeiro.");
+      store.salvar("config", "loja", atual()).then(() => toast("Entrega por distância salva ✓", "bom")).catch(erro);
+    };
+    linhas();
+  }
+
+  // Nota fiscal: cadastro da empresa e tributação padrão (config/fiscal, só a equipe lê)
+  {
+    const f = D.fiscal || {};
+    const pd = { ...FISCAL_PADRAO, ...(f.padrao || {}) };
+    const campo = (id, rot, v, extra = "") => `<div><label class="f" for="${id}">${rot}</label><input class="in" id="${id}" value="${esc(v ?? "")}" ${extra}></div>`;
+    const falta = faltaParaEmitir(f);
+    $("#fiscalForm", el).innerHTML = `
+      <div class="sum"><div class="${falta.length ? "falta" : "troco"}"><span>${falta.length ? "Falta para emitir" : "Dados completos"}</span><span>${falta.length ? esc(falta.join(", ")) : "✓"}</span></div></div>
+      <div class="opts dois"><div><label class="f" for="fAmb">Ambiente</label><select class="in" id="fAmb"><option value="homologacao" ${f.ambiente !== "producao" ? "selected" : ""}>Homologação (teste)</option><option value="producao" ${f.ambiente === "producao" ? "selected" : ""}>Produção (valendo)</option></select></div>
+        <div><label class="f" for="fCrt">Regime tributário</label><select class="in" id="fCrt">${REGIMES.map(([v, l]) => `<option value="${v}" ${(f.crt || "1") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        ${campo("fCnpj", "CNPJ", f.cnpj, 'inputmode="numeric"')}${campo("fIe", "Inscrição estadual", f.ie)}
+        ${campo("fRaz", "Razão social", f.razaoSocial)}${campo("fFan", "Nome fantasia", f.fantasia)}
+        ${campo("fLog", "Rua", f.logradouro)}${campo("fNum", "Número", f.numero)}${campo("fBai", "Bairro", f.bairro)}${campo("fCid", "Cidade", f.cidade)}
+        ${campo("fUf", "UF", f.uf, 'maxlength="2"')}${campo("fCep", "CEP", f.cep, 'inputmode="numeric"')}${campo("fMun", "Código IBGE do município", f.cMun, 'inputmode="numeric"')}
+        ${campo("fSer", "Série da NFC-e", f.serie ?? 1, 'inputmode="numeric"')}${campo("fPro", "Próximo número", f.proximoNumero ?? 1, 'inputmode="numeric"')}
+        ${campo("fCid2", "ID do CSC (SEFAZ)", f.cscId)}${campo("fCsc", "CSC (código de segurança)", f.csc, 'autocomplete="off"')}</div>
+      <label class="opt"><input type="checkbox" id="fCert" ${f.certificadoOk ? "checked" : ""}><span>Já tenho o certificado digital A1 (o arquivo será instalado na hora de ligar a emissão)</span></label>
+      <div class="grp">Tributação padrão dos produtos <small>o contador confirma · cada categoria/produto pode ter a sua</small></div>
+      <div class="opts dois">${campo("fNcm", "NCM", pd.ncm)}${campo("fCfop", "CFOP", pd.cfop)}${campo("fCso", "CSOSN / CST", pd.csosn)}${campo("fOri", "Origem", pd.origem)}</div>
+      <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
+      <p class="muted pq">${D.pagamentos.filter((p) => p.nfce?.status === "pendente").length} recebimento(s) de hoje aguardando nota. Tudo o que for recebido a partir de agora já fica guardado para emitir.</p>`;
+    $("#salvarFiscal", el).onclick = () => {
+      const v = (id) => $("#" + id, el).value.trim(), dig = (id) => v(id).replace(/\D/g, "");
+      store.salvar("config", "fiscal", {
+        ambiente: v("fAmb"), crt: v("fCrt"), cnpj: dig("fCnpj"), ie: v("fIe"), razaoSocial: v("fRaz"), fantasia: v("fFan"),
+        logradouro: v("fLog"), numero: v("fNum"), bairro: v("fBai"), cidade: v("fCid"), uf: v("fUf").toUpperCase(), cep: dig("fCep"), cMun: dig("fMun"),
+        serie: Number(dig("fSer")) || 1, proximoNumero: Number(dig("fPro")) || 1, cscId: v("fCid2"), csc: v("fCsc"), certificadoOk: $("#fCert", el).checked,
+        padrao: { ncm: dig("fNcm"), cfop: dig("fCfop"), csosn: v("fCso"), origem: v("fOri") },
+      }).then(() => toast("Dados fiscais salvos ✓", "bom")).catch(erro);
+    };
+  }
 
   // Loja
   $("#salvarLoja", el).onclick = () => store.salvar("config", "loja", {

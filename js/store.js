@@ -71,6 +71,12 @@ function criarStoreLocal() {
     async listar(col) {
       return Object.entries(ler(col)).map(([id, d]) => ({ id, ...structuredClone(d) }));
     },
+    // Busca única (não fica ouvindo): filtro = [campo, operador, valor] ou lista de filtros.
+    async consultar(col, filtros) {
+      const fs = Array.isArray(filtros[0]) ? filtros : [filtros];
+      const ok = (d, [c, op, v]) => ({ "==": d[c] === v, ">=": d[c] >= v, "<=": d[c] <= v, ">": d[c] > v, "<": d[c] < v })[op];
+      return Object.entries(ler(col)).map(([id, d]) => ({ id, ...structuredClone(d) })).filter((d) => fs.every((f) => ok(d, f)));
+    },
     async salvar(col, id, dados) {
       ler(col)[id] = { ...(ler(col)[id] || {}), ...structuredClone(dados) };
       gravar(col);
@@ -192,6 +198,11 @@ function criarStoreFirebase() {
     obter: (col, id) => tentar(async () => {
       const s = await fb.getDoc(ref(col, id));
       return s.exists() ? { id: s.id, ...s.data() } : null;
+    }),
+    consultar: (col, filtros) => tentar(async () => {
+      const fs = Array.isArray(filtros[0]) ? filtros : [filtros];
+      const s = await fb.getDocs(fb.query(fb.collection(db, col), ...fs.map((f) => fb.where(...f))));
+      return s.docs.map((d) => ({ id: d.id, ...d.data() }));
     }),
     listar: (col) => tentar(async () => {
       const s = await fb.getDocs(fb.collection(db, col));

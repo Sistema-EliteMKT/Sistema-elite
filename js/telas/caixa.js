@@ -4,17 +4,19 @@ import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
   abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta, imprimirPorSetor, imprimirJunto,
-  rotuloComanda, desvioDe, desviarImpressora,
+  rotuloComanda, desvioDe, desviarImpressora, imprimirViaOnline,
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
+import { abaFluxo } from "./fluxo.js";
+import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
 import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
 
 const ABAS = [
-  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["motoboys", "Motoboys"], ["equipe", "Freelancers"], ["relatorio", "Resumo"],
+  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["fluxo", "Caixa"], ["motoboys", "Motoboys"], ["equipe", "Freelancers"], ["relatorio", "Resumo"],
   ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["ajustes", "Ajustes"],
 ];
 const TIPO = { entrega: "Delivery", retirada: "Retirada", balcao: "Balcão" };
@@ -32,6 +34,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const chegaram = novos.filter((p) => !vistos.has(p.id));
     chegaram.forEach((p) => vistos.add(p.id));
     if (chegaram.length && !primeira) { bip(3); toast("Pedido novo pelo cardápio online!", "bom"); }
+    // Imprime a via de todo pedido online novo ainda sem papel (inclusive os que chegaram com o caixa fechado).
+    novos.forEach((p) => imprimirViaOnline(p));
     primeira = false;
     if (!raiz.dataset.pronto) {
       raiz.dataset.pronto = "1";
@@ -59,6 +63,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       pedidos: D.abertos.filter((p) => p.status === "novo").length,
       mesas: new Set(D.abertos.filter((p) => p.tipo === "mesa" && p.status === "conta").map((p) => p.mesa)).size,
       impressao: D.impressoes.filter((j) => j.status === "erro").length,
+      fluxo: D.caixa ? 0 : "!",
     };
     avisoImpressora();
     $("#abas", raiz).innerHTML = ABAS.filter(([k]) => admin || k !== "ajustes")
@@ -94,7 +99,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     if (!el || (porDados && aba === "ajustes")) return;
     if (porDados && el.contains(document.activeElement) && document.activeElement.matches("input,select,textarea")) return;
     const ctx = { usuario, admin };
-    ({ pedidos: abaPedidos, mesas: abaMesas, motoboys: abaMotoboys, equipe: abaEquipe, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
+    ({ pedidos: abaPedidos, mesas: abaMesas, fluxo: abaFluxo, motoboys: abaMotoboys, equipe: abaEquipe, impressao: abaImpressao, relatorio: abaRelatorio, cardapio: abaCardapio, ajustes: abaAjustes }[aba] || abaPedidos)(el, ctx);
   };
 
   // ------------------------------------------------------------------ Pedidos
@@ -223,6 +228,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         <div id="endBox"><label class="f" for="end">Endereço</label><input class="in" id="end">
           <label class="f" for="bai">Bairro / taxa</label><select class="in" id="bai">${(lj.taxasEntrega || []).map((t) => `<option value="${esc(t.nome)}">${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}<option value="">Outra taxa…</option></select>
           <input class="in" id="taxaLivre" inputmode="decimal" placeholder="Taxa de entrega (R$)" hidden>
+          ${entregaPorRaio(lj) ? `<button type="button" class="btn sec sm" id="porMapa">📍 Calcular taxa pelo CEP / mapa</button><small class="muted" id="mapaInfo"></small>` : ""}
           <label class="f" for="ref">Referência</label><input class="in" id="ref"></div>
         <label class="f" for="pg">Pagamento</label><select class="in" id="pg">${(lj.formasPagamento || []).map((f) => `<option>${esc(f)}</option>`).join("")}</select>
         <input class="in" id="troco" inputmode="decimal" placeholder="Troco para (R$)" hidden>
@@ -250,7 +256,24 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     seletorProdutos($("#sel", s), (item) => { itens.push(item); toast(`+ ${item.qtd}x ${item.nome}`); atualizar(); }, { onde: "delivery" });
     $$("[data-t]", s).forEach((b) => (b.onclick = () => { tipo = b.dataset.t; atualizar(); }));
     ["#bai", "#pg"].forEach((q) => ($(q, s).onchange = atualizar));
-    $("#taxaLivre", s).oninput = atualizar;
+    $("#taxaLivre", s).oninput = () => { geo = null; atualizar(); };
+    let geo = null; // ponto calculado pelo mapa (vai junto no pedido)
+    $("#porMapa", s) && ($("#porMapa", s).onclick = () => {
+      let achou = null;
+      const s2 = abrirSheet(`${cabecalhoSheet("Taxa pelo mapa", "CEP, localização ou toque no mapa")}<div class="sh-b"><div id="locx"></div>
+        <button class="btn ok cheio" id="usarTaxa" disabled>Usar esta taxa</button></div>`, { nivel: 2 });
+      localizador($("#locx", s2), lj, { aoMudar: (r, d) => {
+        achou = r && !r.fora ? r : null;
+        $("#usarTaxa", s2).disabled = !achou;
+        if (r && r.rua && !$("#end", s).value.trim()) $("#end", s).value = r.rua + (r.numero ? ", " + r.numero : "");
+      } });
+      $("#usarTaxa", s2).onclick = () => {
+        $("#bai", s).value = ""; $("#taxaLivre", s).value = String(achou.taxa).replace(".", ",");
+        geo = { lat: achou.ponto[0], lng: achou.ponto[1], distanciaKm: Math.round(achou.km * 10) / 10, cep: achou.cep || "", bairro: achou.bairro || "" };
+        $("#mapaInfo", s).textContent = ` ${kmTxt(achou.km)} da pizzaria`;
+        fecharSheet(); atualizar();
+      };
+    });
     $("#tel", s).onchange = async () => {
       const tel = $("#tel", s).value.replace(/\D/g, "");
       if (tel.length < 10) return;
@@ -268,7 +291,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const e = $("#err", s);
       if (!itens.length) return (e.textContent = "Coloque pelo menos um item.");
       const cliente = { nome: $("#nom", s).value.trim(), telefone: $("#tel", s).value.trim() };
-      if (tipo === "entrega") Object.assign(cliente, { endereco: $("#end", s).value.trim(), bairro: $("#bai", s).value, referencia: $("#ref", s).value.trim() });
+      if (tipo === "entrega") Object.assign(cliente, { endereco: $("#end", s).value.trim(), bairro: $("#bai", s).value || geo?.bairro || "", referencia: $("#ref", s).value.trim() }, geo ? { lat: geo.lat, lng: geo.lng, distanciaKm: geo.distanciaKm, cep: geo.cep } : {});
       if (tipo === "entrega" && !cliente.endereco) return (e.textContent = "Coloque o endereço.");
       const forma = $("#pg", s).value;
       ev.currentTarget.disabled = true;

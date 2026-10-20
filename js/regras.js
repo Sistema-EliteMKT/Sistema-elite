@@ -4,13 +4,14 @@ import { LOJA_INICIAL, EQUIPE_INICIAL, MARCA } from "./config.js";
 import { CATEGORIAS, PRODUTOS, BORDAS, TAXAS_ENTREGA, ADICIONAIS } from "./cardapio-inicial.js";
 import { hoje } from "./ui.js";
 import { temInternet } from "./rede.js";
+import { fiscalDoItem, tPagDe } from "./fiscal.js";
 
 // ---------------------------------------------------------------------------
 //  Estado ao vivo (o que está no banco, sempre atualizado)
 // ---------------------------------------------------------------------------
 export const D = {
   loja: null, categorias: [], produtos: [], usuarios: [], motoboys: [],
-  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [],
+  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [], caixa: null, caixasDia: [], movimentos: [], fiscal: null,
   get pedidos() {
     const m = new Map();
     for (const p of [...this.doDia, ...this.abertos]) m.set(p.id, p);
@@ -39,12 +40,17 @@ export function conectar({ publico = false } = {}) {
   ];
   if (publico) return;
   desligar.push(
+    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d; avisar(); }),
     store.ouvir("usuarios", (docs) => { D.usuarios = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("motoboys", (docs) => { D.motoboys = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.abertos = docs; avisar(); }, ["aberto", "==", true]),
     store.ouvir("pedidos", (docs) => { D.doDia = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("impressoes", (docs) => { D.impressoes = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
     store.ouvir("pagamentos", (docs) => { D.pagamentos = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
+    // Caixa aberto (de qualquer dia: o turno pode passar da meia-noite) e os fechados de hoje.
+    store.ouvir("caixas", (docs) => { D.caixa = docs.sort((a, b) => b.abertoEm - a.abertoEm)[0] || null; avisar(); }, ["status", "==", "aberto"]),
+    store.ouvir("caixas", (docs) => { D.caixasDia = docs.filter((c) => c.status === "fechado").sort((a, b) => b.fechadoEm - a.fechadoEm); avisar(); }, ["dia", "==", dia]),
+    store.ouvir("movimentos", (docs) => { D.movimentos = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("saidas", (docs) => { D.saidas = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
   );
   // Virou o dia com o sistema aberto: reconecta para pegar o dia novo.
@@ -288,7 +294,28 @@ export async function aceitarPedido(p, quem) {
   const numero = p.numero || (await numeroDoPedido());
   const itens = p.itens.map((i) => ({ ...i, enviadoEm: Date.now() }));
   await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now(), aceitoPor: quem?.nome || "" });
-  await imprimirNovoPedido({ ...p, numero, itens, aceitoPor: quem?.nome || "" }, quem);
+  // A via com tudo já saiu quando o pedido chegou; ao aceitar saem só os papéis dos setores.
+  const novo = { ...p, numero, itens, aceitoPor: quem?.nome || "" };
+  if (p.viaImpressa) await imprimirProducao(novo, quem);
+  else await imprimirNovoPedido(novo, quem);
+}
+
+// Pedido que chega pelo cardápio online: a via sai sozinha na impressora do caixa, na hora,
+// para ninguém perder o pedido. Quem pega o pedido primeiro (transação) imprime; os outros não repetem.
+const viaOnline = new Set();
+export async function imprimirViaOnline(p) {
+  if (!p || p.origem !== "online" || p.status !== "novo" || p.viaImpressa || viaOnline.has(p.id)) return false;
+  viaOnline.add(p.id);
+  try {
+    const numero = p.numero || (await numeroDoPedido());
+    const pegou = await store.transacao("pedidos", p.id, (d) => (d && !d.viaImpressa && d.status === "novo" ? { viaImpressa: Date.now(), numero: d.numero || numero } : null));
+    if (!pegou) return false;
+    await store.lote([filaImpressao(loja().impressoraConta, `NOVO ONLINE ${titulo({ ...p, numero: pegou.numero })}`, [
+      { t: "*** PEDIDO NOVO PELO APP ***", b: true, c: true }, { t: "aguardando aceite no caixa", c: true }, { sep: true },
+      ...cupomEntrega({ ...p, numero: pegou.numero }),
+    ], { pedido: p.id })]);
+    return true;
+  } catch (e) { viaOnline.delete(p.id); console.error("via online", e); return false; }
 }
 
 export const mudarEtapa = (p, status, extra = {}) =>
@@ -303,6 +330,15 @@ export async function cancelarPedido(p, motivo, quem) {
 // ---------------------------------------------------------------------------
 //  Pagamento (fecha comandas da mesa ou conclui pedido)
 // ---------------------------------------------------------------------------
+function itensFiscais(pedidos) {
+  const lj = loja();
+  return pedidos.flatMap((p) => itensValidos(p)).map((i) => {
+    const prod = produto(i.produtoId);
+    const f = fiscalDoItem(D.fiscal, prod, categoria(prod?.cat));
+    return { cod: i.produtoId || "", desc: i.nome, qtd: i.qtd, vUnit: dinheiro(i.unit), vTotal: dinheiro(i.unit * i.qtd), ...f };
+  });
+}
+
 // pedidos: lista de pedidos/comandas pagos juntos; valores: {servico, desconto, pagamentos:[{forma,valor}]}
 export async function registrarPagamento(pedidos, valores, quem) {
   const sub = dinheiro(pedidos.reduce((s, p) => s + totalPedido(p), 0));
@@ -318,8 +354,10 @@ export async function registrarPagamento(pedidos, valores, quem) {
     pedidos: pedidos.map((p) => p.id), numeros: pedidos.map((p) => p.numero).filter(Boolean),
     nomes: pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean),
     subtotal: sub, servico: dinheiro(valores.servico), desconto: dinheiro(valores.desconto), total,
-    pagamentos: valores.pagamentos.filter((x) => Number(x.valor) > 0).map((x) => ({ forma: x.forma, valor: dinheiro(x.valor) })),
-    troco, cpf: valores.cpf || "",
+    pagamentos: valores.pagamentos.filter((x) => Number(x.valor) > 0).map((x) => ({ forma: x.forma, valor: dinheiro(x.valor), tPag: tPagDe(x.forma) })),
+    troco, cpf: valores.cpf || "", caixa: D.caixa?.id || null,
+    // Dados para a nota fiscal (NFC-e), que será emitida depois a partir daqui.
+    nfce: { status: "pendente" }, itensFiscais: itensFiscais(pedidos),
   };
   // Comanda paga fecha na hora; pedido de entrega/retirada continua aberto até ser concluído.
   const fim = (p) => (p.tipo === "mesa" ? { status: "fechada", aberto: false } : {});
@@ -355,6 +393,90 @@ export function vendasPorGarcom() {
     for (const c of cs) if (c.garcom) linha(c.garcom).servico += (pg.servico * subtotal(c)) / soma;
   }
   return r;
+}
+
+// ---------------------------------------------------------------------------
+//  Caixa: abrir, sangria/reforço/despesa, fechar
+// ---------------------------------------------------------------------------
+export const TIPOS_MOV = { sangria: "Sangria (retirada)", suprimento: "Reforço (entrada de troco)", despesa: "Despesa paga do caixa" };
+
+export async function abrirCaixa(fundo, quem) {
+  if (D.caixa) throw new Error("O caixa já está aberto.");
+  const id = novoId();
+  await store.salvar("caixas", id, { status: "aberto", dia: hoje(), abertoEm: Date.now(), abertoPor: quem?.nome || "", fundo: dinheiro(fundo) });
+  return id;
+}
+
+export async function movimentoCaixa(tipo, valor, motivo, quem) {
+  if (!D.caixa) throw new Error("Abra o caixa primeiro.");
+  if (!(Number(valor) > 0)) throw new Error("Coloque o valor.");
+  const mov = { tipo, valor: dinheiro(valor), motivo: motivo || "", caixa: D.caixa.id, dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" };
+  await store.lote([
+    { tipo: "criar", col: "movimentos", dados: mov },
+    ...(tipo === "sangria" ? [filaImpressao(loja().impressoraConta, "Comprovante de sangria", cupomMovimento(mov))] : []),
+  ]);
+  return mov;
+}
+
+// Tudo o que entrou e saiu desde que o caixa abriu (e até fechar, se já fechou).
+export async function resumoCaixa(cx) {
+  const ate = cx.fechadoEm || Date.now() + 60000;
+  const f = [["criadoEm", ">=", cx.abertoEm]];
+  const [pags, saidas, movs] = await Promise.all([store.consultar("pagamentos", f), store.consultar("saidas", f), store.consultar("movimentos", f)]);
+  const dentro = (x) => x.criadoEm <= ate;
+  const pg = pags.filter(dentro), sd = saidas.filter(dentro), mv = movs.filter(dentro);
+  const porForma = {};
+  let troco = 0, servico = 0, desconto = 0, vendas = 0;
+  for (const p of pg) {
+    for (const x of p.pagamentos) porForma[x.forma] = dinheiro((porForma[x.forma] || 0) + x.valor);
+    troco += p.troco || 0; servico += p.servico || 0; desconto += p.desconto || 0; vendas += p.total || 0;
+  }
+  if (porForma.Dinheiro) porForma.Dinheiro = dinheiro(porForma.Dinheiro - troco);
+  const soma = (t) => dinheiro(mv.filter((m) => m.tipo === t).reduce((a, m) => a + m.valor, 0));
+  const sangrias = soma("sangria"), suprimentos = soma("suprimento"), despesas = soma("despesa");
+  const freelaDinheiro = dinheiro(sd.filter((x) => x.forma === "Dinheiro").reduce((a, x) => a + x.valor, 0));
+  const freelaTotal = dinheiro(sd.reduce((a, x) => a + x.valor, 0));
+  const dinheiroVendas = porForma.Dinheiro || 0;
+  const esperado = dinheiro((cx.fundo || 0) + dinheiroVendas + suprimentos - sangrias - despesas - freelaDinheiro);
+  return { pagamentos: pg, saidas: sd, movimentos: mv.sort((a, b) => a.criadoEm - b.criadoEm), porForma, servico: dinheiro(servico), desconto: dinheiro(desconto), vendas: dinheiro(vendas),
+    sangrias, suprimentos, despesas, freelaDinheiro, freelaTotal, dinheiroVendas, esperado, contas: pg.length };
+}
+
+export async function fecharCaixa(cx, contado, obs, quem) {
+  const r = await resumoCaixa(cx);
+  const fechamento = { status: "fechado", fechadoEm: Date.now(), fechadoPor: quem?.nome || "", contado: dinheiro(contado), esperado: r.esperado, diferenca: dinheiro(contado - r.esperado), obs: obs || "",
+    resumo: { porForma: r.porForma, vendas: r.vendas, servico: r.servico, desconto: r.desconto, sangrias: r.sangrias, suprimentos: r.suprimentos, despesas: r.despesas, freelaDinheiro: r.freelaDinheiro, contas: r.contas } };
+  await store.lote([
+    { tipo: "salvar", col: "caixas", id: cx.id, dados: fechamento },
+    filaImpressao(loja().impressoraConta, "Fechamento de caixa", cupomFechamentoCaixa({ ...cx, ...fechamento }, r)),
+  ]);
+  return { ...cx, ...fechamento };
+}
+
+export const reimprimirFechamento = async (cx) => store.lote([filaImpressao(loja().impressoraConta, "Fechamento de caixa (reimpressão)", cupomFechamentoCaixa(cx, await resumoCaixa(cx)))]);
+
+const r2 = (v) => (Number(v) || 0).toFixed(2).replace(".", ",");
+function cupomMovimento(m) {
+  return [L(loja().nome, { b: true, c: true }), SEP, L(m.tipo === "sangria" ? "SANGRIA DO CAIXA" : TIPOS_MOV[m.tipo].toUpperCase(), { b: true, g: true, c: true }), L(hh(m.criadoEm), { c: true }), SEP,
+    L(lado("VALOR R$", r2(m.valor)), { b: true, g: true }), ...(m.motivo ? [L(`Motivo: ${m.motivo}`)] : []), L(`Por: ${m.por}`), SEP,
+    L(""), L("______________________________", { c: true }), L("Assinatura de quem retirou", { c: true }), ...rodape()];
+}
+export function cupomFechamentoCaixa(cx, r) {
+  const linhas = [L(loja().nome, { b: true, c: true }), L("FECHAMENTO DE CAIXA", { b: true, g: true, c: true }), SEP,
+    L(`Aberto: ${hh(cx.abertoEm)} (${cx.abertoPor || "-"})`), L(`Fechado: ${hh(cx.fechadoEm || Date.now())} (${cx.fechadoPor || "-"})`), SEP,
+    L("VENDAS", { b: true }), ...Object.entries(r.porForma).map(([f, v]) => L(lado(f, r2(v)))),
+    L(lado("Total recebido", r2(r.vendas)), { b: true }), L(lado(`Contas (${r.contas})`, "")),
+    ...(r.servico ? [L(lado("Taxa de serviço", r2(r.servico)))] : []), ...(r.desconto ? [L(lado("Descontos", r2(r.desconto)))] : []), SEP,
+    L("DINHEIRO NA GAVETA", { b: true }), L(lado("Fundo de troco", r2(cx.fundo))), L(lado("+ Dinheiro das vendas", r2(r.dinheiroVendas))),
+    ...(r.suprimentos ? [L(lado("+ Reforços", r2(r.suprimentos)))] : []), ...(r.sangrias ? [L(lado("- Sangrias", r2(r.sangrias)))] : []),
+    ...(r.despesas ? [L(lado("- Despesas", r2(r.despesas)))] : []), ...(r.freelaDinheiro ? [L(lado("- Freelancers (dinheiro)", r2(r.freelaDinheiro)))] : []),
+    L(lado("= ESPERADO", r2(cx.esperado ?? r.esperado)), { b: true }), L(lado("CONTADO", r2(cx.contado)), { b: true, g: true }),
+    L(lado(cx.diferenca < 0 ? "FALTOU" : cx.diferenca > 0 ? "SOBROU" : "DIFERENÇA", r2(Math.abs(cx.diferenca || 0))), { b: true, g: true })];
+  if (r.movimentos?.length) linhas.push(SEP, L("MOVIMENTAÇÕES", { b: true }), ...r.movimentos.map((m) => L(lado(`${hh(m.criadoEm).slice(-5)} ${TIPOS_MOV[m.tipo].split(" ")[0]}${m.motivo ? " " + m.motivo : ""}`, (m.tipo === "suprimento" ? "+" : "-") + r2(m.valor)))));
+  if (r.saidas?.length) linhas.push(SEP, L("PAGAMENTOS A FREELANCERS", { b: true }), ...r.saidas.map((x) => L(lado(`${x.nome} (${x.forma})`, r2(x.valor)))));
+  if (cx.obs) linhas.push(SEP, L(`OBS: ${cx.obs}`));
+  linhas.push(SEP, L(""), L("______________________________", { c: true }), L("Responsável", { c: true }), ...rodape());
+  return linhas;
 }
 
 // Pagamento a freelancer/equipe: sai do caixa e entra no fechamento.
@@ -479,6 +601,7 @@ export function cupomEntrega(p) {
   if (p.tipo === "entrega") {
     linhas.push(L(c.endereco || "", { b: true }));
     if (c.bairro) linhas.push(L(`Bairro: ${c.bairro}`, { b: true }));
+    if (c.distanciaKm) linhas.push(L(`Distância: ${String(c.distanciaKm).replace(".", ",")} km`));
     if (c.referencia) linhas.push(L(`Complemento/ref.: ${c.referencia}`));
   }
   const its = itensValidos(p);
