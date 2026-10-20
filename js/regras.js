@@ -461,7 +461,10 @@ export function impressoraDoSetor(setor, tipo = "mesa") {
 let ultimoCupom = 0;
 export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
   ultimoCupom = Math.max(Date.now(), ultimoCupom + 1);
-  return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra } };
+  // tamanho/fonte escolhidos em Impressoras vão junto com o cupom (o agente usa direto)
+  const imp = loja().impressoras.find((i) => i.id === impressora) || {};
+  const estilo = { tamanho: imp.tamanho || "medio", fonte: imp.fonte || "A" };
+  return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra } };
 }
 
 // p.itens = só os itens que devem sair agora (novos ou cancelados)

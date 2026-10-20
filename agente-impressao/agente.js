@@ -40,7 +40,8 @@ async function processar(id, job) {
       return true;
     });
     if (!pegou) return;
-    await imprimir(job, cfg.impressoras[job.impressora], cfg.acentos);
+    const imp = cfg.impressoras[job.impressora];
+    await imprimir(job, imp && { ...imp, ...(job.estilo || {}) }, cfg.acentos);
     await updateDoc(ref, { status: "impresso", impressoEm: Date.now(), erro: null });
     log("Impresso:", job.titulo, "→", job.impressora);
   } catch (e) {

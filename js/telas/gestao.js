@@ -105,6 +105,10 @@ export function abaImpressao(el, { admin }) {
       return `<div class="card"><div class="card-h"><div><b>🖨️ ${esc(imp.nome)}</b><small>${setores.length ? esc(setores.join(", ")) : "nenhum setor"}${lj.impressoraConta === imp.id ? " · contas e vias" : ""}</small></div>
         <span class="pill ${fila ? "alerta" : "ok"}">${fila ? `${fila} na fila` : "em dia"}</span></div>
         <small class="muted">${ult ? `Último impresso às ${hora(ult.impressoEm || ult.criadoEm)}` : "Nada impresso hoje"}</small>
+        <div class="opts dois letra"><div><label class="f" for="tam-${imp.id}">Tamanho da letra</label><select class="in" id="tam-${imp.id}" data-tam="${imp.id}">
+            ${[["grande", "Grande (dupla)"], ["medio", "Médio"], ["pequeno", "Pequeno"]].map(([v, l]) => `<option value="${v}" ${(imp.tamanho || "medio") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="fon-${imp.id}">Fonte</label><select class="in" id="fon-${imp.id}" data-fon="${imp.id}">
+            ${[["A", "Normal"], ["B", "Compacta (menor)"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "A") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-teste="${imp.id}">Imprimir teste</button></div></div>`;
     }).join("")}</div>
     <div class="card"><b>Imprimir por este computador</b>
@@ -123,9 +127,15 @@ export function abaImpressao(el, { admin }) {
       { t: "TESTE DE IMPRESSÃO", b: true, g: true, c: true }, { sep: true }, { t: imp.nome, b: true },
       { t: `Salão: ${lj.setores.filter((s) => s.impressora === imp.id).map((s) => s.nome).join(", ") || "-"}` },
       { t: `Delivery: ${lj.setores.filter((s) => (s.impressoraDelivery || s.impressora) === imp.id).map((s) => s.nome).join(", ") || "-"}` },
-      { t: new Date().toLocaleString("pt-BR") }, { t: "Acentuação: ção ã é ü" }, { sep: true }, { t: "Sistema Elite · Elite MKT", c: true },
+      { t: new Date().toLocaleString("pt-BR") }, { t: "Acentuação: ção ã é ü" }, { sep: true },
+      { t: "1x Coca-Cola 2 litros (Normal)", b: true, g: true }, { t: "1x Pizza grande meio a meio", b: true, g: true }, { t: "   1/2 Calabresa", b: true }, { sep: true }, { t: "Sistema Elite · Elite MKT", c: true },
     ])]).then(() => toast("Teste enviado para a fila")).catch(erro);
   }));
+  // Tamanho/fonte: salva na hora e vale para os próximos cupons dessa impressora.
+  const mudarEstilo = (id, campo, valor) => store.salvar("config", "loja", { impressoras: lj.impressoras.map((i) => (i.id === id ? { ...i, [campo]: valor } : i)) })
+    .then(() => toast("Salvo. Clique em Imprimir teste para conferir.", "bom")).catch(erro);
+  $$("[data-tam]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.tam, "tamanho", e.value)));
+  $$("[data-fon]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.fon, "fonte", e.value)));
   $$("[data-re]", el).forEach((b) => (b.onclick = () => reimprimir(D.impressoes.find((j) => j.id === b.dataset.re)).then(() => toast("Enviado de novo")).catch(erro)));
   $$("[data-ver]", el).forEach((b) => (b.onclick = () => {
     const j = D.impressoes.find((x) => x.id === b.dataset.ver);

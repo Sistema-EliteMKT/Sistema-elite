@@ -33,9 +33,32 @@ function texto(s, pagina) {
 // imp.tamanho:  tamanho das linhas em destaque (itens e títulos)
 //               "grande"  = letra dupla (larga e alta) · "medio" = só mais alta · "pequeno" = normal, em negrito
 // imp.fonte:    "A" (normal, padrão) ou "B" (compacta, menor ainda) · só ESC/POS
+// Quebra o texto em linhas de até "max" letras, sem cortar palavra no meio.
+// As linhas de continuação ganham recuo para ficar claro que é o mesmo item.
+function quebrar(t, max) {
+  t = String(t);
+  if (max < 8 || t.length <= max) return [t];
+  const recuo = /^\s*\d+x /.test(t) ? "   " : t.match(/^\s*/)[0];
+  const out = [];
+  let linha = "";
+  for (const palavra of t.split(/(\s+)/)) {
+    if (!palavra) continue;
+    if ((linha + palavra).length > max && linha.trim()) {
+      out.push(linha.replace(/\s+$/, ""));
+      linha = recuo + palavra.replace(/^\s+/, "");
+      while (linha.length > max) { out.push(linha.slice(0, max)); linha = recuo + linha.slice(max); }
+    } else linha += palavra;
+  }
+  if (linha.trim()) out.push(linha);
+  return out;
+}
+
+// estilo (tamanho/fonte) escolhido no sistema, em Impressoras, vale mais que o config.json
 export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
   const pagina = imp.acentos || acentosPadrao;
   const largura = imp.colunas || 48;
+  const fonteB = imp.fonte === "B";
+  const colunas = fonteB ? Math.round(largura * 4 / 3) : largura; // fonte compacta cabe ~1/3 a mais
   const bema = imp.comandos === "escbema";
   const negrito = (on) => (bema ? [ESC, on ? 0x45 : 0x46] : [ESC, 0x45, on ? 1 : 0]);
   const tam = imp.tamanho || "grande";
@@ -44,13 +67,14 @@ export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
     return bema ? [ESC, 0x57, larga ? 1 : 0, ESC, 0x64, alta ? 1 : 0] : [GS, 0x21, (larga ? 0x10 : 0) | (alta ? 0x01 : 0)];
   };
   const b = [ESC, 0x40]; // inicia
-  if (!bema && imp.fonte === "B") b.push(ESC, 0x4d, 1); // fonte compacta
+  if (!bema && fonteB) b.push(ESC, 0x4d, 1); // fonte compacta
   if (PAGINAS[pagina] && !bema) b.push(ESC, 0x74, PAGINAS[pagina].n);
   for (const l of linhas) {
-    if (l.sep) { b.push(...texto("-".repeat(largura), pagina), 0x0a); continue; }
+    if (l.sep) { b.push(...texto("-".repeat(colunas), pagina), 0x0a); continue; }
     b.push(ESC, 0x61, l.c ? 1 : 0); // alinhamento
     b.push(...negrito(l.b), ...grande(l.g));
-    b.push(...texto(l.t, pagina), 0x0a);
+    const max = l.g && tam === "grande" ? Math.floor(colunas / 2) : colunas; // letra larga ocupa o dobro
+    for (const parte of quebrar(l.t, max)) b.push(...texto(parte, pagina), 0x0a);
   }
   b.push(ESC, 0x61, 0, ...negrito(false), ...grande(false));
   b.push(...Array(imp.avanco ?? 4).fill(0x0a));
