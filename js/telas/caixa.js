@@ -4,6 +4,7 @@ import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
   abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta, imprimirPorSetor, imprimirJunto,
+  rotuloComanda,
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
@@ -267,7 +268,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="grade-mesas">${oc.map((s) => `<article class="card mesa-card ${s.status === "conta" ? "conta" : ""}">
         <div class="card-h"><b class="mc-t">Mesa ${s.m}</b><span class="pill ${s.status === "conta" ? "bad" : "st-ocupada"}">${s.status === "conta" ? "Pediu a conta" : "Aberta"}</span></div>
         <small class="muted">${esc(s.comandas[0].garcom || "")} · desde ${hora(s.desde)}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""} · ${s.comandas.length} ${s.comandas.length > 1 ? "comandas" : "comanda"}</small>
-        <div class="pe-itens">${s.comandas.map((c) => `${s.comandas.length > 1 || c.nome ? `<div class="sub"><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><span>${brl(subtotal(c))}</span></div>` : ""}
+        <div class="pe-itens">${s.comandas.map((c) => `${s.comandas.length > 1 || c.nome ? `<div class="sub"><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><span>${brl(subtotal(c))}</span></div>` : ""}
           ${itensValidos(c).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}`).join("")}</div>
         <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
         <button class="btn pri cheio" data-fechar="${s.m}">Fechar conta</button>
@@ -294,7 +295,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   function abrirMesaCaixa() {
     const gs = D.usuarios.filter((u) => u.ativo !== false && u.papel === "garcom");
     const s = abrirSheet(`${cabecalhoSheet("Criar comanda", "Abre a comanda e já escolhe os itens")}<div class="sh-b">
-      <label class="f" for="abCom">Identificação da comanda</label><input class="in grande" id="abCom" inputmode="numeric" maxlength="5" placeholder="Nº do cartão">
+      <label class="f" for="abCom">Identificação da comanda <small class="muted">(opcional: em branco lança sem comanda)</small></label><input class="in grande" id="abCom" inputmode="numeric" maxlength="5" placeholder="Nº do cartão">
       <label class="f" for="abAt">Atendente</label><select class="in" id="abAt">${gs.map((u) => `<option>${esc(u.nome)}</option>`).join("")}<option>${esc(usuario.nome)}</option></select>
       <div class="opts dois"><div><label class="f" for="abNome">Cliente <small class="muted">(opcional)</small></label><input class="in" id="abNome" autocomplete="off"></div>
         <div><label class="f" for="abPes">Nº de pessoas</label><input class="in" id="abPes" type="number" min="1" max="99" inputmode="numeric"></div></div>
@@ -319,7 +320,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const cs = comandasDaMesa(mesa);
       if (!cs.length) return fecharSheet();
       const s = abrirSheet(`${cabecalhoSheet(`Mesa ${mesa}`, `${cs.length} comanda(s) · ${brl(cs.reduce((x, c) => x + subtotal(c), 0))}`)}<div class="sh-b">
-        ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</b><small>${esc(c.garcom || "")} · ${hora(c.criadoEm)}</small></div><b>${brl(subtotal(c))}</b></div>
+        ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</b><small>${esc(c.garcom || "")} · ${hora(c.criadoEm)}</small></div><b>${brl(subtotal(c))}</b></div>
           ${(c.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="mini-x" data-ci="${c.id}|${i.key}" title="Cancelar item">×</button>${cs.length > 1 ? `<button class="mini-x" data-mv="${c.id}|${i.key}" title="Passar para outra comanda">⇄</button>` : ""}` })).join("") || `<p class="muted pq">Sem itens.</p>`}
           <div class="linha-btn wrap"><button class="btn sec sm" data-lc="${c.id}">+ Itens</button><button class="btn ghost sm" data-rs="${c.id}">Imprimir por setor</button><button class="btn ghost sm" data-rj="${c.id}">Imprimir tudo junto</button><button class="btn ghost sm" data-cc="${c.id}">Cancelar comanda</button></div></div>`).join("")}
         <button class="btn sec cheio" id="nova">+ Outra comanda nesta mesa</button></div>`, { largo: true });
@@ -340,7 +341,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       }));
       $$("[data-mv]", s).forEach((b) => (b.onclick = () => {
         const [cid, key] = b.dataset.mv.split("|");
-        const s2 = abrirSheet(`${cabecalhoSheet("Passar item para…")}<div class="sh-b"><div class="opts">${cs.filter((c) => c.id !== cid).map((c) => `<button class="opt" data-dst="${c.id}"><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span></button>`).join("")}</div></div>`, { nivel: 2 });
+        const s2 = abrirSheet(`${cabecalhoSheet("Passar item para…")}<div class="sh-b"><div class="opts">${cs.filter((c) => c.id !== cid).map((c) => `<button class="opt" data-dst="${c.id}"><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span></button>`).join("")}</div></div>`, { nivel: 2 });
         $$("[data-dst]", s2).forEach((d) => (d.onclick = async () => { fecharSheet(); try { await moverItem(cid, key, d.dataset.dst); } catch (e) { erro(e); } desenharMesa(); }));
       }));
       $$("[data-cc]", s).forEach((b) => (b.onclick = async () => {
@@ -356,7 +357,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   function escolher(cs, titulo, fn) {
     if (cs.length === 1) return Promise.resolve(fn(cs)).catch(erro);
     const s = abrirSheet(`${cabecalhoSheet(titulo, "Marque as comandas que entram juntas")}<div class="sh-b">
-      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
       <button class="btn pri cheio" id="ok">Continuar</button></div>`);
     $("#ok", s).onclick = () => {
       const ids = $$("input:checked", s).map((i) => i.value);
@@ -368,7 +369,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   function lancarNaComanda(id, voltar) {
     const itens = [];
     const c = D.abertos.find((x) => x.id === id) || {};
-    const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa ?? ""} · Comanda ${c.numero ?? ""}`, "Escolha os itens e envie para a produção")}<div class="sh-b novo-ped">
+    const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa ?? ""} · ${rotuloComanda(c)}`, "Escolha os itens e envie para a produção")}<div class="sh-b novo-ped">
       <div class="np-sel" id="sel"></div>
       <div class="np-form"><div class="grp">Itens a enviar</div><div id="itens"></div><button class="btn ok cheio grande" id="env">Enviar para produção</button></div></div>`, { largo: true });
     const atualizar = () => {

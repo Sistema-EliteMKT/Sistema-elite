@@ -106,9 +106,11 @@ export const comandaAberta = (numero) =>
 // Abre a comanda (número do cartão físico). Uma comanda aberta não pode ser aberta
 // de novo em outra mesa: a "trava" garante isso mesmo com dois garçons ao mesmo tempo.
 // atendente: nome do garçom responsável (pode ser outro, quando o caixa abre) · pessoas: nº de pessoas
+// Sem número = lançamento direto na mesa (sem cartão de comanda): não tem trava.
 export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "", pessoas = 0 } = {}) {
   numero = String(numero || "").trim();
-  if (!/^\d{1,5}$/.test(numero)) throw new Error("Digite o número da comanda.");
+  if (!numero) return abrirSemComanda(mesa, nome, garcom, { atendente, pessoas });
+  if (!/^\d{1,5}$/.test(numero)) throw new Error("O número da comanda tem que ser só números.");
   const travaId = `comanda-${numero}`;
   const id = novoId();
   const trava = { aberta: true, pedido: id, mesa, dia: hoje(), em: Date.now() };
@@ -141,6 +143,20 @@ export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "",
   });
   return id;
 }
+
+// Uma mesa tem no máximo um lançamento "sem comanda" aberto: se já existe, usa ele.
+async function abrirSemComanda(mesa, nome, garcom, { atendente = "", pessoas = 0 } = {}) {
+  const ja = comandasDaMesa(mesa).find((c) => !c.numero);
+  if (ja) return ja.id;
+  const id = novoId();
+  await store.salvar("pedidos", id, {
+    tipo: "mesa", mesa, numero: "", nome: (nome || "").trim(), aberto: true, status: "aberta",
+    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
+  });
+  return id;
+}
+
+export const rotuloComanda = (c) => (c?.numero ? `Comanda ${c.numero}` : "Sem comanda");
 
 const liberarComandas = (pedidos) =>
   pedidos.filter((p) => p.tipo === "mesa" && p.numero).map((p) => ({ tipo: "salvar", col: "travas", id: `comanda-${p.numero}`, dados: { aberta: false, pedido: p.id } }));
@@ -336,7 +352,7 @@ const hh = (t = Date.now()) => new Date(t).toLocaleString("pt-BR", { day: "2-dig
 const rodape = () => [SEP, L(`${MARCA.sistema} · ${MARCA.empresa}`, { c: true })];
 
 const titulo = (p) => {
-  if (p.tipo === "mesa") return `MESA ${p.mesa} · COMANDA ${p.numero || "-"}${p.nome && p.nome !== "Mesa inteira" ? " · " + p.nome : ""}`;
+  if (p.tipo === "mesa") return `MESA ${p.mesa}${p.numero ? ` · COMANDA ${p.numero}` : ""}${p.nome && p.nome !== "Mesa inteira" ? " · " + p.nome : ""}`;
   const n = p.numero ? ` #${p.numero}` : "";
   if (p.tipo === "entrega") return `ENTREGA${n}`;
   if (p.tipo === "retirada") return `RETIRADA${n}`;
@@ -392,7 +408,7 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
   if (lj.endereco) linhas.push(L(lj.endereco, { c: true }));
   linhas.push(SEP, L(p0.tipo === "mesa" ? `CONTA · MESA ${p0.mesa}` : titulo(p0), { b: true, g: true }), L(hh()));
   for (const p of pedidos) {
-    if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `Comanda ${p.numero}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
+    if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `${rotuloComanda(p)}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
     else linhas.push(SEP);
     linhas.push(...linhasItens(itensValidos(p), { precos: true }));
     if (p.taxaEntrega) linhas.push(L(lado("Taxa de entrega", r$(p.taxaEntrega))));

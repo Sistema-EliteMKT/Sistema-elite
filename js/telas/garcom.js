@@ -1,6 +1,6 @@
 // App do garçom: mesas, comandas pelo número do cartão e lançamento de itens.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
-import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa } from "../regras.js";
+import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 
 export function telaGarcom(raiz, usuario, sair) {
@@ -50,16 +50,19 @@ export function telaGarcom(raiz, usuario, sair) {
   const formAbrir = (primeira) => `<div class="card abrir"><b>${primeira ? "Abrir a mesa" : "Nova comanda nesta mesa"}</b>
       <p class="muted pq">${primeira ? "Uma comanda para a mesa inteira, ou uma para cada pessoa." : "Para quem vai pagar separado."}</p>
       <form id="fAbrir" class="form-comanda">
-        <label class="f" for="fNum">Identificação da comanda</label><input class="in grande" id="fNum" inputmode="numeric" maxlength="5" placeholder="Nº do cartão" required>
+        <label class="f" for="fNum">Identificação da comanda <small class="muted">(opcional)</small></label><input class="in grande" id="fNum" inputmode="numeric" maxlength="5" placeholder="Nº do cartão">
         <label class="f" for="fAt">Atendente</label><select class="in" id="fAt">${atendentes()}</select>
         <div class="opts dois"><div><label class="f" for="fNome">Cliente <small class="muted">(opcional)</small></label><input class="in" id="fNome" autocomplete="off"></div>
           <div><label class="f" for="fPes">Nº de pessoas</label><input class="in" id="fPes" type="number" min="1" max="99" inputmode="numeric"></div></div>
-        <button class="btn pri cheio grande">Avançar</button></form>
+        <button class="btn pri cheio grande">Avançar</button>
+        <button type="button" class="btn ghost cheio" id="semCom">Lançar sem comanda</button></form>
       <div class="err" id="fErr"></div></div>`;
 
   const ligarAbrir = (focar) => {
     const f = $("#fAbrir", raiz);
     if (!f) return;
+    const semCom = $("#semCom", raiz);
+    if (semCom) semCom.onclick = () => { $("#fNum", raiz).value = ""; f.requestSubmit(); };
     f.onsubmit = async (e) => {
       e.preventDefault();
       const num = $("#fNum", raiz).value.trim();
@@ -86,7 +89,7 @@ export function telaGarcom(raiz, usuario, sair) {
     raiz.innerHTML = `${topo()}<div class="g-wrap">
       <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesas</button><h2>Mesa ${V.mesa}</h2><span class="pill st-${s.status}">${status}</span></div>
       ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""}</p>` : ""}
-      ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
+      ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>${esc(rotuloComanda(c))}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
         ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i)).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
         <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button></div>`).join("")}
       ${cs.length ? `<div class="g-acoes"><button class="btn sec" id="trocar">Trocar / juntar mesa</button><button class="btn sec" id="conta">${s.status === "conta" ? "Reimprimir conta" : "Pedir a conta"}</button></div>
@@ -118,7 +121,7 @@ export function telaGarcom(raiz, usuario, sair) {
     };
     if (cs.length === 1) return enviar(cs);
     const s = abrirSheet(`${cabecalhoSheet(`Conta da mesa ${V.mesa}`, "Marque as comandas que vão pagar agora")}<div class="sh-b">
-      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
       <button class="btn or cheio" id="ok">Imprimir conta</button></div>`);
     $("#ok", s).onclick = () => {
       const ids = $$("input:checked", s).map((i) => i.value);
@@ -131,7 +134,7 @@ export function telaGarcom(raiz, usuario, sair) {
     const c = comandaAtual();
     if (!c) { V.comanda = null; return desenhar(); }
     raiz.innerHTML = `${topo()}<div class="g-wrap lancar">
-      <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesa ${c.mesa}</button><h2>Comanda ${esc(c.numero)}</h2>${c.nome ? `<span class="pill">${esc(c.nome)}</span>` : ""}</div>
+      <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesa ${c.mesa}</button><h2>${esc(rotuloComanda(c))}</h2>${c.nome ? `<span class="pill">${esc(c.nome)}</span>` : ""}</div>
       <div id="sel"></div></div>
       <div class="gbar"><button class="btn pri cheio" id="ver" ${V.rascunho.length ? "" : "disabled"}></button></div>`;
     ligarTopo();
@@ -159,7 +162,7 @@ export function telaGarcom(raiz, usuario, sair) {
   function verPedido(c, barra) {
     const des = () => {
       const tot = V.rascunho.reduce((t, i) => t + i.unit * i.qtd, 0);
-      const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa} · Comanda ${c.numero}`, "Confira antes de enviar")}<div class="sh-b">
+      const s = abrirSheet(`${cabecalhoSheet(`Mesa ${c.mesa} · ${rotuloComanda(c)}`, "Confira antes de enviar")}<div class="sh-b">
         ${V.rascunho.map((i, k) => `<div class="cl"><div class="n"><b>${esc(i.nome)}</b>${i.det.map((d) => `<small>${esc(d)}</small>`).join("")}${i.obs ? `<small class="obs">Obs: ${esc(i.obs)}</small>` : ""}<small>${brl(i.unit * i.qtd)}</small></div>
           <div class="mini"><button data-menos="${k}" aria-label="Diminuir">−</button><span>${i.qtd}</span><button data-mais="${k}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Nada escolhido.</p>`}
         <div class="sum"><div class="t"><span>Total</span><span>${brl(tot)}</span></div></div>
