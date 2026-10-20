@@ -37,7 +37,7 @@ export const LOJA_INICIAL = {
   taxaServico: 10,            // % sugerido no fechamento da mesa (pode tirar na hora)
   aceitaOnline: true,         // cardápio do cliente aceita pedidos
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm
-  papelPorSetor: false,       // false: um papel por impressora, dividido por setor · true: um papel para cada setor
+  papelPorSetor: true,        // true: um papel para cada setor (Amarílis) · false: um papel por impressora, dividido por setor
   impressoras: [
     { id: "imp1", nome: "Caixa (Bematech MP-4200 TH)" },
     { id: "imp2", nome: "Bar (Control iD Print iD)" },

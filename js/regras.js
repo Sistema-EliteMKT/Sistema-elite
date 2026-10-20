@@ -450,8 +450,11 @@ export function impressoraDoSetor(setor, tipo = "mesa") {
   return imp || lj.impressoras[0]?.id;
 }
 
+// criadoEm sempre crescente: a impressora imprime na ordem em que os papéis foram pedidos.
+let ultimoCupom = 0;
 export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
-  return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, status: "pendente", criadoEm: Date.now(), dia: hoje(), ...extra } };
+  ultimoCupom = Math.max(Date.now(), ultimoCupom + 1);
+  return { tipo: "criar", col: "impressoes", dados: { impressora, titulo: tituloJob, linhas, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra } };
 }
 
 // p.itens = só os itens que devem sair agora (novos ou cancelados)
@@ -467,7 +470,8 @@ export async function imprimirProducao(p, quem, opts = {}) {
   }
   const ops = [];
   const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : ""}`;
-  if (lj.papelPorSetor) {
+  // separado: um papel para cada setor (padrão da loja em Ajustes, ou forçado pelo botão)
+  if (opts.separado ?? lj.papelPorSetor) {
     for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s, p.tipo), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));
   } else {
     // Um papel por impressora, com os setores separados por título.
@@ -482,10 +486,17 @@ export async function imprimirProducao(p, quem, opts = {}) {
   await store.lote(ops);
 }
 
+// Delivery/retirada: primeiro o papel com tudo (via com endereço e valores), depois os papéis de cada setor.
 async function imprimirNovoPedido(p, quem) {
-  await imprimirProducao(p, quem);
   await store.lote([filaImpressao(loja().impressoraConta, `Via ${titulo(p)}`, cupomEntrega(p), { pedido: p.id })]);
+  await imprimirProducao(p, quem);
 }
+
+// Botão "Imprimir por setor": reimprime o pedido inteiro, um papel para cada setor.
+export const imprimirPorSetor = (p, quem) => imprimirProducao({ ...p, itens: itensValidos(p) }, quem, { separado: true });
+
+// Botão "Imprimir tudo junto": reimprime o pedido inteiro num papel só, dividido por setor.
+export const imprimirJunto = (p, quem) => imprimirProducao({ ...p, itens: itensValidos(p) }, quem, { separado: false });
 
 const tituloConta = (pedidos) => (pedidos[0].tipo === "mesa" && pedidos.length > 1 ? `MESA ${pedidos[0].mesa}` : titulo(pedidos[0]));
 export const imprimirConta = (pedidos, valores) =>

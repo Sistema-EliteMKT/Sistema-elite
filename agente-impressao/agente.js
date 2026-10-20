@@ -52,19 +52,37 @@ async function processar(id, job) {
   }
 }
 
+// Cada impressora imprime um papel por vez, na ordem em que foram pedidos
+// (ex.: no delivery, primeiro o papel com tudo e depois os de cada setor).
+const rodando = new Set();
+async function esvaziar(imp) {
+  if (rodando.has(imp)) return;
+  rodando.add(imp);
+  try {
+    for (;;) {
+      const prox = [...fila.entries()].filter(([id, j]) => j.impressora === imp && j.status === "pendente" && !ocupado.has(id))
+        .sort((a, b) => (a[1].criadoEm || 0) - (b[1].criadoEm || 0))[0];
+      if (!prox) break;
+      fila.delete(prox[0]);
+      await processar(prox[0], prox[1]);
+    }
+  } finally { rodando.delete(imp); }
+}
+
 onSnapshot(query(collection(db, "impressoes"), where("status", "in", ["pendente", "erro"])), (snap) => {
   fila.clear();
   for (const d of snap.docs) {
     const j = d.data();
     if (!minhas.includes(j.impressora)) continue;
     fila.set(d.id, j);
-    if (j.status === "pendente") processar(d.id, j);
   }
+  for (const imp of minhas) esvaziar(imp);
 }, (e) => log("Erro ao ouvir a fila:", e.message));
 
 // Tenta de novo os que deram erro (impressora sem papel, desligada…), até 20 vezes.
 setInterval(() => {
-  for (const [id, j] of fila) if (j.status === "erro" && (j.tentativas || 0) < 20) processar(id, j);
+  for (const [id, j] of fila) if (j.status === "erro" && (j.tentativas || 0) < 20) { j.status = "pendente"; fila.set(id, j); }
+  for (const imp of minhas) esvaziar(imp);
 }, 15000);
 
 process.on("SIGINT", () => { log("Encerrando."); process.exit(0); });

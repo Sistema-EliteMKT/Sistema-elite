@@ -3,7 +3,7 @@ import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, abrirShee
 import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
-  abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta,
+  abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta, imprimirPorSetor, imprimirJunto,
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
@@ -124,7 +124,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ${p.motoboy?.nome ? `<small class="muted">Motoboy: <b>${esc(p.motoboy.nome)}</b></small>` : ""}
       ${fim ? `<div class="pe-fim">${p.status === "cancelado" ? `<span class="pill bad">Cancelado</span>` : `<span class="pill ok">Pago${p.pagamento?.forma ? " · " + esc(p.pagamento.forma) : ""}</span>`}</div>`
         : `<div class="pe-a">${principal}</div>
-           <div class="pe-links">${p.status === "novo" ? `<button data-acao="recusar" data-id="${p.id}">Recusar</button>` : `<button data-acao="via" data-id="${p.id}">Imprimir via</button>`}<button data-acao="mais" data-id="${p.id}">Mais opções</button></div>`}
+           <div class="pe-links">${p.status === "novo" ? `<button data-acao="recusar" data-id="${p.id}">Recusar</button>` : `<button data-acao="via" data-id="${p.id}">Imprimir tudo</button><button data-acao="setores" data-id="${p.id}">Imprimir por setor</button>`}<button data-acao="mais" data-id="${p.id}">Mais opções</button></div>`}
     </article>`;
   };
 
@@ -151,7 +151,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         }
         await concluirPedido(p);
       }
-      else if (acao === "via") { await imprimirVia(p); toast("Via enviada para impressão"); }
+      else if (acao === "via") { await imprimirVia(p); toast("Papel com tudo enviado para impressão"); }
+      else if (acao === "setores") { await imprimirPorSetor(p, usuario); toast("Um papel para cada setor enviado para impressão"); }
       else if (acao === "mais") maisPedido(p);
     } catch (e) { erro(e); }
   }
@@ -161,6 +162,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ${(p.itens || []).map((i) => linhaItem(i, { acoes: !i.cancelado && p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : "" })).join("")}
       ${p.cliente?.telefone ? `<p><a href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">WhatsApp ${esc(p.cliente.telefone)}</a></p>` : ""}
       <div class="linha-btn wrap">
+        ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
         <button class="btn perigo" id="cancelar">Cancelar pedido</button></div></div>`);
@@ -169,6 +171,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       if (motivo == null) return;
       try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast("Item cancelado. Aviso enviado ao setor."); fecharSheet(); } catch (e) { erro(e); }
     }));
+    $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
     $("#voltarPreparo", s) && ($("#voltarPreparo", s).onclick = async () => { await mudarEtapa(p, "preparo"); fecharSheet(); });
     $("#cancelar", s).onclick = () => { fecharSheet(); acaoPedido("cancelar", p); };
@@ -268,7 +271,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
           ${itensValidos(c).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}`).join("")}</div>
         <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
         <button class="btn pri cheio" data-fechar="${s.m}">Fechar conta</button>
-        <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-det="${s.m}">Lançar / editar</button></div>
+        <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-set="${s.m}">Imprimir por setor</button><button data-det="${s.m}">Lançar / editar</button></div>
       </article>`).join("") || `<p class="vazio">Nenhuma mesa aberta. Use “+ Abrir mesa” ou o app do garçom.</p>`}</div>`;
     const cs = (m) => comandasDaMesa(+m);
     $$("[data-fechar]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.fechar), "Fechar conta", (sel) =>
@@ -280,6 +283,11 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       fecharSheet();
     })));
     $$("[data-det]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.det)));
+    $$("[data-set]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.set), "Imprimir por setor", async (sel) => {
+      for (const c of sel) await imprimirPorSetor(c, usuario);
+      toast("Um papel para cada setor enviado para impressão");
+      fecharSheet();
+    })));
   }
 
   // Mesmos campos do app do garçom: comanda, atendente, cliente, pessoas e mesa.
@@ -313,7 +321,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const s = abrirSheet(`${cabecalhoSheet(`Mesa ${mesa}`, `${cs.length} comanda(s) · ${brl(cs.reduce((x, c) => x + subtotal(c), 0))}`)}<div class="sh-b">
         ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</b><small>${esc(c.garcom || "")} · ${hora(c.criadoEm)}</small></div><b>${brl(subtotal(c))}</b></div>
           ${(c.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado ? "" : `<button class="mini-x" data-ci="${c.id}|${i.key}" title="Cancelar item">×</button>${cs.length > 1 ? `<button class="mini-x" data-mv="${c.id}|${i.key}" title="Passar para outra comanda">⇄</button>` : ""}` })).join("") || `<p class="muted pq">Sem itens.</p>`}
-          <div class="linha-btn wrap"><button class="btn sec sm" data-lc="${c.id}">+ Itens</button><button class="btn ghost sm" data-cc="${c.id}">Cancelar comanda</button></div></div>`).join("")}
+          <div class="linha-btn wrap"><button class="btn sec sm" data-lc="${c.id}">+ Itens</button><button class="btn ghost sm" data-rs="${c.id}">Imprimir por setor</button><button class="btn ghost sm" data-rj="${c.id}">Imprimir tudo junto</button><button class="btn ghost sm" data-cc="${c.id}">Cancelar comanda</button></div></div>`).join("")}
         <button class="btn sec cheio" id="nova">+ Outra comanda nesta mesa</button></div>`, { largo: true });
       $("#nova", s).onclick = async () => {
         const num = await pedirTexto(`Nova comanda · mesa ${mesa}`, "Número da comanda", { ok: "Abrir", tipo: "number" });
@@ -321,6 +329,9 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         try { const id = await abrirComanda(mesa, num, "", usuario); lancarNaComanda(id, desenharMesa); } catch (e) { erro(e); }
       };
       $$("[data-lc]", s).forEach((b) => (b.onclick = () => lancarNaComanda(b.dataset.lc, desenharMesa)));
+      const comanda = (id) => cs.find((c) => c.id === id);
+      $$("[data-rs]", s).forEach((b) => (b.onclick = () => imprimirPorSetor(comanda(b.dataset.rs), usuario).then(() => toast("Um papel para cada setor enviado")).catch(erro)));
+      $$("[data-rj]", s).forEach((b) => (b.onclick = () => imprimirJunto(comanda(b.dataset.rj), usuario).then(() => toast("Papel com tudo enviado")).catch(erro)));
       $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
         const [cid, key] = b.dataset.ci.split("|");
         const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });
