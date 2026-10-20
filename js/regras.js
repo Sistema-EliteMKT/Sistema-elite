@@ -242,8 +242,8 @@ export async function criarPedido(dados, quem) {
 export async function aceitarPedido(p, quem) {
   const numero = p.numero || (await numeroDoPedido());
   const itens = p.itens.map((i) => ({ ...i, enviadoEm: Date.now() }));
-  await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now() });
-  await imprimirNovoPedido({ ...p, numero, itens }, quem);
+  await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now(), aceitoPor: quem?.nome || "" });
+  await imprimirNovoPedido({ ...p, numero, itens, aceitoPor: quem?.nome || "" }, quem);
 }
 
 export const mudarEtapa = (p, status, extra = {}) =>
@@ -418,21 +418,28 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
 export function cupomEntrega(p) {
   const lj = loja();
   const c = p.cliente || {};
-  const linhas = [L(lj.nome, { b: true, c: true }), SEP, L(titulo(p), { b: true, g: true }), L(hh(p.criadoEm))];
-  if (p.origem === "online") linhas.push(L("Pedido pelo cardápio online"));
+  const linhas = [L(lj.nome, { b: true, c: true }), SEP, L(titulo(p), { b: true, g: true }), L(`Horário: ${hh(p.criadoEm)}`)];
+  linhas.push(L(`Tipo: ${{ entrega: "DELIVERY", retirada: "RETIRADA", balcao: "BALCÃO" }[p.tipo] || ""}${p.origem === "online" ? " (pelo cardápio online)" : ""}`));
+  const operador = p.criadoPor || p.aceitoPor;
+  if (operador) linhas.push(L(`Operador: ${operador}`));
   linhas.push(SEP, L(c.nome || "Cliente", { b: true, g: true }));
   if (c.telefone) linhas.push(L(`Tel: ${c.telefone}`, { b: true }));
   if (p.tipo === "entrega") {
     linhas.push(L(c.endereco || "", { b: true }));
     if (c.bairro) linhas.push(L(`Bairro: ${c.bairro}`, { b: true }));
-    if (c.referencia) linhas.push(L(`Ref: ${c.referencia}`));
+    if (c.referencia) linhas.push(L(`Complemento/ref.: ${c.referencia}`));
   }
-  linhas.push(SEP, ...linhasItens(itensValidos(p), { precos: true }));
-  if (p.taxaEntrega) linhas.push(L(lado("Taxa de entrega", r$(p.taxaEntrega))));
+  const its = itensValidos(p);
+  const nItens = its.reduce((s, i) => s + i.qtd, 0);
+  linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasItens(its, { precos: true }));
+  linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
+  if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
+  if (p.taxaEntrega) linhas.push(L(lado("Entrega", r$(p.taxaEntrega))));
   linhas.push(SEP, L(lado("TOTAL R$", r$(totalPedido(p))), { b: true, g: true }));
   const pg = p.pagamento || {};
   if (pg.forma) linhas.push(L(`Pagamento: ${pg.forma}${p.pago ? " (PAGO)" : ""}`, { b: true }));
   if (pg.trocoPara) linhas.push(L(`Troco para ${r$(pg.trocoPara)} · levar ${r$(pg.trocoPara - totalPedido(p))}`, { b: true }));
+  else if (pg.forma === "Dinheiro" && !p.pago) linhas.push(L("Troco: não precisa", { b: true }));
   if (p.obs) linhas.push(SEP, L(`OBS: ${p.obs}`, { b: true }));
   if (p.motoboy?.nome) linhas.push(L(`Motoboy: ${p.motoboy.nome}`));
   linhas.push(SEP, L("NÃO É DOCUMENTO FISCAL", { c: true }), ...rodape());
