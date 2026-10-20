@@ -20,7 +20,7 @@ const passa = (doc, filtro) => {
 //  Modo demonstração (localStorage + aviso entre abas)
 // ---------------------------------------------------------------------------
 function criarStoreLocal() {
-  const P = "se2_"; // prefixo do modo demonstração (mudou com o cardápio de 5 setores)
+  const P = "se3_"; // prefixo do modo demonstração (muda quando o cardápio inicial muda)
   const cache = {};
   const ouvintes = new Set();
   const ler = (col) => {

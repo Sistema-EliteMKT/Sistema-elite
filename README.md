@@ -12,16 +12,16 @@ Primeira loja: **Pizzaria Amarílis** (período de teste).
 
 ## O que o sistema faz
 
-- **Mesas e comandas.** O garçom abre a mesa digitando o **número do cartão da comanda**: uma comanda para a mesa inteira, ou uma para cada pessoa (com nome, se quiser). **Uma comanda aberta não abre de novo em outra mesa**: se a 120 já está na mesa 10 e alguém tenta lançar 120 na mesa 11, o sistema avisa e leva para a mesa 10. Funciona mesmo com dois garçons ao mesmo tempo. Dá para juntar comandas na hora de pagar, passar item de uma comanda para outra, trocar ou juntar mesas, e achar a comanda pelo número.
-- **Impressão por setor (5 setores, 2 impressoras).** Cada pedido sai num papel por impressora, dividido por setor:
+- **Mesas e comandas.** O garçom cria a comanda como no app antigo: **identificação (número do cartão), atendente, cliente, nº de pessoas e mesa**. Pode ser uma comanda para a mesa inteira, ou uma para cada pessoa (com nome, se quiser). **Uma comanda aberta não abre de novo em outra mesa**: se a 120 já está na mesa 10 e alguém tenta lançar 120 na mesa 11, o sistema avisa e leva para a mesa 10. Funciona mesmo com dois garçons ao mesmo tempo. Dá para juntar comandas na hora de pagar, passar item de uma comanda para outra, trocar ou juntar mesas, e achar a comanda pelo número.
+- **Impressão por setor (5 setores, 2 impressoras).** Cada pedido sai num papel só, dividido pelos 5 setores: **Pizzas · Esfihas · Cozinha (porções, pastéis, pratos executivos) · Refrigerantes e cervejas (pegar e levar) · Sucos e drinks (preparar)**.
 
-  | Impressora | Setores |
-  |---|---|
-  | **Cozinha** | Pizzas · Esfihas · Cozinha (porções, pastéis, pratos executivos) |
-  | **Bar** | Refrigerantes e cervejas (pegar e levar) · Sucos e drinks (preparar) |
+  | Impressora | Onde fica | O que imprime |
+  |---|---|---|
+  | **Control iD Print iD** (cabo de rede) | Bar | **Tudo do salão** (mesas e comandas) |
+  | **Bematech MP-4200 TH** (USB) | Caixa | **Delivery e retirada**, via do motoboy, conta da mesa e fechamento |
 
-  Item cancelado imprime um aviso **CANCELADO** no setor. Em Ajustes dá para trocar setores de impressora ou imprimir um papel para cada setor.
-- **Adicionais só na mesa.** Ex.: frango com requeijão **+ bacon**. O garçom marca os adicionais ao lançar; eles não aparecem no delivery. A lista e os preços ficam em Caixa > Cardápio > Adicionais (**os preços iniciais são de exemplo: troque pela lista real**).
+  Item cancelado imprime um aviso **CANCELADO**. Em Ajustes cada setor escolhe a impressora do salão e a do delivery.
+- **Adicionais só na mesa.** Cada tipo de produto tem a sua lista (Pizza, Esfiha, Pastel, Beirute, Batata frita, Panqueca), já com os preços passados pela Jennifer. Na pizza tem "pizza inteira" e "meia pizza". Em **"Outros adicionais"** o garçom escreve qual é (ex.: bacon) e sai no cupom. Nada disso aparece no delivery/retirada. Editar em Caixa > Cardápio > Adicionais.
 - **Onde cada produto é vendido.** Cada produto pode ser **Mesa e delivery**, **Só mesa** (não aparece no cardápio online nem no pedido de entrega/retirada) ou **Só delivery/retirada** (não aparece para o garçom). Muda direto na lista do Cardápio.
 - **Caixa.** Pedidos de telefone, balcão e delivery; pedidos do cardápio online chegam com **aviso sonoro**; conta da mesa com **taxa de serviço** (10%, pode tirar); desconto; pagamento dividido em várias formas; troco; relatório do dia e **fechamento impresso**.
 - **Motoboys.** Cadastro, despacho do pedido para o motoboy, entregas do dia, taxas e dinheiro a acertar com cada um.
@@ -83,13 +83,18 @@ Antes de tudo, descubra como cada impressora térmica está ligada:
 - **Na rede (cabo ou Wi-Fi):** imprima a página de configuração da impressora (normalmente segure o botão de avanço ao ligar) e anote o **IP** (ex.: `192.168.0.51`).
 - **No USB do computador (Windows):** instale o driver do fabricante (Elgin, Epson, Bematech…). Depois, em *Configurações → Impressoras → [impressora] → Propriedades da impressora → Compartilhamento*, marque **Compartilhar** e dê um nome curto, sem espaço (ex.: `COZINHA`, `BAR`).
 
-### Impressoras da Amarílis: Control iD Print iD e Bematech
+### Impressoras da Amarílis
 
-As duas são térmicas de 80 mm (**48 colunas**). Pelo USB no computador do caixa:
+As duas são térmicas de 80 mm (**48 colunas**). O agente roda no computador do caixa e fala com as duas:
 
-1. **Drivers:** instale o driver da **Control iD** (site controlid.com.br, área de suporte da Print iD) e o da **Bematech** (site da Bematech/Elgin, driver do modelo, ex.: MP-4200 TH). Ligue cada uma e confira se aparece em *Configurações → Impressoras*.
-2. **Compartilhe** cada uma com nome curto: Print iD → `COZINHA`, Bematech → `BAR` (ou o contrário, conforme o setor de cada uma).
-3. No `config.json` do agente (veja `config.exemplo.json`, que já vem com as duas), deixe `"comandos": "escpos"` nas duas.
+- **`imp1` = Bematech MP-4200 TH, no USB do caixa.**
+  1. Instale o driver da MP-4200 TH (site da Bematech/Elgin) e confira se aparece em *Configurações → Impressoras*.
+  2. *Propriedades da impressora → Compartilhamento*: marque **Compartilhar** com o nome **`CAIXA`**.
+- **`imp2` = Control iD Print iD, no cabo de rede do bar.**
+  1. Desligue, segure o botão de avançar papel e ligue: sai a página de configuração com o **IP** (ex.: `192.168.0.100`).
+  2. O ideal é fixar esse IP no roteador (reserva de DHCP) para ele não mudar.
+
+No `config.json` do agente (copie de `config.exemplo.json`, que já vem com as duas), troque o IP da Print iD e deixe `"comandos": "escpos"` nas duas.
 4. Imprima o **teste** de cada uma em Caixa > Impressão.
    - **Saiu certo:** pronto.
    - **Bematech imprimiu símbolos estranhos ou não cortou:** ela está no modo próprio da marca. Troque só na Bematech para `"comandos": "escbema"` e reinicie o agente. Se mesmo assim não sair, use o utilitário de configuração da Bematech para colocar a impressora no modo **ESC/POS** e volte para `"escpos"`.

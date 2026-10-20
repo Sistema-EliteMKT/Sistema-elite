@@ -2,6 +2,8 @@
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
 import { D, loja, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe } from "../regras.js";
 
+const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
+const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
 const CANAIS = [["todos", "Mesa e delivery"], ["mesa", "Só mesa"], ["delivery", "Só delivery/retirada"]];
 import { store, novoId } from "../store.js";
 import { lerEstacao, gravarEstacao } from "../estacao.js";
@@ -96,7 +98,9 @@ export function abaImpressao(el, { admin }) {
     ${lj.impressoras.map((imp) => {
       const js = D.impressoes.filter((j) => j.impressora === imp.id);
       const fila = js.filter((j) => j.status === "pendente").length;
-      const setores = lj.setores.filter((s) => s.impressora === imp.id).map((s) => s.nome);
+      const sal = lj.setores.filter((s) => s.impressora === imp.id).length;
+      const del = lj.setores.filter((s) => (s.impressoraDelivery || s.impressora) === imp.id).length;
+      const setores = [sal && `salão (${sal} setores)`, del && `delivery/retirada (${del} setores)`].filter(Boolean);
       const ult = js.find((j) => j.status === "impresso");
       return `<div class="card"><div class="card-h"><div><b>🖨️ ${esc(imp.nome)}</b><small>${setores.length ? esc(setores.join(", ")) : "nenhum setor"}${lj.impressoraConta === imp.id ? " · contas e vias" : ""}</small></div>
         <span class="pill ${fila ? "alerta" : "ok"}">${fila ? `${fila} na fila` : "em dia"}</span></div>
@@ -117,7 +121,8 @@ export function abaImpressao(el, { admin }) {
     const imp = lj.impressoras.find((i) => i.id === b.dataset.teste);
     store.lote([filaImpressao(imp.id, `Teste · ${imp.nome}`, [
       { t: "TESTE DE IMPRESSÃO", b: true, g: true, c: true }, { sep: true }, { t: imp.nome, b: true },
-      { t: `Setores: ${lj.setores.filter((s) => s.impressora === imp.id).map((s) => s.nome).join(", ") || "-"}` },
+      { t: `Salão: ${lj.setores.filter((s) => s.impressora === imp.id).map((s) => s.nome).join(", ") || "-"}` },
+      { t: `Delivery: ${lj.setores.filter((s) => (s.impressoraDelivery || s.impressora) === imp.id).map((s) => s.nome).join(", ") || "-"}` },
       { t: new Date().toLocaleString("pt-BR") }, { t: "Acentuação: ção ã é ü" }, { sep: true }, { t: "Sistema Elite · Elite MKT", c: true },
     ])]).then(() => toast("Teste enviado para a fila")).catch(erro);
   }));
@@ -197,13 +202,13 @@ export function abaCardapio(el) {
   const prods = D.produtos.filter((p) => p.cat === catSel);
   const nomeSetor = (id) => lj.setores.find((s) => s.id === id)?.nome || id;
   el.innerHTML = `<div class="chips">${D.categorias.map((c) => `<button class="chip" data-cs="${esc(c.id)}" aria-pressed="${c.id === catSel}">${esc(c.nome)}</button>`).join("")}<button class="chip" id="novaCat">+ Categoria</button></div>
-    ${cat ? `<div class="card"><div class="card-h"><div><b>${esc(cat.nome)}</b><small>Setor: ${esc(nomeSetor(cat.setor))}${cat.grupoPizza ? " · monta pizza (meio a meio, borda)" : ""}${cat.adicionais ? " · aceita adicionais na mesa" : ""}</small></div><button class="btn ghost sm" id="edCat">Editar categoria</button></div>
+    ${cat ? `<div class="card"><div class="card-h"><div><b>${esc(cat.nome)}</b><small>Setor: ${esc(nomeSetor(cat.setor))}${cat.grupoPizza ? " · monta pizza (meio a meio, borda)" : ""}${cat.grupoAdicional ? ` · adicionais de ${esc(cat.grupoAdicional)} na mesa` : ""}</small></div><button class="btn ghost sm" id="edCat">Editar categoria</button></div>
       <div class="linha-btn"><button class="btn pri sm" id="novoProd">+ Produto</button></div>
       ${prods.map((p) => `<div class="cl ${p.ativo === false ? "off" : ""}"><div class="n"><b>${esc(p.nome)}</b><small>${esc(p.desc || "")}</small>${p.ativo === false ? `<small class="ruim-txt">Esgotado / fora do cardápio</small>` : ""}</div>
         <div class="v">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}<select class="in mini-sel" data-cn="${esc(p.id)}" aria-label="Onde vende">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select><label class="sw" title="Disponível"><input type="checkbox" data-av="${esc(p.id)}" ${p.ativo === false ? "" : "checked"}><span></span></label><button class="btn ghost sm" data-ep="${esc(p.id)}">Editar</button></div></div>`).join("") || `<p class="vazio">Nenhum produto nesta categoria.</p>`}</div>` : ""}
     <div class="grade">
       <div class="card"><div class="card-h"><b>Bordas (pizzas salgadas)</b><button class="btn ghost sm" id="edBordas">Editar</button></div>${(lj.bordas || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.preco)}</span></div>`).join("")}</div>
-      <div class="card"><div class="card-h"><b>Adicionais (só mesa)</b><button class="btn ghost sm" id="edAdic">Editar</button></div>${(lj.adicionais || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.preco)}</span></div>`).join("") || `<p class="muted pq">Nenhum adicional cadastrado.</p>`}</div>
+      <div class="card"><div class="card-h"><b>Adicionais (só mesa)</b><button class="btn ghost sm" id="edAdic">Editar</button></div>${gruposAdicionais().map((g) => `<div class="grp">${esc(g)}</div>${(lj.adicionais || []).filter((a) => a.grupo === g).map((b) => `<div class="cl"><span>${esc(b.nome)}${b.livre ? ` <small class="muted">(garçom escreve qual)</small>` : ""}</span><span>${brl(b.preco)}</span></div>`).join("")}`).join("") || `<p class="muted pq">Nenhum adicional cadastrado.</p>`}</div>
       <div class="card"><div class="card-h"><b>Taxas de entrega</b><button class="btn ghost sm" id="edTaxas">Editar</button></div>${(lj.taxasEntrega || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.taxa)}</span></div>`).join("")}</div>
     </div>`;
   $$("[data-cs]", el).forEach((b) => (b.onclick = () => { sessionStorage.setItem("se_cat", b.dataset.cs); abaCardapio(el); }));
@@ -214,7 +219,7 @@ export function abaCardapio(el) {
   $("#novaCat", el).onclick = () => editarCategoria({});
   $("#edBordas", el).onclick = () => editarLista("Bordas", "bordas", "preco", "Preço");
   $("#edTaxas", el).onclick = () => editarLista("Taxas de entrega", "taxasEntrega", "taxa", "Taxa");
-  $("#edAdic", el).onclick = () => editarLista("Adicionais (lançados só na mesa)", "adicionais", "preco", "Preço");
+  $("#edAdic", el).onclick = editarAdicionais;
   $$("[data-cn]", el).forEach((b) => (b.onchange = () => store.salvar("produtos", b.dataset.cn, { canal: b.value, semEntrega: b.value === "mesa" })
     .then(() => toast(`Agora: ${CANAIS.find(([v]) => v === b.value)[1]}`)).catch(erro)));
 }
@@ -227,6 +232,7 @@ function editarProduto(p) {
     <div class="opts dois"><div><label class="f" for="pp">Preço (R$)</label><input class="in" id="pp" inputmode="decimal" value="${p.preco != null ? valorCampo(p.preco) : ""}"></div>
       <div><label class="f" for="pb">Preço brotinho (só pizza)</label><input class="in" id="pb" inputmode="decimal" value="${p.precoBroto ? valorCampo(p.precoBroto) : ""}"></div></div>
     <label class="f" for="po">Opções para escolher (separe por vírgula, ex.: Coca-Cola, Guaraná)</label><input class="in" id="po" value="${esc((p.opcoes || []).join(", "))}">
+    <label class="f" for="pad">Adicionais na mesa</label><select class="in" id="pad"><option value="__cat" ${p.grupoAdicional == null ? "selected" : ""}>Os da categoria</option>${opcoesGrupo(p.grupoAdicional === "" ? "" : p.grupoAdicional, "Nenhum").replace('<option value="">Nenhum</option>', `<option value="" ${p.grupoAdicional === "" ? "selected" : ""}>Nenhum</option>`)}</select>
     <label class="f" for="ps">Setor de impressão</label><select class="in" id="ps"><option value="">O mesmo da categoria</option>${loja().setores.map((x) => `<option value="${esc(x.id)}" ${x.id === p.setor ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pz" ${p.tipo === "pizza" ? "checked" : ""}><span>É pizza (tamanho, meio a meio, borda)</span></label>
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
@@ -239,7 +245,7 @@ function editarProduto(p) {
     if (!nome || !preco) return toast("Coloque nome e preço.");
     const dados = {
       nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null,
-      opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null,
+      opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null, grupoAdicional: $("#pad", s).value === "__cat" ? null : $("#pad", s).value,
       tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,
     };
@@ -258,7 +264,7 @@ function editarCategoria(c) {
     <label class="f" for="cp">Prefixo no cupom (ex.: "Esfiha ")</label><input class="in" id="cp" value="${esc(c.prefixo || "")}">
     <label class="f" for="cg">Pizzas desta categoria se misturam com</label><select class="in" id="cg">
       <option value="">Não é pizza</option><option value="salgada" ${c.grupoPizza === "salgada" ? "selected" : ""}>Pizzas salgadas (com borda)</option><option value="doce" ${c.grupoPizza === "doce" ? "selected" : ""}>Pizzas doces</option></select>
-    <label class="opt"><input type="checkbox" id="cad" ${c.adicionais ? "checked" : ""}><span>Aceita adicionais na mesa (ex.: + bacon)</span></label>
+    <label class="f" for="cad">Adicionais que o garçom pode lançar</label><select class="in" id="cad">${opcoesGrupo(c.grupoAdicional, "Nenhum")}</select>
     <label class="f" for="co">Ordem no cardápio</label><input class="in" id="co" type="number" value="${c.ordem ?? D.categorias.length + 1}">
     <div class="linha-btn">${c.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
   $("#ok", s).onclick = async () => {
@@ -266,7 +272,7 @@ function editarCategoria(c) {
     if (!nome) return toast("Coloque o nome.");
     const id = c.id || nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || novoId();
     try {
-      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, adicionais: $("#cad", s).checked, ordem: Number($("#co", s).value) || 0 });
+      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0 });
       sessionStorage.setItem("se_cat", id); fecharSheet(); toast("Salvo ✓");
     } catch (e) { erro(e); }
   };
@@ -274,6 +280,31 @@ function editarCategoria(c) {
     if (D.produtos.some((p) => p.cat === c.id)) return toast("Tire ou mude os produtos dessa categoria antes.");
     if (await confirmar("Excluir categoria", `Excluir "${c.nome}"?`, { ok: "Excluir", perigo: true })) store.apagar("categorias", c.id).catch(erro);
   });
+}
+
+// Adicionais: grupo (Pizza, Esfiha…), nome, preço e se o garçom escreve qual é ("Outros adicionais").
+function editarAdicionais() {
+  const itens = structuredClone(loja().adicionais || []);
+  const s = abrirSheet(`${cabecalhoSheet("Adicionais (só mesa)", "O grupo liga o adicional à categoria ou ao produto")}<div class="sh-b">
+    <datalist id="dlGrupos">${gruposAdicionais().map((g) => `<option value="${esc(g)}">`).join("")}</datalist>
+    <div id="ls"></div><button class="btn ghost sm" id="mais">+ Adicional</button><div class="linha-btn"><button class="btn pri" id="ok">Salvar</button></div></div>`, { largo: true });
+  const des = () => {
+    $("#ls", s).innerHTML = `<div class="ad-linha ad-cab"><span>Grupo</span><span>Nome</span><span>Preço</span><span>Escreve qual</span><span></span></div>` + itens.map((x, i) => `<div class="ad-linha">
+      <input class="in" data-g="${i}" list="dlGrupos" value="${esc(x.grupo || "")}" placeholder="Ex.: Pizza" aria-label="Grupo">
+      <input class="in" data-n="${i}" value="${esc(x.nome)}" placeholder="Ex.: Catupiry Original" aria-label="Nome">
+      <input class="in" data-v="${i}" inputmode="decimal" value="${valorCampo(x.preco)}" aria-label="Preço">
+      <label class="sw" title="Garçom escreve qual é"><input type="checkbox" data-l="${i}" ${x.livre ? "checked" : ""}><span></span></label>
+      <button class="mini-x" data-x="${i}" aria-label="Tirar">×</button></div>`).join("");
+    $$("[data-g]", s).forEach((e) => (e.oninput = () => (itens[e.dataset.g].grupo = e.value.trim())));
+    $$("[data-n]", s).forEach((e) => (e.oninput = () => (itens[e.dataset.n].nome = e.value)));
+    $$("[data-v]", s).forEach((e) => (e.oninput = () => (itens[e.dataset.v].preco = numero(e.value))));
+    $$("[data-l]", s).forEach((e) => (e.onchange = () => (itens[e.dataset.l].livre = e.checked)));
+    $$("[data-x]", s).forEach((e) => (e.onclick = () => { itens.splice(+e.dataset.x, 1); des(); }));
+  };
+  $("#mais", s).onclick = () => { itens.push({ grupo: itens[itens.length - 1]?.grupo || "", nome: "", preco: 0 }); des(); };
+  $("#ok", s).onclick = () => store.salvar("config", "loja", { adicionais: itens.filter((x) => x.nome.trim() && x.grupo) })
+    .then(() => { fecharSheet(); toast("Adicionais salvos ✓"); }).catch(erro);
+  des();
 }
 
 // Edita uma lista {nome, valor} dentro de config/loja (bordas, taxas de entrega).
@@ -307,8 +338,8 @@ export function abaAjustes(el) {
       <label class="opt"><input type="checkbox" id="ao" ${lj.aceitaOnline ? "checked" : ""}><span>Cardápio online aceitando pedidos</span></label>
       <button class="btn pri" id="salvarLoja">Salvar</button></div>
 
-    <div class="card"><b>Impressoras e setores</b>
-      <p class="muted pq">Cada setor manda seus itens para uma impressora. Pode ter vários setores na mesma impressora.</p>
+    <div class="card inteiro"><b>Impressoras e setores</b>
+      <p class="muted pq">Cada setor escolhe em qual impressora sai quando o pedido é do salão (mesas) e quando é de delivery/retirada. Vários setores na mesma impressora saem no mesmo papel, divididos por título.</p>
       <div id="imps"></div><button class="btn ghost sm" id="maisImp">+ Impressora</button>
       <div class="grp">Setores</div><div id="sets"></div><button class="btn ghost sm" id="maisSet">+ Setor</button>
       <label class="f" for="aic">Conta da mesa, via de entrega e fechamento saem na</label><select class="in" id="aic"></select>
@@ -338,14 +369,18 @@ export function abaAjustes(el) {
   const imps = structuredClone(lj.impressoras);
   const sets = structuredClone(lj.setores);
   const des = () => {
-    $("#imps", el).innerHTML = imps.map((i, k) => `<div class="forma"><input class="in" data-in="${k}" value="${esc(i.nome)}" aria-label="Nome da impressora"><code>${esc(i.id)}</code>${imps.length > 1 ? `<button class="mini-x" data-ix="${k}">×</button>` : ""}</div>`).join("");
-    $("#sets", el).innerHTML = sets.map((x, k) => `<div class="forma"><input class="in" data-sn="${k}" value="${esc(x.nome)}" aria-label="Nome do setor"><select class="in" data-si="${k}">${imps.map((i) => `<option value="${esc(i.id)}" ${i.id === x.impressora ? "selected" : ""}>${esc(i.nome)}</option>`).join("")}</select>${sets.length > 1 ? `<button class="mini-x" data-sx="${k}">×</button>` : ""}</div>`).join("");
+    $("#imps", el).innerHTML = imps.map((i, k) => `<div class="forma imp"><input class="in" data-in="${k}" value="${esc(i.nome)}" aria-label="Nome da impressora"><code>${esc(i.id)}</code>${imps.length > 1 ? `<button class="mini-x" data-ix="${k}">×</button>` : ""}</div>`).join("");
+    const opImp = (sel) => imps.map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
+    $("#sets", el).innerHTML = `<div class="set-linha set-cab"><span>Setor</span><span>Salão (mesas)</span><span>Delivery / retirada</span><span></span></div>` + sets.map((x, k) => `<div class="set-linha"><input class="in" data-sn="${k}" value="${esc(x.nome)}" aria-label="Nome do setor">
+      <select class="in" data-si="${k}" aria-label="Impressora do salão">${opImp(x.impressora)}</select>
+      <select class="in" data-sd="${k}" aria-label="Impressora do delivery">${opImp(x.impressoraDelivery || x.impressora)}</select>${sets.length > 1 ? `<button class="mini-x" data-sx="${k}">×</button>` : "<span></span>"}</div>`).join("");
     const atual = $("#aic", el).value || lj.impressoraConta;
     $("#aic", el).innerHTML = imps.map((i) => `<option value="${esc(i.id)}" ${i.id === atual ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
     $$("[data-in]", el).forEach((e) => (e.oninput = () => (imps[e.dataset.in].nome = e.value)));
-    $$("[data-ix]", el).forEach((e) => (e.onclick = () => { const [r] = imps.splice(+e.dataset.ix, 1); sets.forEach((s) => s.impressora === r.id && (s.impressora = imps[0].id)); des(); }));
+    $$("[data-ix]", el).forEach((e) => (e.onclick = () => { const [r] = imps.splice(+e.dataset.ix, 1); sets.forEach((s) => { if (s.impressora === r.id) s.impressora = imps[0].id; if (s.impressoraDelivery === r.id) s.impressoraDelivery = imps[0].id; }); des(); }));
     $$("[data-sn]", el).forEach((e) => (e.oninput = () => (sets[e.dataset.sn].nome = e.value)));
     $$("[data-si]", el).forEach((e) => (e.onchange = () => (sets[e.dataset.si].impressora = e.value)));
+    $$("[data-sd]", el).forEach((e) => (e.onchange = () => (sets[e.dataset.sd].impressoraDelivery = e.value)));
     $$("[data-sx]", el).forEach((e) => (e.onclick = () => { sets.splice(+e.dataset.sx, 1); des(); }));
   };
   $("#maisImp", el).onclick = () => { imps.push({ id: "imp" + (Math.max(0, ...imps.map((i) => parseInt(i.id.replace(/\D/g, "")) || 0)) + 1), nome: `Impressora ${imps.length + 1}` }); des(); };
@@ -353,7 +388,7 @@ export function abaAjustes(el) {
     const nome = await pedirTexto("Novo setor", "Nome do setor (ex.: Sobremesas)");
     if (!nome) return;
     const id = nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-");
-    if (!sets.some((s) => s.id === id)) sets.push({ id, nome, impressora: imps[0].id });
+    if (!sets.some((s) => s.id === id)) sets.push({ id, nome, impressora: imps[0].id, impressoraDelivery: imps[0].id });
     des();
   };
   $("#salvarImp", el).onclick = () => {

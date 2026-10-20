@@ -38,10 +38,21 @@ export function telaGarcom(raiz, usuario, sair) {
     $("#buscaCom", raiz).onsubmit = (e) => { e.preventDefault(); const v = $("#numCom", raiz).value.trim(); if (v) irParaComanda(v); };
   }
 
+  // Garçons ativos; quem está logado vem primeiro.
+  const atendentes = () => {
+    const gs = D.usuarios.filter((u) => u.ativo !== false && (u.papel === "garcom" || u.id === usuario.id));
+    if (!gs.some((u) => u.id === usuario.id)) gs.unshift(usuario);
+    return gs.map((u) => `<option ${u.id === usuario.id ? "selected" : ""}>${esc(u.nome)}</option>`).join("");
+  };
+
   const formAbrir = (primeira) => `<div class="card abrir"><b>${primeira ? "Abrir a mesa" : "Nova comanda nesta mesa"}</b>
       <p class="muted pq">${primeira ? "Uma comanda para a mesa inteira, ou uma para cada pessoa." : "Para quem vai pagar separado."}</p>
-      <form id="fAbrir" class="abrir-linha"><input class="in grande" id="fNum" inputmode="numeric" maxlength="5" placeholder="Nº da comanda" aria-label="Número da comanda" required>
-        <input class="in" id="fNome" placeholder="Nome (opcional)" aria-label="Nome"><button class="btn pri">Abrir</button></form>
+      <form id="fAbrir" class="form-comanda">
+        <label class="f" for="fNum">Identificação da comanda</label><input class="in grande" id="fNum" inputmode="numeric" maxlength="5" placeholder="Nº do cartão" required>
+        <label class="f" for="fAt">Atendente</label><select class="in" id="fAt">${atendentes()}</select>
+        <div class="opts dois"><div><label class="f" for="fNome">Cliente <small class="muted">(opcional)</small></label><input class="in" id="fNome" autocomplete="off"></div>
+          <div><label class="f" for="fPes">Nº de pessoas</label><input class="in" id="fPes" type="number" min="1" max="99" inputmode="numeric"></div></div>
+        <button class="btn pri cheio grande">Avançar</button></form>
       <div class="err" id="fErr"></div></div>`;
 
   const ligarAbrir = (focar) => {
@@ -52,7 +63,7 @@ export function telaGarcom(raiz, usuario, sair) {
       const num = $("#fNum", raiz).value.trim();
       $("#fErr", raiz).textContent = "";
       try {
-        const id = await abrirComanda(V.mesa, num, $("#fNome", raiz).value, usuario);
+        const id = await abrirComanda(V.mesa, num, $("#fNome", raiz).value, usuario, { atendente: $("#fAt", raiz).value, pessoas: $("#fPes", raiz).value });
         V.comanda = id; V.rascunho = []; desenhar();
       } catch (x) {
         if (x.mesa) {
@@ -71,7 +82,7 @@ export function telaGarcom(raiz, usuario, sair) {
     const status = { livre: "Livre", ocupada: "Aberta", conta: "Pediu a conta" }[s.status];
     raiz.innerHTML = `${topo()}<div class="g-wrap">
       <div class="g-cab"><button class="btn sec sm" id="voltar">‹ Mesas</button><h2>Mesa ${V.mesa}</h2><span class="pill st-${s.status}">${status}</span></div>
-      ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}</p>` : ""}
+      ${cs.length ? `<p class="muted pq">Aberta às ${hora(s.desde)} · ${esc(cs[0].garcom || "")}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""}</p>` : ""}
       ${cs.map((c) => `<div class="card comanda"><div class="card-h"><div><b>Comanda ${esc(c.numero)}${c.nome ? ` · ${esc(c.nome)}` : ""}</b>${c.status === "conta" ? `<small class="laranja">pediu a conta</small>` : ""}</div><b>${brl(subtotal(c))}</b></div>
         ${(c.itens || []).length ? c.itens.map((i) => linhaItem(i)).join("") : `<p class="muted pq">Nenhum item ainda.</p>`}
         <button class="btn ghost cheio" data-lancar="${c.id}">+ Adicionar itens</button></div>`).join("")}

@@ -36,7 +36,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const lj = loja();
       raiz.innerHTML = `<header class="p-top"><div class="p-top-in">
           <div class="p-loja">${lj.logo ? `<img src="${esc(lj.logo)}" alt="${esc(lj.nome)}">` : `<b>${esc(lj.nome)}</b>`}<span class="muted">${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</span></div>
-          <div class="p-quem"><button class="btn pri sm" id="novo">+ Novo pedido</button><button class="btn ghost sm" id="abrirMesa">+ Abrir mesa</button><button class="btn ghost sm" id="garcom">Modo garçom</button>
+          <div class="p-quem"><button class="btn pri sm" id="novo">+ Novo pedido</button><button class="btn ghost sm" id="abrirMesa">+ Criar comanda</button><button class="btn ghost sm" id="garcom">Modo garçom</button>
             <span class="caixa-on"><i></i>${esc(usuario.nome)}</span><button class="btn ghost sm" id="sair">Sair</button></div>
         </div></header>
         <nav class="p-tabs chips" id="abas"></nav>
@@ -263,7 +263,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="kpi"><b>${oc.filter((m) => m.status === "conta").length}</b><span>pedindo a conta</span></div></div>
       <div class="grade-mesas">${oc.map((s) => `<article class="card mesa-card ${s.status === "conta" ? "conta" : ""}">
         <div class="card-h"><b class="mc-t">Mesa ${s.m}</b><span class="pill ${s.status === "conta" ? "bad" : "st-ocupada"}">${s.status === "conta" ? "Pediu a conta" : "Aberta"}</span></div>
-        <small class="muted">${esc(s.comandas[0].garcom || "")} · desde ${hora(s.desde)} · ${s.comandas.length} ${s.comandas.length > 1 ? "comandas" : "comanda"}</small>
+        <small class="muted">${esc(s.comandas[0].garcom || "")} · desde ${hora(s.desde)}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""} · ${s.comandas.length} ${s.comandas.length > 1 ? "comandas" : "comanda"}</small>
         <div class="pe-itens">${s.comandas.map((c) => `${s.comandas.length > 1 || c.nome ? `<div class="sub"><span>Comanda ${esc(c.numero)}${c.nome ? " · " + esc(c.nome) : ""}</span><span>${brl(subtotal(c))}</span></div>` : ""}
           ${itensValidos(c).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}`).join("")}</div>
         <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
@@ -282,18 +282,27 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     $$("[data-det]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.det)));
   }
 
+  // Mesmos campos do app do garçom: comanda, atendente, cliente, pessoas e mesa.
   function abrirMesaCaixa() {
-    const s = abrirSheet(`${cabecalhoSheet("Abrir mesa", "Abre a comanda e já escolhe os itens")}<div class="sh-b">
-      <div class="opts dois"><div><label class="f" for="abMesa">Mesa</label><input class="in grande" id="abMesa" type="number" min="1" max="${loja().nMesas}" inputmode="numeric"></div>
-        <div><label class="f" for="abCom">Nº da comanda</label><input class="in grande" id="abCom" inputmode="numeric" maxlength="5"></div></div>
-      <label class="f" for="abNome">Nome (opcional)</label><input class="in" id="abNome">
-      <div class="err" id="aerr"></div><button class="btn pri cheio" id="ok">Abrir e lançar itens</button></div>`);
-    setTimeout(() => $("#abMesa", s).focus(), 50);
+    const gs = D.usuarios.filter((u) => u.ativo !== false && u.papel === "garcom");
+    const s = abrirSheet(`${cabecalhoSheet("Criar comanda", "Abre a comanda e já escolhe os itens")}<div class="sh-b">
+      <label class="f" for="abCom">Identificação da comanda</label><input class="in grande" id="abCom" inputmode="numeric" maxlength="5" placeholder="Nº do cartão">
+      <label class="f" for="abAt">Atendente</label><select class="in" id="abAt">${gs.map((u) => `<option>${esc(u.nome)}</option>`).join("")}<option>${esc(usuario.nome)}</option></select>
+      <div class="opts dois"><div><label class="f" for="abNome">Cliente <small class="muted">(opcional)</small></label><input class="in" id="abNome" autocomplete="off"></div>
+        <div><label class="f" for="abPes">Nº de pessoas</label><input class="in" id="abPes" type="number" min="1" max="99" inputmode="numeric"></div></div>
+      <label class="f" for="abMesa">Mesa</label><select class="in grande" id="abMesa"><option value="">Escolha a mesa</option>${Array.from({ length: Number(loja().nMesas) || 0 }, (_, i) => {
+        const st = situacaoMesa(i + 1).status;
+        return `<option value="${i + 1}">Mesa ${i + 1}${st === "livre" ? "" : " (ocupada)"}</option>`;
+      }).join("")}</select>
+      <div class="err" id="aerr"></div><button class="btn pri cheio grande" id="ok">Avançar</button></div>`);
+    setTimeout(() => $("#abCom", s).focus(), 50);
     $("#ok", s).onclick = async () => {
       const mesa = Number($("#abMesa", s).value);
-      if (!mesa || mesa > Number(loja().nMesas)) return ($("#aerr", s).textContent = "Mesa não existe.");
-      try { const id = await abrirComanda(mesa, $("#abCom", s).value, $("#abNome", s).value, usuario); lancarNaComanda(id, fecharSheet); }
-      catch (e) { $("#aerr", s).textContent = e.message; }
+      if (!mesa) return ($("#aerr", s).textContent = "Escolha a mesa.");
+      try {
+        const id = await abrirComanda(mesa, $("#abCom", s).value, $("#abNome", s).value, usuario, { atendente: $("#abAt", s).value, pessoas: $("#abPes", s).value });
+        lancarNaComanda(id, fecharSheet);
+      } catch (e) { $("#aerr", s).textContent = e.message; }
     };
   }
 

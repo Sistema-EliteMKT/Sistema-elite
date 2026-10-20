@@ -9,7 +9,7 @@
   "senha": "SENHA_DA_CONTA_DA_LOJA",
   "acentos": "sem-acentos",
   "impressoras": {
-    "imp1": { "nome": "Control iD Print iD (cozinha)", "tipo": "windows", "compartilhamento": "COZINHA", "colunas": 48, "comandos": "escpos" },
-    "imp2": { "nome": "Bematech (bar)", "tipo": "windows", "compartilhamento": "BAR", "colunas": 48, "comandos": "escpos" }
+    "imp1": { "nome": "Caixa - Bematech MP-4200 TH (USB)", "tipo": "windows", "compartilhamento": "CAIXA", "colunas": 48, "comandos": "escpos" },
+    "imp2": { "nome": "Bar - Control iD Print iD (rede)", "tipo": "rede", "ip": "192.168.0.100", "porta": 9100, "colunas": 48, "comandos": "escpos" }
   }
 }

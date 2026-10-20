@@ -10,8 +10,9 @@ const saboresPossiveis = (p, onde) =>
 
 export function montarItem(p, aoAdicionar, { onde = "", rapido = false } = {}) {
   const cat = categoria(p.cat);
-  // Adicionais só na mesa, e só nas categorias marcadas (pizza, esfiha, porções…).
-  const adicionais = onde === "mesa" && cat?.adicionais ? loja().adicionais || [] : [];
+  // Adicionais só na mesa, da lista do grupo do produto (Pizza, Esfiha, Pastel…).
+  const grupoAd = p.grupoAdicional ?? cat?.grupoAdicional ?? "";
+  const adicionais = onde === "mesa" && grupoAd ? (loja().adicionais || []).filter((a) => a.grupo === grupoAd) : [];
   // Item simples sem opções: no garçom/caixa entra direto com 1 toque.
   if (rapido && p.tipo !== "pizza" && !(p.opcoes || []).length && !adicionais.length) {
     aoAdicionar(criar(p, { qtd: 1 }));
@@ -39,8 +40,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false } = {}) {
     ` : ""}
     ${(p.opcoes || []).length ? `<div class="grp">Escolha</div><div class="opts dois">${p.opcoes.map((o, i) =>
       `<label class="opt"><input type="radio" name="op" value="${esc(o)}" ${i ? "" : "checked"}><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
-    ${adicionais.length ? `<div class="grp">Adicionais <small>pode marcar vários</small></div><div class="opts dois">${adicionais.map((a, i) =>
-      `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>`).join("")}</div>` : ""}
+    ${adicionais.length ? `<div class="grp">Adicionais <small>só na mesa · pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
+      `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>
+       ${a.livre ? `<input class="in livre" data-livre="${i}" placeholder="Qual adicional? (ex.: bacon)" hidden>` : ""}`).join("")}</div>` : ""}
     <label class="f" for="obs">Observação</label>
     <input class="in" id="obs" placeholder="Ex.: sem cebola, bem passada" maxlength="120">
     <div class="addrow"><div class="qtd"><button id="qm" aria-label="Diminuir">−</button><span id="qv">1</span><button id="qp" aria-label="Aumentar">+</button></div>
@@ -53,7 +55,11 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false } = {}) {
     const bi = val("bor");
     return {
       tam, segundo, borda: bi === "" || bi == null ? null : bordas[+bi], opcao: val("op"),
-      extras: $$('input[name="ad"]:checked', s).map((i) => adicionais[+i.value]),
+      extras: $$('input[name="ad"]:checked', s).map((i) => {
+        const a = adicionais[+i.value];
+        const qual = a.livre ? $(`[data-livre="${i.value}"]`, s)?.value.trim() : "";
+        return qual ? { ...a, nome: `${a.nome.replace(/^Outros adicionais/i, "Adicional")}: ${qual}` } : a;
+      }),
       obs: $("#obs", s).value.trim(), qtd,
     };
   };
@@ -62,11 +68,16 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false } = {}) {
     $("#ap", s).textContent = brl(criar(p, ler()).unit * qtd);
     const s2 = $("#s2", s);
     if (s2) s2.hidden = val("ns") !== "2";
+    $$("[data-livre]", s).forEach((t) => (t.hidden = !$(`input[name="ad"][value="${t.dataset.livre}"]`, s).checked));
   };
   $$("input,select", s).forEach((i) => i.addEventListener("change", atualizar));
   $("#qm", s).onclick = () => { if (qtd > 1) { qtd--; atualizar(); } };
   $("#qp", s).onclick = () => { qtd++; atualizar(); };
-  $("#add", s).onclick = () => { aoAdicionar(criar(p, ler())); fecharSheet(); };
+  $("#add", s).onclick = () => {
+    const semNome = $$("[data-livre]", s).find((t) => !t.hidden && !t.value.trim());
+    if (semNome) { semNome.focus(); semNome.placeholder = "Escreva qual é o adicional"; semNome.classList.add("falta"); return; }
+    aoAdicionar(criar(p, ler())); fecharSheet();
+  };
   atualizar();
 }
 

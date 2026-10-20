@@ -39,18 +39,19 @@ export const LOJA_INICIAL = {
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm
   papelPorSetor: false,       // false: um papel por impressora, dividido por setor · true: um papel para cada setor
   impressoras: [
-    { id: "imp1", nome: "Cozinha" },
-    { id: "imp2", nome: "Bar" },
+    { id: "imp1", nome: "Caixa (Bematech MP-4200 TH)" },
+    { id: "imp2", nome: "Bar (Control iD Print iD)" },
   ],
-  // 5 setores: 3 na cozinha e 2 no bar
+  // 5 setores. Cada setor tem uma impressora para o salão (mesas) e outra para delivery/retirada.
+  // Amarílis: tudo do salão sai no bar; tudo de delivery e retirada sai no caixa.
   setores: [
-    { id: "pizza", nome: "Pizzas", impressora: "imp1" },
-    { id: "esfiha", nome: "Esfihas", impressora: "imp1" },
-    { id: "cozinha", nome: "Cozinha (porções, pastéis e pratos)", impressora: "imp1" },
-    { id: "bebidas", nome: "Refrigerantes e cervejas (pegar e levar)", impressora: "imp2" },
-    { id: "preparo", nome: "Sucos e drinks (preparar)", impressora: "imp2" },
+    { id: "pizza", nome: "Pizzas", impressora: "imp2", impressoraDelivery: "imp1" },
+    { id: "esfiha", nome: "Esfihas", impressora: "imp2", impressoraDelivery: "imp1" },
+    { id: "cozinha", nome: "Cozinha (porções, pastéis e pratos)", impressora: "imp2", impressoraDelivery: "imp1" },
+    { id: "bebidas", nome: "Refrigerantes e cervejas (pegar e levar)", impressora: "imp2", impressoraDelivery: "imp1" },
+    { id: "preparo", nome: "Sucos e drinks (preparar)", impressora: "imp2", impressoraDelivery: "imp1" },
   ],
-  impressoraConta: "imp1",    // onde sai a conta da mesa e a via de entrega
+  impressoraConta: "imp1",    // onde sai a conta da mesa, a via de entrega e o fechamento
   formasPagamento: ["Dinheiro", "Pix", "Crédito", "Débito", "Vale-refeição"],
 };
 

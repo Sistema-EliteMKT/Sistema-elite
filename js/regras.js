@@ -96,7 +96,8 @@ export function situacaoMesa(mesa) {
   const total = cs.reduce((s, c) => s + subtotal(c), 0);
   const conta = cs.some((c) => c.status === "conta");
   const desde = Math.min(...cs.map((c) => c.criadoEm));
-  return { status: conta ? "conta" : "ocupada", comandas: cs, total, desde };
+  const pessoas = cs.reduce((s, c) => s + (Number(c.pessoas) || 0), 0);
+  return { status: conta ? "conta" : "ocupada", comandas: cs, total, desde, pessoas };
 }
 
 export const comandaAberta = (numero) =>
@@ -104,7 +105,8 @@ export const comandaAberta = (numero) =>
 
 // Abre a comanda (número do cartão físico). Uma comanda aberta não pode ser aberta
 // de novo em outra mesa: a "trava" garante isso mesmo com dois garçons ao mesmo tempo.
-export async function abrirComanda(mesa, numero, nome, garcom) {
+// atendente: nome do garçom responsável (pode ser outro, quando o caixa abre) · pessoas: nº de pessoas
+export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "", pessoas = 0 } = {}) {
   numero = String(numero || "").trim();
   if (!/^\d{1,5}$/.test(numero)) throw new Error("Digite o número da comanda.");
   const travaId = `comanda-${numero}`;
@@ -126,7 +128,7 @@ export async function abrirComanda(mesa, numero, nome, garcom) {
   }
   await store.salvar("pedidos", id, {
     tipo: "mesa", mesa, numero, nome: (nome || "").trim(), aberto: true, status: "aberta",
-    itens: [], garcom: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
+    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
   });
   return id;
 }
@@ -384,9 +386,11 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
     linhas.push(SEP);
     for (const x of pagamento.pagamentos) linhas.push(L(lado(x.forma, r$(x.valor))));
     if (pagamento.troco) linhas.push(L(lado("Troco", r$(pagamento.troco))));
-  } else if (p0.tipo === "mesa" && pedidos.length === 1 && total > 0) {
+  } else if (p0.tipo === "mesa" && total > 0) {
     // ajuda o cliente a dividir
-    linhas.push(SEP, L(`Dividido por 2: ${r$(total / 2)} · por 3: ${r$(total / 3)} · por 4: ${r$(total / 4)}`));
+    const pessoas = pedidos.reduce((s, p) => s + (Number(p.pessoas) || 0), 0);
+    if (pessoas > 1) linhas.push(SEP, L(lado(`Por pessoa (${pessoas})`, r$(total / pessoas)), { b: true }));
+    else linhas.push(SEP, L(`Dividido por 2: ${r$(total / 2)} · por 3: ${r$(total / 3)} · por 4: ${r$(total / 4)}`));
   }
   linhas.push(SEP, L("NÃO É DOCUMENTO FISCAL", { c: true }), ...rodape());
   return linhas;
@@ -419,9 +423,12 @@ export function cupomEntrega(p) {
 // ---------------------------------------------------------------------------
 //  Fila de impressão
 // ---------------------------------------------------------------------------
-export function impressoraDoSetor(setor) {
+// Mesa (salão) usa a impressora do setor; delivery/retirada/balcão usa a "impressoraDelivery".
+export function impressoraDoSetor(setor, tipo = "mesa") {
   const lj = loja();
-  return lj.setores.find((s) => s.id === setor)?.impressora || lj.impressoras[0]?.id;
+  const s = lj.setores.find((x) => x.id === setor);
+  const imp = tipo === "mesa" ? s?.impressora : s?.impressoraDelivery || s?.impressora;
+  return imp || lj.impressoras[0]?.id;
 }
 
 export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
@@ -442,12 +449,12 @@ export async function imprimirProducao(p, quem, opts = {}) {
   const ops = [];
   const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : ""}`;
   if (lj.papelPorSetor) {
-    for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));
+    for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s, p.tipo), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));
   } else {
     // Um papel por impressora, com os setores separados por título.
     const porImp = new Map();
     for (const [s, its] of porSetor) {
-      const imp = impressoraDoSetor(s);
+      const imp = impressoraDoSetor(s, p.tipo);
       if (!porImp.has(imp)) porImp.set(imp, []);
       porImp.get(imp).push([s, its]);
     }
