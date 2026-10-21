@@ -66,6 +66,8 @@ export const setorDe = (prod) => prod?.setor || categoria(prod?.cat)?.setor || "
 export const nomeSetor = (id) => loja().setores.find((s) => s.id === id)?.nome || id;
 
 // Onde cada produto é vendido: "todos", "mesa" (só no salão) ou "delivery" (só entrega/retirada).
+// Produto/categoria marcado como "não imprime" (ex.: rodízio): é lançado e vai para a conta, mas não sai papel nenhum.
+export const naoImprime = (p) => !!(p?.semImpressao || categoria(p?.cat)?.semImpressao);
 export const canalDe = (p) => p?.canal || (p?.semEntrega ? "mesa" : "todos");
 // Promoção: produto com janela de validade (dias da semana, horário, período). Fora dela não aparece para vender.
 export function promoValida(p, d = new Date()) {
@@ -697,7 +699,7 @@ export async function desviarImpressora(de, para) {
 
 // p.itens = só os itens que devem sair agora (novos ou cancelados)
 export async function imprimirProducao(p, quem, opts = {}) {
-  const itens = p.itens;
+  const itens = p.itens.filter((i) => !(i.semImpressao || naoImprime(produto(i.produtoId))));
   if (!itens.length) return;
   const lj = loja();
   const porSetor = new Map();
@@ -741,6 +743,27 @@ const tituloConta = (pedidos) => (pedidos[0].tipo === "mesa" && pedidos.length >
 const impressoraDaConta = (salao) => (salao ? loja().impressoraContaGarcom || loja().impressoraConta : loja().impressoraConta);
 export const imprimirConta = (pedidos, valores, { salao = false } = {}) =>
   store.lote([filaImpressao(impressoraDaConta(salao), `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
+
+// Recibo para o cliente assinar e a loja guardar.
+export function cupomRecibo(pedidos, pag, via = "VIA DA LOJA") {
+  const lj = loja(), p0 = pedidos[0];
+  const nomes = pedidos.map((p) => p.nome || p.cliente?.nome || "").filter((x) => x && x !== "Mesa inteira").join(", ");
+  const onde = p0.tipo === "mesa" ? `Mesa ${p0.mesa}${pedidos.length > 1 ? "" : p0.numero ? " · comanda " + p0.numero : ""}` : titulo(p0);
+  const linhas = [L(lj.nome, { b: true, g: true, c: true }), ...(lj.telefone ? [L(lj.telefone, { c: true })] : []), ...(lj.endereco ? [L(lj.endereco, { c: true })] : []),
+    SEP, L("RECIBO DE PAGAMENTO", { b: true, g: true, c: true }), L(via, { c: true }), L(hh(pag.criadoEm || Date.now())), SEP, L(onde, { b: true }), ...(nomes ? [L(`Cliente: ${nomes}`)] : []), SEP];
+  for (const x of pag.pagamentos) linhas.push(L(lado(x.forma, r$(x.valor))));
+  if (pag.servico) linhas.push(L(lado("Serviço", r$(pag.servico))));
+  if (pag.desconto) linhas.push(L(lado("Desconto", "-" + r$(pag.desconto))));
+  if (pag.troco) linhas.push(L(lado("Troco", r$(pag.troco))));
+  linhas.push(L(lado("TOTAL PAGO R$", r$(pag.total)), { b: true, g: true }), SEP,
+    L(`Declaro que paguei o valor de R$ ${r$(pag.total)} referente ao consumo acima.`),
+    L(""), L(""), L("______________________________", { c: true }), L("Assinatura do cliente", { c: true }), L(""),
+    L("Nome: ______________________________"), L(pag.cpf ? `CPF: ${pag.cpf}` : "CPF: ______________________________"), ...(pag.por ? [L(`Recebido por: ${pag.por}`)] : []),
+    SEP, L("NÃO É DOCUMENTO FISCAL", { c: true }), ...rodape());
+  return linhas;
+}
+export const imprimirRecibo = (pedidos, pag, { salao = false, vias = 1 } = {}) =>
+  store.lote(Array.from({ length: vias }, (_, i) => filaImpressao(impressoraDaConta(salao), `Recibo ${tituloConta(pedidos)}`, cupomRecibo(pedidos, pag, vias > 1 ? (i ? "VIA DO CLIENTE" : "VIA DA LOJA") : "VIA DA LOJA"))));
 
 export const imprimirComprovante = (pedidos, pag, { salao = false } = {}) =>
   store.lote([filaImpressao(impressoraDaConta(salao), `Comprovante ${tituloConta(pedidos)}`, cupomConta(pedidos, { servico: pag.servico, desconto: pag.desconto, pagamento: pag }))]);

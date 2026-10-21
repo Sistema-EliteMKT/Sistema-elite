@@ -121,11 +121,14 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const por = (sts) => ps.filter((p) => sts.includes(p.status)).sort((a, b) => a.criadoEm - b.criadoEm);
     const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
     const col = (titulo, lista, vazio) => `<section class="coluna"><h3>${titulo}<span>${lista.length}</span></h3>${lista.length ? lista.map(cartao).join("") : `<p class="muted pq">${vazio}</p>`}</section>`;
-    el.innerHTML = `${kpis()}<div class="colunas">
+    el.innerHTML = `${kpis()}
+      <div class="novos-ped"><button class="btn pri grande" data-novo="entrega">🛵 Novo pedido · Delivery</button><button class="btn sec grande" data-novo="retirada">🥡 Novo pedido · Retirada</button><button class="btn ghost grande" data-novo="balcao">🧾 Balcão</button></div>
+      <div class="colunas">
       ${col("Novos", por(["novo"]), "Nenhum.")}
       ${col("Em preparo", por(["preparo"]), "Nenhum.")}
       ${col("Pronto / na rua", por(["pronto", "saiu"]), "Nenhum.")}
       ${col("Concluídos", feitos, "Nenhum ainda.")}</div>`;
+    $$("[data-novo]", el).forEach((b) => (b.onclick = () => novoPedido(b.dataset.novo)));
     $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.pedidos.find((p) => p.id === b.dataset.id))));
     $$("[data-mb]", el).forEach((s) => (s.onchange = () => (mbEscolhido[s.dataset.mb] = s.value)));
   }
@@ -216,10 +219,10 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   };
 
   // -------------------------------------------------------------- Novo pedido
-  function novoPedido() {
+  function novoPedido(tipoInicial = "entrega") {
     const lj = loja();
     const itens = [];
-    let tipo = "entrega";
+    let tipo = tipoInicial;
     const s = abrirSheet(`${cabecalhoSheet("Novo pedido", "Telefone, delivery, retirada ou balcão")}<div class="sh-b novo-ped">
       <div class="np-sel" id="sel"></div>
       <div class="np-form">

@@ -38,7 +38,10 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
       const escopo = geral ? prods : prods.filter((p) => atual?.cats.some((c) => c.id === p.cat));
       const achados = escopo.filter((p) => sem(p.nome + " " + p.desc).includes(q));
       lista = achados.map((p) => item(p, geral ? D.categorias.find((c) => c.id === p.cat)?.nome || "" : "")).join("");
-      if (!achados.length) lista = `<p class="vazio">Nada encontrado ${geral ? "no cardápio" : `em ${esc(atual?.nome || "esta aba")}`}.</p>`;
+      // Abas (categorias) cujo nome combina com o que foi digitado: tocar abre a aba.
+      const abasAchadas = abas.filter((a) => sem(a.nome).includes(q) || a.cats.some((c) => sem(c.nome).includes(q)));
+      if (abasAchadas.length) lista = `<div class="cat-hits"><small class="muted">Abas encontradas</small>${abasAchadas.map((a) => `<button class="cat-hit" data-hit="${esc(a.id)}">📂 ${esc(a.nome)}<span>${prods.filter((p) => a.cats.some((c) => c.id === p.cat)).length} itens</span></button>`).join("")}</div>` + lista;
+      if (!achados.length) lista += `<p class="vazio">Nenhum item ${geral ? "no cardápio" : `em ${esc(atual?.nome || "esta aba")}`}.</p>`;
       if (!geral) lista += `<button class="btn ghost cheio" id="geral">Buscar em todas as abas</button>`;
     } else {
       lista = (atual?.cats || []).map((c) => {
@@ -57,6 +60,7 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
     const inp = $(".busca", el);
     inp.oninput = () => { busca = inp.value; if (!busca.trim()) geral = false; const pos = inp.selectionStart; desenhar(); const n = $(".busca", el); n.focus(); n.setSelectionRange(pos, pos); };
     $("#geral", el) && ($("#geral", el).onclick = () => { geral = true; desenhar(); });
+    $$("[data-hit]", el).forEach((b) => (b.onclick = () => { aba = b.dataset.hit; busca = ""; geral = false; desenhar(); el.querySelector(".sel-lista")?.scrollTo?.(0, 0); }));
     // Trocar de aba com algo digitado: a busca continua, agora na aba nova.
     $$("[data-gc]", el).forEach((b) => (b.onclick = () => { aba = b.dataset.gc; geral = false; desenhar(); el.querySelector(".sel-lista")?.scrollTo?.(0, 0); }));
     $$("[data-gp]", el).forEach((b) => (b.onclick = () => {

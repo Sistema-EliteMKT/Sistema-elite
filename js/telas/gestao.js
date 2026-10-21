@@ -281,11 +281,13 @@ function editarProduto(p) {
     <label class="f" for="pc">Categoria</label><select class="in" id="pc">${D.categorias.map((c) => `<option value="${esc(c.id)}" ${c.id === p.cat ? "selected" : ""}>${esc(c.nome)}</option>`).join("")}</select>
     <div class="opts dois"><div><label class="f" for="pp">Preço (R$)</label><input class="in" id="pp" inputmode="decimal" value="${p.preco != null ? valorCampo(p.preco) : ""}"></div>
       <div><label class="f" for="pb">Preço média, 4 pedaços (só pizza)</label><input class="in" id="pb" inputmode="decimal" value="${p.precoBroto ? valorCampo(p.precoBroto) : ""}"></div></div>
+    <label class="f" for="pm">Preço da meia porção (opcional, só vende na mesa)</label><input class="in" id="pm" inputmode="decimal" value="${p.precoMeia ? valorCampo(p.precoMeia) : ""}" placeholder="Deixe vazio se não tem meia">
     <label class="f" for="po">Opções para escolher (separe por vírgula, ex.: Coca-Cola, Guaraná)</label><input class="in" id="po" value="${esc((p.opcoes || []).join(", "))}">
     <label class="f" for="pad">Adicionais na mesa</label><select class="in" id="pad"><option value="__cat" ${p.grupoAdicional == null ? "selected" : ""}>Os da categoria</option>${opcoesGrupo(p.grupoAdicional === "" ? "" : p.grupoAdicional, "Nenhum").replace('<option value="">Nenhum</option>', `<option value="" ${p.grupoAdicional === "" ? "selected" : ""}>Nenhum</option>`)}</select>
     <label class="f" for="ps">Setor de impressão</label><select class="in" id="ps"><option value="">O mesmo da categoria</option>${loja().setores.map((x) => `<option value="${esc(x.id)}" ${x.id === p.setor ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pz" ${p.tipo === "pizza" ? "checked" : ""}><span>É pizza (tamanho, meio a meio, borda)</span></label>
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
+    <label class="opt"><input type="checkbox" id="psi" ${p.semImpressao ? "checked" : ""}><span>Não imprimir quando lançar <small>(só entra na conta, ex.: rodízio)</small></span></label>
     <label class="f" for="pe">Onde vende</label><select class="in" id="pe">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pa" ${p.ativo === false ? "" : "checked"}><span>Disponível</span></label>
     ${blocoFiscal(p.fiscal, "pf", "da categoria")}
@@ -295,7 +297,7 @@ function editarProduto(p) {
     const preco = numero($("#pp", s).value);
     if (!nome || !preco) return toast("Coloque nome e preço.");
     const dados = {
-      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null,
+      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null, precoMeia: numero($("#pm", s).value) || null, semImpressao: $("#psi", s).checked,
       opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null, grupoAdicional: $("#pad", s).value === "__cat" ? null : $("#pad", s).value,
       tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,
@@ -317,6 +319,7 @@ function editarCategoria(c) {
     <label class="f" for="cg">Pizzas desta categoria se misturam com</label><select class="in" id="cg">
       <option value="">Não é pizza</option><option value="salgada" ${c.grupoPizza === "salgada" ? "selected" : ""}>Pizzas salgadas (com borda)</option><option value="doce" ${c.grupoPizza === "doce" ? "selected" : ""}>Pizzas doces</option></select>
     <label class="f" for="cad">Adicionais que o garçom pode lançar</label><select class="in" id="cad">${opcoesGrupo(c.grupoAdicional, "Nenhum")}</select>
+    <label class="opt"><input type="checkbox" id="csi" ${c.semImpressao ? "checked" : ""}><span>Não imprimir os itens desta aba quando lançar <small>(só entram na conta)</small></span></label>
     <label class="f" for="co">Ordem no cardápio</label><input class="in" id="co" type="number" value="${c.ordem ?? D.categorias.length + 1}">
     ${blocoFiscal(c.fiscal, "cf", "da loja")}
     <div class="linha-btn">${c.id ? `<button class="btn perigo" id="del">Excluir</button>` : ""}<button class="btn pri" id="ok">Salvar</button></div></div>`);
@@ -325,7 +328,7 @@ function editarCategoria(c) {
     if (!nome) return toast("Coloque o nome.");
     const id = c.id || nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || novoId();
     try {
-      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0, fiscal: lerFiscal(s, "cf") });
+      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0, semImpressao: $("#csi", s).checked, fiscal: lerFiscal(s, "cf") });
       sessionStorage.setItem("se_cat", id); fecharSheet(); toast("Salvo ✓");
     } catch (e) { erro(e); }
   };

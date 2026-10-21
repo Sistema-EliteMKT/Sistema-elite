@@ -344,3 +344,7 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .seta:hover{background:var(--surface-2)}
 .seta[hidden]{display:none}
 .obs-chips{margin:2px 0 8px}
+.cat-hits{display:grid;gap:6px;margin:6px 0 10px;padding:10px;border:1px dashed var(--line);border-radius:12px;background:var(--surface-2)}
+.cat-hit{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:15px;text-align:left;cursor:pointer}
+.cat-hit span{color:var(--muted);font-weight:500;font-size:13px}
+.novos-ped{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}.novos-ped .btn{flex:1;min-width:200px}

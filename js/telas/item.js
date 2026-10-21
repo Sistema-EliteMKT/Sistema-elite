@@ -2,7 +2,7 @@
 // Usada pelo cardápio do cliente, pelo garçom e pelo caixa.
 // onde: "mesa" (garçom/comanda) ou "delivery" (cardápio online, entrega, retirada, balcão).
 import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo, toast, erro } from "../ui.js";
-import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem } from "../regras.js";
+import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem, naoImprime } from "../regras.js";
 
 const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
 const saboresPossiveis = (p, onde) =>
@@ -29,6 +29,7 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   }
   const pizza = p.tipo === "pizza";
   const broto = pizza && p.precoBroto;
+  const meia = !pizza && Number(p.precoMeia) > 0 && onde === "mesa"; // meia porção: só no salão
   const bordas = grupo(p) === "salgada" ? loja().bordas || [] : [];
   const outros = pizza ? saboresPossiveis(p, onde).filter((x) => x.id !== p.id) : [];
   let qtd = inicial?.qtd || 1;
@@ -49,6 +50,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     ` : ""}
     ${p.escolha?.n ? `<div class="grp">${esc(p.escolha.titulo || `Escolha ${p.escolha.n}`)} <small>marque ${p.escolha.n}${p.escolha.n > 1 ? "" : ""}</small></div><div class="opts dois">${itensDaEscolha(p).map((o) =>
       `<label class="opt"><input type="checkbox" name="es" value="${esc(o)}"><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
+    ${meia ? `<div class="grp">Tamanho</div><div class="opts dois">
+        <label class="opt"><input type="radio" name="tam" value="G" checked><span>Porção inteira<br><em>${brl(p.preco)}</em></span></label>
+        <label class="opt"><input type="radio" name="tam" value="M"><span>Meia porção<br><em>${brl(p.precoMeia)}</em></span></label></div>` : ""}
     ${(p.opcoes || []).length ? `<div class="grp">Escolha</div><div class="opts dois">${p.opcoes.map((o, i) =>
       `<label class="opt"><input type="radio" name="op" value="${esc(o)}" ${i ? "" : "checked"}><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
     ${adicionais.length ? `<div class="grp">Adicionais <small>só na mesa · pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
@@ -62,7 +66,7 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
 
   const val = (n) => $(`input[name="${n}"]:checked`, s)?.value;
   const ler = () => {
-    const tam = broto ? val("tam") : "G";
+    const tam = broto || meia ? val("tam") : "G";
     const segundo = val("ns") === "2" ? produto($("#s2sel", s)?.value) : null;
     const bi = val("bor");
     return {
@@ -183,11 +187,14 @@ export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", 
     tam, segundo: segundo?.id || null, borda: borda?.nome || null, opcao: opcao || "", obs: obs || "", qtd, escolhidos,
     extras: extras.map((a) => ({ nome: a.base || a.nome, qual: a.qual || "" })),
   };
-  const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [], escolhas };
+  const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [], escolhas, ...(naoImprime(p) ? { semImpressao: true } : {}) };
   const somaExtras = extras.reduce((t, a) => t + (Number(a.preco) || 0), 0);
   const detExtras = extras.map((a) => `+ ${a.nome}`);
   if (p.tipo !== "pizza") {
-    return { ...base, nome: (cat?.prefixo || "") + p.nome + (opcao ? ` (${opcao})` : ""), det: [...escolhidos.map((x) => `• ${x}`), ...detExtras], unit: (Number(p.preco) || 0) + somaExtras };
+    const meia = tam === "M" && Number(p.precoMeia) > 0;
+    const nomeBase = (cat?.prefixo || "") + p.nome;
+    const nomeFinal = meia ? (/^porção\s/i.test(nomeBase) ? nomeBase.replace(/^porção\s/i, "Meia porção ") : `Meia ${nomeBase}`) : nomeBase;
+    return { ...base, nome: nomeFinal + (opcao ? ` (${opcao})` : ""), det: [...escolhidos.map((x) => `• ${x}`), ...detExtras], unit: (meia ? Number(p.precoMeia) : Number(p.preco) || 0) + somaExtras };
   }
   const preco = (x) => (tam === "B" && x.precoBroto ? x.precoBroto : x.preco);
   const sabores = segundo ? [p, segundo] : [p];

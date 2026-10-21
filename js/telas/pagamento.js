@@ -1,6 +1,6 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
 import { $, $$, esc, brl, numero, valorCampo, toast, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante } from "../regras.js";
+import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
 export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
@@ -25,6 +25,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       <label class="f" for="cpf">CPF na nota (opcional)</label><input class="in" id="cpf" inputmode="numeric" placeholder="Só números">
       <div class="sum" id="sum"></div>
       <label class="opt"><input type="checkbox" id="comp"><span>Imprimir comprovante</span></label>
+      <label class="opt"><input type="checkbox" id="rec"><span>Imprimir recibo para o cliente assinar <small>(a loja guarda)</small></span></label>
       <div class="err" id="err"></div>
       <button class="btn ok cheio" id="ok">Confirmar recebimento</button></div>`);
     const total = () => dinheiro(sub + valorServ() - numero($("#desc", s).value));
@@ -67,6 +68,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
           pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""),
         }, quem);
         if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag, { salao });
+        if ($("#rec", s).checked) await imprimirRecibo(pedidos, pag, { salao });
         toast(pag.troco ? `Recebido. Troco: ${brl(pag.troco)}` : "Recebido ✓", "bom");
         fecharSheet();
         res(pag);
