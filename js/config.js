@@ -59,6 +59,7 @@ export const LOJA_INICIAL = {
     bebidas: ["Copo com gelo", "Copo sem gelo", "Com limão", "Sem limão"],
     preparo: ["Copo com gelo", "Copo sem gelo", "Sem açúcar", "Pouco açúcar"],
   },
+  impressoraContaGarcom: "imp2", // conta pedida pelo garçom: Print iD do bar
   impressoraConta: "imp1",    // onde sai a conta da mesa, a via de entrega e o fechamento
   formasPagamento: ["Dinheiro", "Pix", "Crédito", "Débito", "Vale-refeição"],
 };

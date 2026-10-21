@@ -3,7 +3,7 @@ import { $, $$, esc, brl, numero, valorCampo, toast, abrirSheet, fecharSheet, ca
 import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
-export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0 } = {}) {
+export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
   return new Promise((res) => {
     const lj = loja();
     const formas = lj.formasPagamento || ["Dinheiro"];
@@ -66,7 +66,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
           servico: valorServ(), desconto: numero($("#desc", s).value),
           pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""),
         }, quem);
-        if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag);
+        if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag, { salao });
         toast(pag.troco ? `Recebido. Troco: ${brl(pag.troco)}` : "Recebido ✓", "bom");
         fecharSheet();
         res(pag);

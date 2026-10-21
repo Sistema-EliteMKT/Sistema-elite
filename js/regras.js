@@ -737,11 +737,13 @@ export const imprimirPorSetor = (p, quem) => imprimirProducao({ ...p, itens: ite
 export const imprimirJunto = (p, quem) => imprimirProducao({ ...p, itens: itensValidos(p) }, quem, { separado: false });
 
 const tituloConta = (pedidos) => (pedidos[0].tipo === "mesa" && pedidos.length > 1 ? `MESA ${pedidos[0].mesa}` : titulo(pedidos[0]));
-export const imprimirConta = (pedidos, valores) =>
-  store.lote([filaImpressao(loja().impressoraConta, `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
+// Conta pedida pelo garçom (tela do garçom) sai na impressora do salão (Print iD no bar), não na do caixa.
+const impressoraDaConta = (salao) => (salao ? loja().impressoraContaGarcom || loja().impressoraConta : loja().impressoraConta);
+export const imprimirConta = (pedidos, valores, { salao = false } = {}) =>
+  store.lote([filaImpressao(impressoraDaConta(salao), `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
 
-export const imprimirComprovante = (pedidos, pag) =>
-  store.lote([filaImpressao(loja().impressoraConta, `Comprovante ${tituloConta(pedidos)}`, cupomConta(pedidos, { servico: pag.servico, desconto: pag.desconto, pagamento: pag }))]);
+export const imprimirComprovante = (pedidos, pag, { salao = false } = {}) =>
+  store.lote([filaImpressao(impressoraDaConta(salao), `Comprovante ${tituloConta(pedidos)}`, cupomConta(pedidos, { servico: pag.servico, desconto: pag.desconto, pagamento: pag }))]);
 
 export const imprimirVia = (p) =>
   store.lote([filaImpressao(loja().impressoraConta, `Via ${titulo(p)}`, cupomEntrega(p), { pedido: p.id })]);

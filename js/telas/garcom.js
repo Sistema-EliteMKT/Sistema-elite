@@ -135,7 +135,7 @@ export function telaGarcom(raiz, usuario, sair) {
       desenhar();
     }));
     $("#fechar", raiz) && ($("#fechar", raiz).onclick = () => escolherComandas(cs, "Fechar conta", "Receber", async (sel) => {
-      const pag = await receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${V.mesa}` });
+      const pag = await receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${V.mesa}`, salao: true });
       if (!pag) return;
       if (!comandasDaMesa(V.mesa).length) V.mesa = null;
       desenhar();
@@ -161,7 +161,7 @@ export function telaGarcom(raiz, usuario, sair) {
     const enviar = async (sel) => {
       try {
         await pedirConta(sel.map((c) => c.id));
-        await imprimirConta(sel, { servico: servicoDe(sel) });
+        await imprimirConta(sel, { servico: servicoDe(sel) }, { salao: true });
         toast("Conta enviada para impressão. O caixa já está vendo.", "bom");
         fecharSheet();
       } catch (e) { erro(e); }

@@ -395,7 +395,8 @@ export function abaAjustes(el) {
       <p class="muted pq">Cada setor escolhe em qual impressora sai quando o pedido é do salão (mesas) e quando é de delivery/retirada. Vários setores na mesma impressora saem no mesmo papel, divididos por título.</p>
       <div id="imps"></div><button class="btn ghost sm" id="maisImp">+ Impressora</button>
       <div class="grp">Setores</div><div id="sets"></div><button class="btn ghost sm" id="maisSet">+ Setor</button>
-      <label class="f" for="aic">Conta da mesa, via de entrega e fechamento saem na</label><select class="in" id="aic"></select>
+      <label class="f" for="aic">Conta feita no caixa, via de entrega e fechamento saem na</label><select class="in" id="aic"></select>
+      <label class="f" for="aig">Conta pedida pelo garçom (e comprovante do garçom) sai na</label><select class="in" id="aig"></select>
       <label class="f" for="acol">Largura da bobina</label><select class="in" id="acol"><option value="48" ${lj.colunas == 48 ? "selected" : ""}>80 mm</option><option value="32" ${lj.colunas == 32 ? "selected" : ""}>58 mm</option></select>
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
       <button class="btn pri" id="salvarImp">Salvar impressoras</button></div>
@@ -569,6 +570,8 @@ export function abaAjustes(el) {
       <select class="in" data-sd="${k}" aria-label="Impressora do delivery">${opImp(x.impressoraDelivery || x.impressora)}</select>${sets.length > 1 ? `<button class="mini-x" data-sx="${k}">×</button>` : "<span></span>"}</div>`).join("");
     const atual = $("#aic", el).value || lj.impressoraConta;
     $("#aic", el).innerHTML = imps.map((i) => `<option value="${esc(i.id)}" ${i.id === atual ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
+    const atualG = $("#aig", el).value || lj.impressoraContaGarcom || lj.impressoraConta;
+    $("#aig", el).innerHTML = imps.map((i) => `<option value="${esc(i.id)}" ${i.id === atualG ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
     $$("[data-in]", el).forEach((e) => (e.oninput = () => (imps[e.dataset.in].nome = e.value)));
     $$("[data-ix]", el).forEach((e) => (e.onclick = () => { const [r] = imps.splice(+e.dataset.ix, 1); sets.forEach((s) => { if (s.impressora === r.id) s.impressora = imps[0].id; if (s.impressoraDelivery === r.id) s.impressoraDelivery = imps[0].id; }); des(); }));
     $$("[data-sn]", el).forEach((e) => (e.oninput = () => (sets[e.dataset.sn].nome = e.value)));
@@ -588,7 +591,7 @@ export function abaAjustes(el) {
     const usados = new Set([...D.categorias.map((c) => c.setor), ...D.produtos.map((p) => p.setor).filter(Boolean)]);
     const falta = [...usados].filter((u) => !sets.some((s) => s.id === u));
     if (falta.length) return toast(`O setor "${falta[0]}" ainda é usado no cardápio. Mude as categorias antes de tirar.`);
-    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked })
+    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked })
       .then(() => toast("Impressoras salvas ✓")).catch(erro);
   };
   des();
