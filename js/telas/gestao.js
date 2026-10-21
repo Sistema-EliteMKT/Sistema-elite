@@ -237,12 +237,13 @@ export function abaRelatorio(el, { usuario }) {
 // ----------------------------------------------------------------- Cardápio
 export function abaCardapio(el) {
   const lj = loja();
-  let catSel = sessionStorage.getItem("se_cat") || D.categorias[0]?.id;
-  if (!D.categorias.some((c) => c.id === catSel)) catSel = D.categorias[0]?.id;
+  const primeira = (D.categorias.find((c) => c.id !== "promocoes") || D.categorias[0])?.id; // a aba Promoções tem tela própria
+  let catSel = sessionStorage.getItem("se_cat") || primeira;
+  if (!D.categorias.some((c) => c.id === catSel)) catSel = primeira;
   const cat = D.categorias.find((c) => c.id === catSel);
   const prods = D.produtos.filter((p) => p.cat === catSel);
   const nomeSetor = (id) => lj.setores.find((s) => s.id === id)?.nome || id;
-  el.innerHTML = `<div class="chips">${D.categorias.map((c) => `<button class="chip" data-cs="${esc(c.id)}" aria-pressed="${c.id === catSel}">${esc(c.nome)}</button>`).join("")}<button class="chip" id="novaCat">+ Categoria</button></div>
+  el.innerHTML = `<div class="chips quebra"><button class="chip chip-novo" id="novaCat">+ Categoria</button>${D.categorias.map((c) => `<button class="chip" data-cs="${esc(c.id)}" aria-pressed="${c.id === catSel}">${esc(c.nome)}</button>`).join("")}</div>
     ${cat ? `<div class="card"><div class="card-h"><div><b>${esc(cat.nome)}</b><small>Setor: ${esc(nomeSetor(cat.setor))}${cat.grupoPizza ? " · monta pizza (meio a meio, borda)" : ""}${cat.grupoAdicional ? ` · adicionais de ${esc(cat.grupoAdicional)} na mesa` : ""}</small></div><button class="btn ghost sm" id="edCat">Editar categoria</button></div>
       <div class="linha-btn"><button class="btn pri sm" id="novoProd">+ Produto</button></div>
       ${prods.map((p) => `<div class="cl ${p.ativo === false ? "off" : ""}"><div class="n"><b>${esc(p.nome)}</b><small>${esc(p.desc || "")}</small>${p.ativo === false ? `<small class="ruim-txt">Esgotado / fora do cardápio</small>` : ""}</div>

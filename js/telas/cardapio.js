@@ -50,7 +50,7 @@ export function telaCardapio(raiz) {
     const itens = D.produtos.filter((p) => p.cat === c.id && vendeEm(p, "delivery"));
     return `<section class="c-sec" id="sec-${esc(c.id)}"><h2>${esc(c.nome)}</h2>${c.nota ? `<p class="nota">${esc(c.nota)}</p>` : ""}
       ${itens.map((p) => `<button class="it" data-p="${esc(p.id)}"><span class="n"><b>${esc(p.nome)}${p.veg ? `<span class="veg" title="Vegetariana">V</span>` : ""}</b>${p.desc ? `<small>${esc(p.desc)}</small>` : ""}</span>
-        <span class="p">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}</span><span class="plus" aria-hidden="true">+</span></button>`).join("")}</section>`;
+        <span class="p">${brl(p.preco)}${p.precoBroto ? `<small>média ${brl(p.precoBroto)}</small>` : ""}</span><span class="plus" aria-hidden="true">+</span></button>`).join("")}</section>`;
   };
 
   const abrirSacola = () => {
