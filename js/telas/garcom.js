@@ -123,12 +123,12 @@ export function telaGarcom(raiz, usuario, sair) {
       const i = cs.find((x) => x.id === cid)?.itens.find((x) => x.key === key);
       const motivo = await pedirTexto(`Remover ${i ? `${i.qtd}x ${i.nome}` : "item"}`, "Motivo (ex.: cliente desistiu, lançado errado)", { ok: "Remover item" });
       if (motivo == null) return;
-      try { await cancelarItem(cid, key, motivo, usuario); toast("Item removido. Aviso enviado ao setor."); } catch (e) { erro(e); }
+      try { await cancelarItem(cid, key, motivo, usuario); toast(`Item removido.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); } catch (e) { erro(e); }
       desenhar();
     }));
     $$("[data-cc]", raiz).forEach((b) => (b.onclick = async () => {
       const c = cs.find((x) => x.id === b.dataset.cc);
-      const motivo = await pedirTexto(`Cancelar ${rotuloComanda(c)}`, "Motivo (a comanda é apagada e os setores são avisados)", { ok: "Cancelar comanda" });
+      const motivo = await pedirTexto(`Cancelar ${rotuloComanda(c)}`, "Motivo (a comanda é cancelada no sistema)", { ok: "Cancelar comanda" });
       if (motivo == null) return;
       try { await cancelarComanda(c.id, motivo, usuario); toast("Comanda cancelada."); } catch (e) { erro(e); }
       if (!comandasDaMesa(V.mesa).length) V.mesa = null;

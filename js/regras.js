@@ -579,7 +579,10 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
   const linhas = [L(lj.nome, { b: true, g: true, c: true })];
   if (lj.telefone) linhas.push(L(lj.telefone, { c: true }));
   if (lj.endereco) linhas.push(L(lj.endereco, { c: true }));
-  linhas.push(SEP, L(p0.tipo === "mesa" ? `CONTA · MESA ${p0.mesa}` : titulo(p0), { b: true, g: true }), L(hh()));
+  linhas.push(SEP, L(p0.tipo === "mesa" ? `CONTA · MESA ${p0.mesa}` : titulo(p0), { b: true, g: true }));
+  // Mesa com uma comanda só: mostra qual comanda está sendo fechada (com várias, cada uma vem com o seu nome abaixo).
+  if (p0.tipo === "mesa" && pedidos.length === 1) linhas.push(L(`${rotuloComanda(p0).toUpperCase()}${p0.nome && p0.nome !== "Mesa inteira" ? " · " + p0.nome : ""}`, { b: true, g: true }));
+  linhas.push(L(hh()));
   for (const p of pedidos) {
     if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `${rotuloComanda(p)}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
     else linhas.push(SEP);
@@ -588,7 +591,7 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
   }
   const sub = pedidos.reduce((s, p) => s + totalPedido(p), 0);
   linhas.push(SEP, L(lado("Subtotal", r$(sub))));
-  if (servico) linhas.push(L(lado(`Serviço`, r$(servico))));
+  if (servico) linhas.push(L(lado("Serviço (opcional)", r$(servico))));
   if (desconto) linhas.push(L(lado("Desconto", "-" + r$(desconto))));
   const total = sub + (servico || 0) - (desconto || 0);
   linhas.push(L(lado("TOTAL R$", r$(total)), { b: true, g: true }));
@@ -701,6 +704,8 @@ export async function desviarImpressora(de, para) {
 export async function imprimirProducao(p, quem, opts = {}) {
   const itens = p.itens.filter((i) => !(i.semImpressao || naoImprime(produto(i.produtoId))));
   if (!itens.length) return;
+  // Cancelar só muda no computador: o papel "CANCELADO" no setor só sai se a loja ligar em Ajustes.
+  if (opts.cancelamento && !loja().imprimirCancelamento) return;
   const lj = loja();
   const porSetor = new Map();
   for (const i of itens) {

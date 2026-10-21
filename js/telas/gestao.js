@@ -401,6 +401,7 @@ export function abaAjustes(el) {
       <label class="f" for="aic">Conta feita no caixa, via de entrega e fechamento saem na</label><select class="in" id="aic"></select>
       <label class="f" for="aig">Conta pedida pelo garçom (e comprovante do garçom) sai na</label><select class="in" id="aig"></select>
       <label class="f" for="acol">Largura da bobina</label><select class="in" id="acol"><option value="48" ${lj.colunas == 48 ? "selected" : ""}>80 mm</option><option value="32" ${lj.colunas == 32 ? "selected" : ""}>58 mm</option></select>
+      <label class="opt"><input type="checkbox" id="aic2" ${lj.imprimirCancelamento ? "checked" : ""}><span>Avisar o setor no papel quando cancelar item ou comanda (desmarcado: só cancela no sistema)</span></label>
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
       <button class="btn pri" id="salvarImp">Salvar impressoras</button></div>
 
@@ -594,7 +595,7 @@ export function abaAjustes(el) {
     const usados = new Set([...D.categorias.map((c) => c.setor), ...D.produtos.map((p) => p.setor).filter(Boolean)]);
     const falta = [...usados].filter((u) => !sets.some((s) => s.id === u));
     if (falta.length) return toast(`O setor "${falta[0]}" ainda é usado no cardápio. Mude as categorias antes de tirar.`);
-    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked })
+    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked })
       .then(() => toast("Impressoras salvas ✓")).catch(erro);
   };
   des();

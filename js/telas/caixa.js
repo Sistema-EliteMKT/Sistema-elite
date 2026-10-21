@@ -205,7 +205,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
       const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });
       if (motivo == null) return;
-      try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast("Item cancelado. Aviso enviado ao setor."); fecharSheet(); } catch (e) { erro(e); }
+      try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); fecharSheet(); } catch (e) { erro(e); }
     }));
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
@@ -395,7 +395,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
         const [cid, key] = b.dataset.ci.split("|");
         const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });
-        if (motivo != null) { try { await cancelarItem(cid, key, motivo, usuario); toast("Item cancelado. Aviso enviado ao setor."); } catch (e) { erro(e); } }
+        if (motivo != null) { try { await cancelarItem(cid, key, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); } catch (e) { erro(e); } }
         desenharMesa();
       }));
       $$("[data-mv]", s).forEach((b) => (b.onclick = () => {
