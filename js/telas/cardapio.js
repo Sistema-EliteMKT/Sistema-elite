@@ -1,5 +1,5 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
-import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
+import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
@@ -19,6 +19,7 @@ export function telaCardapio(raiz) {
     const lj = loja();
     const cats = D.categorias.filter((c) => D.produtos.some((p) => p.cat === c.id && vendeEm(p, "delivery")));
     cat = cat && cats.some((c) => c.id === cat) ? cat : cats[0]?.id;
+    const rolou = $(".c-cats .chips", raiz)?.scrollLeft || 0;
     raiz.innerHTML = `
       <header class="c-hero"><div class="pat" aria-hidden="true"></div><div class="c-hero-in">
         ${lj.logoClaro ? `<img src="${esc(lj.logoClaro)}" alt="${esc(lj.nome)}">` : `<h1>${esc(lj.nome)}</h1>`}
@@ -32,6 +33,8 @@ export function telaCardapio(raiz) {
         ${rodapeMarca()}
       </div>
       <div class="cartbar" id="cartbar" ${sacola.length ? "" : "hidden"}><button id="verSacola"><span><span class="q">${sacola.reduce((s, l) => s + l.qtd, 0)}</span>Ver sacola</span><span>${brl(sacola.reduce((s, l) => s + l.unit * l.qtd, 0))}</span></button></div>`;
+    const fila = $(".c-cats .chips", raiz);
+    if (fila) { setasRolagem(fila); fila.scrollLeft = rolou; }
     $$("[data-c]", raiz).forEach((b) => (b.onclick = () => {
       cat = b.dataset.c;
       $$("[data-c]", raiz).forEach((x) => x.setAttribute("aria-pressed", x === b));

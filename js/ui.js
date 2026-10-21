@@ -104,3 +104,24 @@ export function bip(vezes = 2) {
 
 export const rodapeMarca = () =>
   `<footer class="marca"><img src="${esc(MARCA.logo)}" alt="" width="22" height="22"><span><b>${esc(MARCA.sistema)}</b> · desenvolvido por ${esc(MARCA.empresa)}${MARCA.site ? ` · ${esc(MARCA.site)}` : ""}</span></footer>`;
+
+// Setas ‹ › nas pontas de uma fileira de abas que rola para o lado (no computador não dá para "arrastar").
+export function setasRolagem(el) {
+  if (!el || el.parentNode?.classList.contains("chips-setas")) return;
+  const wrap = document.createElement("div");
+  wrap.className = "chips-setas";
+  el.parentNode.insertBefore(wrap, el);
+  const botao = (dir) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "seta"; b.textContent = dir < 0 ? "‹" : "›";
+    b.setAttribute("aria-label", dir < 0 ? "Abas anteriores" : "Mais abas");
+    b.onclick = () => el.scrollBy({ left: dir * Math.max(180, el.clientWidth * 0.7), behavior: "smooth" });
+    return b;
+  };
+  const esq = botao(-1), dir = botao(1);
+  wrap.append(esq, el, dir);
+  const atual = () => { esq.hidden = el.scrollLeft < 4; dir.hidden = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4; };
+  el.addEventListener("scroll", atual, { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(atual).observe(el);
+  atual();
+}

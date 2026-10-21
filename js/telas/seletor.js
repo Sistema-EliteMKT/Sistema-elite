@@ -1,6 +1,6 @@
 // Lista de produtos com busca e categorias (mesmo visual do cardápio), para o garçom e o caixa.
 // onde: "mesa" esconde o que é só de delivery; "delivery" esconde o que é só de mesa.
-import { $, $$, esc, brl } from "../ui.js";
+import { $, $$, esc, brl, setasRolagem } from "../ui.js";
 import { D, vendeEm } from "../regras.js";
 import { montarItem } from "./item.js";
 
@@ -46,9 +46,14 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
         return atual.cats.length > 1 ? `<h4 class="sel-sec">${esc(c.nome)}</h4>${its}` : its;
       }).join("");
     }
+    const rolou = $(".chips", el)?.scrollLeft || 0; // não volta a fileira de abas para o começo a cada toque
     el.innerHTML = `<div class="sel-topo"><input class="in busca" type="search" placeholder="${geral && q ? "Buscar em todas as abas" : `Buscar em ${esc(atual?.nome || "")}`}" value="${esc(busca)}" aria-label="Buscar item">
       <div class="chips">${abas.map((a) => `<button class="chip" data-gc="${esc(a.id)}" aria-pressed="${a.id === aba && !(geral && q)}">${esc(a.nome)}</button>`).join("")}</div></div>
       <div class="sel-lista">${lista || `<p class="vazio">Nada aqui.</p>`}</div>`;
+    const fila = $(".chips", el);
+    setasRolagem(fila);
+    fila.scrollLeft = rolou;
+    $(".chip[aria-pressed=true]", fila)?.scrollIntoView({ block: "nearest", inline: "nearest" });
     const inp = $(".busca", el);
     inp.oninput = () => { busca = inp.value; if (!busca.trim()) geral = false; const pos = inp.selectionStart; desenhar(); const n = $(".busca", el); n.focus(); n.setSelectionRange(pos, pos); };
     $("#geral", el) && ($("#geral", el).onclick = () => { geral = true; desenhar(); });
@@ -56,7 +61,8 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
     $$("[data-gc]", el).forEach((b) => (b.onclick = () => { aba = b.dataset.gc; geral = false; desenhar(); el.querySelector(".sel-lista")?.scrollTo?.(0, 0); }));
     $$("[data-gp]", el).forEach((b) => (b.onclick = () => {
       const p = D.produtos.find((x) => x.id === b.dataset.gp);
-      montarItem(p, aoAdicionar, { onde, rapido: true });
+      // No salão sempre abre a janela do item (tem a barra de observação: copo com gelo, sem cebola…). Delivery/telefone segue com 1 toque.
+      montarItem(p, aoAdicionar, { onde, rapido: onde !== "mesa" });
     }));
   };
   desenhar();

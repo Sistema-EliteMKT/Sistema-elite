@@ -400,6 +400,10 @@ export function abaAjustes(el) {
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
       <button class="btn pri" id="salvarImp">Salvar impressoras</button></div>
 
+    <div class="card"><b>Observações rápidas</b><p class="muted pq">Botões que aparecem na janela do item, por setor (ex.: copo com gelo). Separe por vírgula. A barra de observação livre aparece sempre.</p>
+      ${lj.setores.map((x) => `<label class="f" for="or-${esc(x.id)}">${esc(x.nome)}</label><input class="in" id="or-${esc(x.id)}" data-or="${esc(x.id)}" value="${esc((lj.obsRapidas?.[x.id] || []).join(", "))}">`).join("")}
+      <button class="btn pri" id="salvarObs">Salvar observações</button></div>
+
     <div class="card"><b>Equipe</b><p class="muted pq">Cada pessoa entra com o próprio PIN. Garçom só vê as mesas; caixa vê o painel; administrador vê também os Ajustes.</p>
       ${D.usuarios.map((u) => `<div class="cl ${u.ativo === false ? "off" : ""}"><div class="n"><b>${esc(u.nome)}</b><small>${{ admin: "Administrador", caixa: "Caixa", garcom: "Garçom" }[u.papel] || u.papel}${u.freelancer ? ` · freelancer${u.diaria ? " · diária " + brl(u.diaria) : ""}` : ""}${u.ativo === false ? " · desativado" : ""}</small></div><div class="v"><button class="btn ghost sm" data-eu="${esc(u.id)}">Editar</button></div></div>`).join("")}
       <button class="btn pri sm" id="novoU">+ Pessoa</button></div>
@@ -543,6 +547,9 @@ export function abaAjustes(el) {
       }).then(() => toast("Dados fiscais salvos ✓", "bom")).catch(erro);
     };
   }
+
+  $("#salvarObs", el).onclick = () => store.salvar("config", "loja", { obsRapidas: Object.fromEntries($$("[data-or]", el).map((i) => [i.dataset.or, i.value.split(",").map((x) => x.trim()).filter(Boolean)])) })
+    .then(() => toast("Observações salvas ✓", "bom")).catch(erro);
 
   // Loja
   $("#salvarLoja", el).onclick = () => store.salvar("config", "loja", {

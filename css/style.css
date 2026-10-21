@@ -336,3 +336,11 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .serv-lin{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.serv-lin label{display:flex;align-items:center;gap:8px;flex:1}.serv-lin .in{width:72px;padding:8px}.serv-lin em{margin-left:auto}
 .promo-dir{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}.promo.off{opacity:.65}
 .chips.quebra{flex-wrap:wrap;overflow:visible}.chip-novo{border-style:dashed;font-weight:700}
+
+/* setas para rolar as abas no computador */
+.chips-setas{display:flex;align-items:center;gap:6px;min-width:0}
+.chips-setas>.chips{flex:1;min-width:0}
+.seta{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;line-height:1;padding:0 0 3px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.seta:hover{background:var(--surface-2)}
+.seta[hidden]{display:none}
+.obs-chips{margin:2px 0 8px}

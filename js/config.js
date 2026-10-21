@@ -51,6 +51,14 @@ export const LOJA_INICIAL = {
     { id: "bebidas", nome: "Refrigerantes e cervejas (pegar e levar)", impressora: "imp2", impressoraDelivery: "imp1" },
     { id: "preparo", nome: "Sucos e drinks (preparar)", impressora: "imp2", impressoraDelivery: "imp1" },
   ],
+  // Observações rápidas (botões na janela do item), por setor. Editáveis em Ajustes.
+  obsRapidas: {
+    pizza: ["Sem cebola", "Sem azeitona", "Sem orégano", "Bem assada"],
+    esfiha: ["Sem cebola", "Bem assada"],
+    cozinha: ["Sem cebola", "Sem salada", "Ao ponto", "Bem passado", "Sem pimenta"],
+    bebidas: ["Copo com gelo", "Copo sem gelo", "Com limão", "Sem limão"],
+    preparo: ["Copo com gelo", "Copo sem gelo", "Sem açúcar", "Pouco açúcar"],
+  },
   impressoraConta: "imp1",    // onde sai a conta da mesa, a via de entrega e o fechamento
   formasPagamento: ["Dinheiro", "Pix", "Crédito", "Débito", "Vale-refeição"],
 };

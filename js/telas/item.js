@@ -55,7 +55,8 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
       `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>
        ${a.livre ? `<input class="in livre" data-livre="${i}" placeholder="Qual adicional? (ex.: bacon)" hidden>` : ""}`).join("")}</div>` : ""}
     <label class="f" for="obs">Observação</label>
-    <input class="in" id="obs" placeholder="Ex.: sem cebola, bem passada" maxlength="120">
+    ${(loja().obsRapidas?.[setorDe(p)] || []).length ? `<div class="chips quebra obs-chips">${loja().obsRapidas[setorDe(p)].map((o) => `<button type="button" class="chip" data-oc="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>` : ""}
+    <input class="in" id="obs" placeholder="Ex.: copo com gelo, sem cebola, bem passada" maxlength="120">
     <div class="addrow"><div class="qtd"><button id="qm" aria-label="Diminuir">−</button><span id="qv">1</span><button id="qp" aria-label="Aumentar">+</button></div>
       <button class="btn pri" id="add"><span>Adicionar</span><span id="ap"></span></button></div></div>`, { nivel: 2 });
 
@@ -86,6 +87,17 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     $$("[data-livre]", s).forEach((t) => (t.hidden = !$(`input[name="ad"][value="${t.dataset.livre}"]`, s).checked));
   };
   if (inicial) preencher(s, inicial, { bordas, adicionais });
+  // Botões de observação rápida: tocar marca/desmarca e escreve na barra.
+  const partes = () => $("#obs", s).value.split(",").map((x) => x.trim()).filter(Boolean);
+  const marcarChips = () => $$("[data-oc]", s).forEach((b) => b.setAttribute("aria-pressed", partes().includes(b.dataset.oc)));
+  $$("[data-oc]", s).forEach((b) => (b.onclick = () => {
+    const l = partes(), i = l.indexOf(b.dataset.oc);
+    if (i >= 0) l.splice(i, 1); else l.push(b.dataset.oc);
+    $("#obs", s).value = l.join(", ");
+    marcarChips(); atualizar();
+  }));
+  $("#obs", s).addEventListener("input", marcarChips);
+  marcarChips();
   $$("input,select", s).forEach((i) => i.addEventListener("change", atualizar));
   $("#qm", s).onclick = () => { if (qtd > 1) { qtd--; atualizar(); } };
   $("#qp", s).onclick = () => { qtd++; atualizar(); };
