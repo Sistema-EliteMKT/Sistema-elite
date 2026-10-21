@@ -1,5 +1,5 @@
 // Painel do caixa: pedidos (entrega/retirada/balcão), mesas, motoboys, resumo, impressoras, cardápio e ajustes.
-import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
+import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
 import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
@@ -78,7 +78,11 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     if (!el) return;
     const lj = loja();
     const nome = (id) => lj.impressoras.find((i) => i.id === id)?.nome || id;
-    const html = lj.impressoras.map((imp) => {
+    // Papéis esperando há mais de 90 s = o programa de impressão do computador do caixa não está rodando.
+    const parados = D.impressoes.filter((j) => j.status === "pendente" && Date.now() - j.criadoEm > 90000);
+    const alertaParado = parados.length ? `<div class="aviso-desvio" role="alert"><span>🖨️ ${parados.length} ${parados.length > 1 ? "papéis" : "papel"} esperando há ${Math.round((Date.now() - Math.min(...parados.map((j) => j.criadoEm))) / 60000)} min e nada está imprimindo. O programa de impressão do computador do caixa está desligado: abra o <b>iniciar.bat</b> nele.</span>
+      <button class="btn sm" data-descartar>Descartar os papéis antigos</button></div>` : "";
+    const html = alertaParado + lj.impressoras.map((imp) => {
       const para = desvioDe(imp.id);
       if (para) return `<div class="aviso-desvio" role="status"><span>🚨 Desvio ligado: cupons da ${esc(nome(imp.id))} estão saindo na ${esc(nome(para))}.</span>
         <button class="btn sm" data-desf="${imp.id}">Voltar ao normal</button></div>`;
@@ -89,6 +93,10 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         <button class="btn sm" data-dsv="${imp.id}" data-para="${outra.id}">Mandar para a ${esc(nome(outra.id))}</button></div>`;
     }).join("");
     if (el.innerHTML !== html) el.innerHTML = html;
+    $$("[data-descartar]", el).forEach((b) => (b.onclick = async () => {
+      if (!(await confirmar("Descartar papéis antigos", `Os ${parados.length} papéis que estão esperando não vão mais ser impressos (ao ligar o programa de impressão, eles saem todos de uma vez). Descartar?`, { ok: "Descartar", perigo: true }))) return;
+      store.lote(parados.map((j) => ({ tipo: "salvar", col: "impressoes", id: j.id, dados: { status: "descartado", erro: "Descartado no caixa" } }))).then(() => toast("Papéis antigos descartados")).catch(erro);
+    }));
     $$("[data-desf]", el).forEach((b) => (b.onclick = () => desviarImpressora(b.dataset.desf, "").then(() => toast("Desvio desligado", "bom")).catch(erro)));
     $$("[data-dsv]", el).forEach((b) => (b.onclick = () => desviarImpressora(b.dataset.dsv, b.dataset.para)
       .then((n) => toast(`Desvio ligado${n ? `: ${n} cupom${n > 1 ? "s" : ""} parado${n > 1 ? "s" : ""} já foi junto` : ""}`, "bom")).catch(erro)));
@@ -448,5 +456,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   const parar = aoMudar(desenhar);
   delete raiz.dataset.pronto;
   desenhar();
-  return parar;
+  // O aviso de impressão parada depende da hora que passa, não só de mudanças no banco.
+  const relogio = setInterval(() => { if (raiz.isConnected) avisoImpressora(); }, 20000);
+  return () => { parar(); clearInterval(relogio); };
 }

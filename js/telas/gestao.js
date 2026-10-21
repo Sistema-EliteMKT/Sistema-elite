@@ -98,7 +98,7 @@ export function abaImpressao(el, { admin }) {
   const lj = loja();
   const est = lerEstacao();
   const nomeImp = (id) => lj.impressoras.find((i) => i.id === id)?.nome || id;
-  const st = { pendente: "Na fila", imprimindo: "Imprimindo", impresso: "Impresso", erro: "Erro" };
+  const st = { pendente: "Na fila", imprimindo: "Imprimindo", impresso: "Impresso", erro: "Erro", descartado: "Descartado" };
   el.innerHTML = `<div class="grade">
     ${lj.impressoras.map((imp) => {
       const js = D.impressoes.filter((j) => j.impressora === imp.id);
