@@ -33,7 +33,7 @@ export const LOJA_INICIAL = {
   logo: "assets/logo-cliente.png",
   logoClaro: "assets/logo-cliente-claro.png",
   slogan: "Pizzas, esfihas e muito mais. Peça pelo app e receba em casa.",
-  nMesas: 20,
+  nMesas: 36,
   taxaServico: 10,            // % sugerido no fechamento da mesa (pode tirar na hora)
   aceitaOnline: true,         // cardápio do cliente aceita pedidos
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm

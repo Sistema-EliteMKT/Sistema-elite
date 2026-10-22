@@ -68,6 +68,10 @@ export const nomeSetor = (id) => loja().setores.find((s) => s.id === id)?.nome |
 // Onde cada produto é vendido: "todos", "mesa" (só no salão) ou "delivery" (só entrega/retirada).
 // Produto/categoria marcado como "não imprime" (ex.: rodízio): é lançado e vai para a conta, mas não sai papel nenhum.
 export const naoImprime = (p) => !!(p?.semImpressao || categoria(p?.cat)?.semImpressao);
+// Produto/categoria que fica de fora da taxa de serviço (ex.: rodízio): o serviço só incide sobre o resto da conta.
+export const naoCobraServico = (p) => !!(p?.semServico || categoria(p?.cat)?.semServico);
+export const baseServico = (pedidos) => dinheiro(pedidos.flatMap((p) => itensValidos(p))
+  .filter((i) => !(i.semServico || naoCobraServico(produto(i.produtoId)))).reduce((t, i) => t + i.unit * i.qtd, 0));
 export const canalDe = (p) => p?.canal || (p?.semEntrega ? "mesa" : "todos");
 // Promoção: produto com janela de validade (dias da semana, horário, período). Fora dela não aparece para vender.
 export function promoValida(p, d = new Date()) {

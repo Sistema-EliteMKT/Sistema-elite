@@ -2,7 +2,7 @@
 // Usada pelo cardápio do cliente, pelo garçom e pelo caixa.
 // onde: "mesa" (garçom/comanda) ou "delivery" (cardápio online, entrega, retirada, balcão).
 import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo, toast, erro } from "../ui.js";
-import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem, naoImprime } from "../regras.js";
+import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem, naoImprime, naoCobraServico } from "../regras.js";
 
 const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
 const saboresPossiveis = (p, onde) =>
@@ -187,7 +187,7 @@ export function criar(p, { tam = "G", segundo = null, borda = null, opcao = "", 
     tam, segundo: segundo?.id || null, borda: borda?.nome || null, opcao: opcao || "", obs: obs || "", qtd, escolhidos,
     extras: extras.map((a) => ({ nome: a.base || a.nome, qual: a.qual || "" })),
   };
-  const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [], escolhas, ...(naoImprime(p) ? { semImpressao: true } : {}) };
+  const base = { produtoId: p.id, setor: setorDe(p), qtd, obs: obs || "", det: [], escolhas, ...(naoImprime(p) ? { semImpressao: true } : {}), ...(naoCobraServico(p) ? { semServico: true } : {}) };
   const somaExtras = extras.reduce((t, a) => t + (Number(a.preco) || 0), 0);
   const detExtras = extras.map((a) => `+ ${a.nome}`);
   if (p.tipo !== "pizza") {

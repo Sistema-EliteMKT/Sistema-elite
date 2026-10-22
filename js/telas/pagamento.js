@@ -1,6 +1,6 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
 import { $, $$, esc, brl, numero, valorCampo, toast, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo } from "../regras.js";
+import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
 export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
@@ -11,7 +11,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
     const linhas = [{ forma: forma || formas[0], valor: 0 }];
     let comServico = servico > 0;
     // Serviço pela porcentagem escolhida na hora (padrão: a da loja); o valor sugerido já vem arredondado.
-    const valorServ = () => (comServico ? dinheiro((sub * Math.min(30, Math.max(0, Number($("#spct", s)?.value) || 0))) / 100) : 0);
+    const valorServ = () => (comServico ? dinheiro((baseServico(pedidos) * Math.min(30, Math.max(0, Number($("#spct", s)?.value) || 0))) / 100) : 0);
     const s = abrirSheet(`${cabecalhoSheet(titulo, pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean).join(", "))}<div class="sh-b">
       <div class="sum"><div><span>Subtotal</span><span>${brl(sub)}</span></div></div>
       ${!D.caixa ? `<p class="ruim-txt pq">⚠️ O caixa está fechado. Abra na aba Caixa para o recebimento entrar no fechamento.</p>` : ""}

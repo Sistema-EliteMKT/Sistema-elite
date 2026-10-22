@@ -1,6 +1,6 @@
 // App do garçom: mesas, comandas pelo número do cartão e lançamento de itens.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca } from "../ui.js";
-import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda, cancelarItem, cancelarComanda } from "../regras.js";
+import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirComanda, lancarItens, pedirConta, imprimirConta, subtotal, trocarMesa, rotuloComanda, cancelarItem, cancelarComanda, baseServico } from "../regras.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
@@ -244,5 +244,5 @@ export function telaGarcom(raiz, usuario, sair) {
 
 export const servicoDe = (cs) => {
   const pct = Number(loja().taxaServico) || 0;
-  return Math.round(cs.reduce((s, c) => s + subtotal(c), 0) * pct) / 100;
+  return Math.round(baseServico(cs) * pct) / 100; // itens "sem serviço" (rodízio) ficam de fora
 };

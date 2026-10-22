@@ -287,6 +287,7 @@ function editarProduto(p) {
     <label class="f" for="ps">Setor de impressão</label><select class="in" id="ps"><option value="">O mesmo da categoria</option>${loja().setores.map((x) => `<option value="${esc(x.id)}" ${x.id === p.setor ? "selected" : ""}>${esc(x.nome)}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pz" ${p.tipo === "pizza" ? "checked" : ""}><span>É pizza (tamanho, meio a meio, borda)</span></label>
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
+    <label class="opt"><input type="checkbox" id="pss" ${p.semServico ? "checked" : ""}><span>Não cobrar taxa de serviço (10%) neste item <small>(ex.: rodízio)</small></span></label>
     <label class="opt"><input type="checkbox" id="psi" ${p.semImpressao ? "checked" : ""}><span>Não imprimir quando lançar <small>(só entra na conta, ex.: rodízio)</small></span></label>
     <label class="f" for="pe">Onde vende</label><select class="in" id="pe">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pa" ${p.ativo === false ? "" : "checked"}><span>Disponível</span></label>
@@ -297,7 +298,7 @@ function editarProduto(p) {
     const preco = numero($("#pp", s).value);
     if (!nome || !preco) return toast("Coloque nome e preço.");
     const dados = {
-      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null, precoMeia: numero($("#pm", s).value) || null, semImpressao: $("#psi", s).checked,
+      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null, precoMeia: numero($("#pm", s).value) || null, semImpressao: $("#psi", s).checked, semServico: $("#pss", s).checked,
       opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null, grupoAdicional: $("#pad", s).value === "__cat" ? null : $("#pad", s).value,
       tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,
@@ -319,6 +320,7 @@ function editarCategoria(c) {
     <label class="f" for="cg">Pizzas desta categoria se misturam com</label><select class="in" id="cg">
       <option value="">Não é pizza</option><option value="salgada" ${c.grupoPizza === "salgada" ? "selected" : ""}>Pizzas salgadas (com borda)</option><option value="doce" ${c.grupoPizza === "doce" ? "selected" : ""}>Pizzas doces</option></select>
     <label class="f" for="cad">Adicionais que o garçom pode lançar</label><select class="in" id="cad">${opcoesGrupo(c.grupoAdicional, "Nenhum")}</select>
+    <label class="opt"><input type="checkbox" id="css" ${c.semServico ? "checked" : ""}><span>Não cobrar taxa de serviço (10%) nos itens desta aba</span></label>
     <label class="opt"><input type="checkbox" id="csi" ${c.semImpressao ? "checked" : ""}><span>Não imprimir os itens desta aba quando lançar <small>(só entram na conta)</small></span></label>
     <label class="f" for="co">Ordem no cardápio</label><input class="in" id="co" type="number" value="${c.ordem ?? D.categorias.length + 1}">
     ${blocoFiscal(c.fiscal, "cf", "da loja")}
@@ -328,7 +330,7 @@ function editarCategoria(c) {
     if (!nome) return toast("Coloque o nome.");
     const id = c.id || nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || novoId();
     try {
-      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0, semImpressao: $("#csi", s).checked, fiscal: lerFiscal(s, "cf") });
+      await store.salvar("categorias", id, { nome, setor: $("#cs", s).value, nota: $("#cno", s).value.trim(), prefixo: $("#cp", s).value, grupoPizza: $("#cg", s).value, grupoAdicional: $("#cad", s).value, ordem: Number($("#co", s).value) || 0, semImpressao: $("#csi", s).checked, semServico: $("#css", s).checked, fiscal: lerFiscal(s, "cf") });
       sessionStorage.setItem("se_cat", id); fecharSheet(); toast("Salvo ✓");
     } catch (e) { erro(e); }
   };
