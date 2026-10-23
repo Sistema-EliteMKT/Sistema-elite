@@ -11,6 +11,7 @@ import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
 import { abaFluxo } from "./fluxo.js";
+import { abrirConta } from "./conta.js";
 import { abaPromocoes } from "./promocoes.js";
 import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
 import { servicoDe } from "./garcom.js";
@@ -339,12 +340,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const cs = (m) => comandasDaMesa(+m);
     $$("[data-fechar]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.fechar), "Fechar conta", (sel) =>
       receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${b.dataset.fechar}` }))));
-    $$("[data-imp]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.imp), "Imprimir conta", async (sel) => {
-      await pedirConta(sel.map((c) => c.id));
-      await imprimirConta(sel, { servico: servicoDe(sel) });
-      toast("Conta enviada para impressão");
-      fecharSheet();
-    })));
+    $$("[data-imp]", el).forEach((b) => (b.onclick = () => abrirConta(cs(b.dataset.imp), { origem: "caixa" })));
     $$("[data-det]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.det)));
     $$("[data-set]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.set), "Imprimir por setor", async (sel) => {
       for (const c of sel) await imprimirPorSetor(c, usuario);

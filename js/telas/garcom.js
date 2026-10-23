@@ -4,6 +4,7 @@ import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirCom
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
+import { abrirConta } from "./conta.js";
 
 export function telaGarcom(raiz, usuario, sair) {
   // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
@@ -157,24 +158,9 @@ export function telaGarcom(raiz, usuario, sair) {
     };
   }
 
-  async function escolherConta(cs) {
-    const enviar = async (sel) => {
-      try {
-        await pedirConta(sel.map((c) => c.id));
-        await imprimirConta(sel, { servico: servicoDe(sel) }, { salao: true });
-        toast("Conta enviada para impressão. O caixa já está vendo.", "bom");
-        fecharSheet();
-      } catch (e) { erro(e); }
-    };
-    if (cs.length === 1) return enviar(cs);
-    const s = abrirSheet(`${cabecalhoSheet(`Conta da mesa ${V.mesa}`, "Marque as comandas que vão pagar agora")}<div class="sh-b">
-      <div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" value="${c.id}" checked><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
-      <button class="btn or cheio" id="ok">Imprimir conta</button></div>`);
-    $("#ok", s).onclick = () => {
-      const ids = $$("input:checked", s).map((i) => i.value);
-      if (!ids.length) return toast("Marque pelo menos uma comanda.");
-      enviar(cs.filter((c) => ids.includes(c.id)));
-    };
+  // Pedir a conta: abre a janela para escolher as comandas e a impressora (padrão: salão, Print iD).
+  function escolherConta(cs) {
+    abrirConta(cs, { origem: "salao", titulo: cs[0].status === "conta" ? "Reimprimir conta" : "Pedir a conta" });
   }
 
   function desenharLancar() {

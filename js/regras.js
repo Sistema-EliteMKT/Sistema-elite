@@ -750,8 +750,8 @@ export const imprimirJunto = (p, quem) => imprimirProducao({ ...p, itens: itensV
 const tituloConta = (pedidos) => (pedidos[0].tipo === "mesa" && pedidos.length > 1 ? `MESA ${pedidos[0].mesa}` : titulo(pedidos[0]));
 // Conta pedida pelo garçom (tela do garçom) sai na impressora do salão (Print iD no bar), não na do caixa.
 const impressoraDaConta = (salao) => (salao ? loja().impressoraContaGarcom || loja().impressoraConta : loja().impressoraConta);
-export const imprimirConta = (pedidos, valores, { salao = false } = {}) =>
-  store.lote([filaImpressao(impressoraDaConta(salao), `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
+export const imprimirConta = (pedidos, valores, { salao = false, impressora = null } = {}) =>
+  store.lote([filaImpressao(impressora || impressoraDaConta(salao), `Conta ${tituloConta(pedidos)}`, cupomConta(pedidos, valores))]);
 
 // Recibo para o cliente assinar e a loja guardar.
 export function cupomRecibo(pedidos, pag, via = "VIA DA LOJA") {
