@@ -4,7 +4,7 @@ import { D, loja, aoMudar, situacaoMesa, comandasDaMesa, comandaAberta, abrirCom
 import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
-import { abrirConta } from "./conta.js";
+import { abrirConta, trocarMesaUI } from "./conta.js";
 
 export function telaGarcom(raiz, usuario, sair) {
   // nova: comanda acabou de ser aberta e talvez ainda não esteja na lista (ex.: sem internet)
@@ -110,13 +110,7 @@ export function telaGarcom(raiz, usuario, sair) {
       editarLancado(c, c.itens.find((i) => i.key === key), usuario, "mesa", desenhar);
     }));
     $$("[data-lancar]", raiz).forEach((b) => (b.onclick = () => { V.comanda = b.dataset.lancar; V.rascunho = []; desenhar(); }));
-    $("#trocar", raiz) && ($("#trocar", raiz).onclick = async () => {
-      const n = Number(await pedirTexto(`Trocar a mesa ${V.mesa}`, "Para qual mesa?", { tipo: "number", ok: "Trocar" }));
-      if (!n || n === V.mesa) return;
-      if (n < 1 || n > Number(loja().nMesas)) return toast("Mesa não existe.");
-      if (comandasDaMesa(n).length && !(await confirmar("Juntar mesas", `A mesa ${n} já está ocupada. Juntar as comandas da mesa ${V.mesa} com a mesa ${n}?`, { ok: "Juntar" }))) return;
-      try { await trocarMesa(cs.map((c) => c.id), n); V.mesa = n; toast(`Agora é a mesa ${n}.`); desenhar(); } catch (e) { erro(e); }
-    });
+    $("#trocar", raiz) && ($("#trocar", raiz).onclick = () => trocarMesaUI(cs, V.mesa, { aoFim: ({ n, todas }) => { if (todas) V.mesa = n; desenhar(); } }));
     $("#conta", raiz) && ($("#conta", raiz).onclick = () => escolherConta(cs));
     // Remover item já lançado: sai um aviso de cancelamento na impressora do setor.
     $$("[data-ci]", raiz).forEach((b) => (b.onclick = async () => {

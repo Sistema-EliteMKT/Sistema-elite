@@ -2,7 +2,7 @@
 // O garçom abre com o salão (Print iD) marcado; o caixa abre com o caixa (Bematech). Dá para trocar
 // na hora, caso uma das impressoras pare de funcionar.
 import { $, $$, esc, brl, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { loja, subtotal, rotuloComanda, pedirConta, imprimirConta, baseServico } from "../regras.js";
+import { loja, subtotal, rotuloComanda, pedirConta, imprimirConta, baseServico, trocarMesa, comandasDaMesa } from "../regras.js";
 
 const servico = (cs) => Math.round(baseServico(cs) * (Number(loja().taxaServico) || 0)) / 100;
 
@@ -29,6 +29,39 @@ export function abrirConta(cs, { origem = "caixa", titulo = "Imprimir conta", ao
       fecharSheet();
       toast(`Conta enviada para ${nome(alvo)}.`, "bom");
       aoImprimir(sel);
+    } catch (e) { erro(e); ev.currentTarget.disabled = false; }
+  };
+}
+
+// Trocar de mesa: escolhe QUAIS comandas vão (uma, duas ou todas) e para qual mesa.
+// Se a mesa de destino já tem gente, as comandas ficam juntas lá.
+export function trocarMesaUI(cs, mesaAtual, { aoFim = () => {} } = {}) {
+  const lj = loja();
+  const s = abrirSheet(`${cabecalhoSheet(`Trocar de mesa · mesa ${mesaAtual}`, cs.length > 1 ? "Marque as comandas que vão mudar" : "")}<div class="sh-b">
+    ${cs.length > 1 ? `<div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" name="tc" value="${c.id}"><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>
+      <div class="linha-btn"><button class="btn ghost sm" id="todas">Marcar todas</button></div>` : ""}
+    <label class="f" for="tm">Para qual mesa?</label><input class="in" id="tm" type="number" inputmode="numeric" min="1" max="${Number(lj.nMesas) || 36}" placeholder="Nº da mesa">
+    <small class="muted" id="tmInfo"></small>
+    <div class="err" id="err"></div>
+    <button class="btn pri cheio grande" id="ok">Mudar de mesa</button></div>`);
+  $("#todas", s) && ($("#todas", s).onclick = () => $$('input[name="tc"]', s).forEach((i) => (i.checked = true)));
+  $("#tm", s).oninput = () => {
+    const n = Number($("#tm", s).value);
+    const ocupada = n && comandasDaMesa(n).length;
+    $("#tmInfo", s).textContent = ocupada ? `A mesa ${n} já está ocupada: as comandas vão ficar junto com as de lá.` : "";
+  };
+  $("#ok", s).onclick = async (ev) => {
+    const sel = cs.length > 1 ? cs.filter((c) => $$('input[name="tc"]:checked', s).some((i) => i.value === c.id)) : cs;
+    const n = Number($("#tm", s).value);
+    if (!sel.length) return ($("#err", s).textContent = "Marque pelo menos uma comanda.");
+    if (!n || n === mesaAtual) return ($("#err", s).textContent = "Escolha uma mesa diferente da atual.");
+    if (n < 1 || n > Number(lj.nMesas)) return ($("#err", s).textContent = `A mesa ${n} não existe (vai até ${lj.nMesas}).`);
+    ev.currentTarget.disabled = true;
+    try {
+      await trocarMesa(sel.map((c) => c.id), n);
+      fecharSheet();
+      toast(sel.length === cs.length ? `Mesa ${mesaAtual} agora é a mesa ${n}.` : `${sel.length} ${sel.length > 1 ? "comandas foram" : "comanda foi"} para a mesa ${n}.`, "bom");
+      aoFim({ n, todas: sel.length === cs.length });
     } catch (e) { erro(e); ev.currentTarget.disabled = false; }
   };
 }

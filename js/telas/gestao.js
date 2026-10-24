@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe } from "../regras.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, desfazerPagamento } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -214,7 +214,13 @@ export function abaRelatorio(el, { usuario }) {
       <div class="card"><b>Mais vendidos hoje</b><div class="sum">${top.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("") || `<p class="vazio">—</p>`}</div></div>
     </div>
     <div class="linha-btn"><button class="btn pri" id="fech">Imprimir fechamento do dia</button></div>
-    <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}</div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div>`;
+    <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}<button class="btn ghost sm" data-desfaz="${p.id}">Desfazer</button></div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div>`;
+  $$("[data-desfaz]", el).forEach((b) => (b.onclick = async () => {
+    const pg = pags.find((x) => x.id === b.dataset.desfaz);
+    const onde = pg.mesa ? `Mesa ${pg.mesa}` : nomesTipo[pg.tipo] || "pedido";
+    if (!(await confirmar("Desfazer recebimento", `Desfazer o recebimento de ${brl(pg.total)} (${onde})? ${pg.mesa ? "A mesa volta a ficar aberta, pedindo a conta." : "O pedido volta a ficar como não pago."} O valor sai do caixa.`, { ok: "Desfazer", perigo: true }))) return;
+    desfazerPagamento(pg, usuario).then(() => toast("Recebimento desfeito ✓", "bom")).catch(erro);
+  }));
   $("#fech", el).onclick = () => {
     const w = Number(loja().colunas) || 48;
     const lado = (a, b) => ({ t: a + " ".repeat(Math.max(1, w - a.length - b.length)) + b, e: a, d: b });

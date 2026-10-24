@@ -11,7 +11,7 @@ import { seletorProdutos, linhaItem } from "./seletor.js";
 import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
 import { abaFluxo } from "./fluxo.js";
-import { abrirConta } from "./conta.js";
+import { abrirConta, trocarMesaUI } from "./conta.js";
 import { abaPromocoes } from "./promocoes.js";
 import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
 import { servicoDe } from "./garcom.js";
@@ -335,13 +335,14 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
           ${itensValidos(c).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}`).join("")}</div>
         <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
         <button class="btn pri cheio" data-fechar="${s.m}">Fechar conta</button>
-        <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-set="${s.m}">Imprimir por setor</button><button data-det="${s.m}">Lançar / editar</button></div>
+        <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-set="${s.m}">Imprimir por setor</button><button data-det="${s.m}">Lançar / editar</button><button data-troc="${s.m}">Trocar mesa</button></div>
       </article>`).join("") || `<p class="vazio">Nenhuma mesa aberta. Use “+ Abrir mesa” ou o app do garçom.</p>`}</div>`;
     const cs = (m) => comandasDaMesa(+m);
     $$("[data-fechar]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.fechar), "Fechar conta", (sel) =>
       receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${b.dataset.fechar}` }))));
     $$("[data-imp]", el).forEach((b) => (b.onclick = () => abrirConta(cs(b.dataset.imp), { origem: "caixa" })));
     $$("[data-det]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.det)));
+    $$("[data-troc]", el).forEach((b) => (b.onclick = () => trocarMesaUI(cs(b.dataset.troc), +b.dataset.troc)));
     $$("[data-set]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.set), "Imprimir por setor", async (sel) => {
       for (const c of sel) await imprimirPorSetor(c, usuario);
       toast("Um papel para cada setor enviado para impressão");

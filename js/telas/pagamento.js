@@ -1,6 +1,6 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
-import { $, $$, esc, brl, numero, valorCampo, toast, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico } from "../regras.js";
+import { $, $$, esc, brl, numero, valorCampo, toast, erro, avisoDesfazer, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
+import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico, desfazerPagamento } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
 export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
@@ -71,6 +71,8 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
         if ($("#rec", s).checked) await imprimirRecibo(pedidos, pag, { salao });
         toast(pag.troco ? `Recebido. Troco: ${brl(pag.troco)}` : "Recebido ✓", "bom");
         fecharSheet();
+        // Fechou por engano? Por alguns segundos dá para desfazer (a mesa volta a ficar aberta).
+        avisoDesfazer("Conta recebida e fechada.", () => desfazerPagamento(pag, quem).then(() => toast("Recebimento desfeito. A mesa voltou a ficar aberta.", "bom")).catch(erro));
         res(pag);
       } catch (e) { $("#err", s).textContent = e.message; btn.disabled = false; }
     };

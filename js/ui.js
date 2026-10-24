@@ -125,3 +125,18 @@ export function setasRolagem(el) {
   if (window.ResizeObserver) new ResizeObserver(atual).observe(el);
   atual();
 }
+
+// Aviso com botão (ex.: "Desfazer") que fica alguns segundos na parte de baixo da tela.
+export function avisoDesfazer(texto, aoClicar, { botao = "Desfazer", ms = 15000 } = {}) {
+  document.querySelector(".aviso-acao")?.remove();
+  const el = document.createElement("div");
+  el.className = "aviso-acao";
+  el.setAttribute("role", "status");
+  el.innerHTML = `<span></span><button type="button"></button>`;
+  el.firstChild.textContent = texto;
+  const b = el.querySelector("button");
+  b.textContent = botao;
+  b.onclick = async () => { b.disabled = true; try { await aoClicar(); } finally { el.remove(); } };
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}

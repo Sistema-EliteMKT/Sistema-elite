@@ -390,6 +390,28 @@ export async function registrarPagamento(pedidos, valores, quem) {
   return { id: pid, ...pag };
 }
 
+// Desfaz um recebimento feito sem querer: a mesa/pedido volta a ficar aberto e o dinheiro sai do caixa.
+export async function desfazerPagamento(pag, quem) {
+  const pedidos = (await Promise.all(pag.pedidos.map((id) => store.obter("pedidos", id)))).filter(Boolean);
+  if (!pedidos.length) throw new Error("Não achei os pedidos desse recebimento.");
+  const marca = { reabertoPor: quem?.nome || "", reabertoEm: Date.now(), pago: false, pagamentoId: null, pagoEm: null };
+  const ops = [];
+  for (const p of pedidos) {
+    if (p.tipo === "mesa") {
+      if (p.numero) {
+        const t = await store.obter("travas", `comanda-${p.numero}`);
+        if (t?.aberta && t.pedido !== p.id) throw new Error(`A comanda ${p.numero} já foi aberta de novo${t.mesa ? " na mesa " + t.mesa : ""}. Feche essa antes de desfazer.`);
+        ops.push({ tipo: "salvar", col: "travas", id: `comanda-${p.numero}`, dados: { aberta: true, pedido: p.id, mesa: p.mesa, dia: p.dia || hoje(), em: Date.now() } });
+      }
+      ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, aberto: true, status: "conta" } });
+    } else {
+      ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, ...(p.aberto === false ? { aberto: true, status: p.tipo === "entrega" ? "saiu" : "pronto", concluidoEm: null } : {}) } });
+    }
+  }
+  ops.push({ tipo: "apagar", col: "pagamentos", id: pag.id });
+  await store.lote(ops);
+}
+
 // Pedido de entrega/retirada concluído (e pago) sai da tela de pedidos abertos.
 export const concluirPedido = (p) => store.salvar("pedidos", p.id, { status: "concluido", aberto: false, concluidoEm: Date.now() });
 
