@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, desfazerPagamento } from "../regras.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -67,7 +67,7 @@ export function abaEquipe(el, { usuario, admin }) {
         <button class="btn ${ja ? "ghost" : "ok"} cheio" data-pagar="${esc(u.nome)}" data-sug="${sugestao(u).toFixed(2)}" data-fun="Garçom">${ja ? "Pagar mais" : "Pagar"}${sugestao(u) ? ` · ${brl(sugestao(u))}` : ""}</button></div>`;
     }).join("") || `<p class="vazio">Nenhum garçom cadastrado.</p>`}</div>
     <div class="card"><b>Pagamentos de hoje</b>${D.saidas.map((x) => `<div class="cl"><div class="n"><b>${esc(x.nome)}</b><small>${hora(x.criadoEm)} · ${esc(x.funcao || "")} · ${esc(x.forma)}${x.obs ? " · " + esc(x.obs) : ""} · por ${esc(x.por)}</small></div>
-      <div class="v">${brl(x.valor)}${admin ? `<button class="mini-x" data-del="${x.id}" title="Apagar">×</button>` : ""}</div></div>`).join("") || `<p class="muted pq">Nenhum pagamento ainda.</p>`}</div>`;
+      <div class="v">${brl(x.valor)}<button class="btn ghost sm" data-recibo="${x.id}">Recibo</button>${admin ? `<button class="mini-x" data-del="${x.id}" title="Apagar">×</button>` : ""}</div></div>`).join("") || `<p class="muted pq">Nenhum pagamento ainda.</p>`}</div>`;
 
   const pagar = ({ nome = "", funcao = "Garçom", valor = 0 } = {}) => {
     const formas = loja().formasPagamento || ["Dinheiro", "Pix"];
@@ -77,17 +77,24 @@ export function abaEquipe(el, { usuario, admin }) {
       <div class="opts dois"><div><label class="f" for="fv">Valor (R$)</label><input class="in grande" id="fv" inputmode="decimal" value="${valor ? valorCampo(valor) : ""}"></div>
         <div><label class="f" for="fp">Pago em</label><select class="in" id="fp">${formas.filter((f) => ["Dinheiro", "Pix"].includes(f)).concat(formas.filter((f) => !["Dinheiro", "Pix"].includes(f))).map((f) => `<option>${esc(f)}</option>`).join("")}</select></div></div>
       <label class="f" for="fo">Observação (ex.: diária + 10%)</label><input class="in" id="fo">
+      <label class="opt"><input type="checkbox" id="frec" checked><span>Imprimir recibo para assinar <small>(a loja guarda)</small></span></label>
+      <label class="opt"><input type="checkbox" id="fvias"><span>Imprimir 2 vias <small>(uma fica com a pessoa)</small></span></label>
       <div class="err" id="ferr"></div><button class="btn ok cheio grande" id="ok">Registrar pagamento</button></div>`);
     setTimeout(() => $(nome ? "#fv" : "#fn", s).focus(), 50);
     $("#ok", s).onclick = async (ev) => {
       const dados = { nome: $("#fn", s).value.trim(), funcao: $("#ff", s).value, valor: numero($("#fv", s).value), forma: $("#fp", s).value, obs: $("#fo", s).value.trim() };
       if (!dados.nome || !(dados.valor > 0)) return ($("#ferr", s).textContent = "Coloque o nome e o valor.");
       ev.currentTarget.disabled = true;
-      try { await pagarEquipe(dados, usuario); fecharSheet(); toast(`Pagamento de ${brl(dados.valor)} registrado ✓`, "bom"); } catch (e) { erro(e); ev.currentTarget.disabled = false; }
+      try {
+        const reg = await pagarEquipe(dados, usuario);
+        if ($("#frec", s).checked) await imprimirReciboEquipe(reg, { vias: $("#fvias", s).checked ? 2 : 1 });
+        fecharSheet(); toast(`Pagamento de ${brl(dados.valor)} registrado ✓${$("#frec", s).checked ? " Recibo enviado para impressão." : ""}`, "bom");
+      } catch (e) { erro(e); ev.currentTarget.disabled = false; }
     };
   };
   $("#outro", el).onclick = () => pagar({ funcao: "Cozinha" });
   $$("[data-pagar]", el).forEach((b) => (b.onclick = () => pagar({ nome: b.dataset.pagar, funcao: b.dataset.fun, valor: Number(b.dataset.sug) })));
+  $$("[data-recibo]", el).forEach((b) => (b.onclick = () => imprimirReciboEquipe(D.saidas.find((x) => x.id === b.dataset.recibo)).then(() => toast("Recibo enviado para impressão")).catch(erro)));
   $$("[data-del]", el).forEach((b) => (b.onclick = async () => {
     if (await confirmar("Apagar pagamento", "Apagar este pagamento? O valor volta para o caixa.", { ok: "Apagar", perigo: true })) store.apagar("saidas", b.dataset.del).catch(erro);
   }));

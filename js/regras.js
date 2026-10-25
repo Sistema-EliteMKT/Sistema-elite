@@ -522,9 +522,50 @@ export function cupomFechamentoCaixa(cx, r) {
   return linhas;
 }
 
-// Pagamento a freelancer/equipe: sai do caixa e entra no fechamento.
-export const pagarEquipe = (dados, quem) =>
-  store.criar("saidas", { ...dados, valor: dinheiro(dados.valor), dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" });
+// Pagamento a freelancer/equipe: sai do caixa e entra no fechamento. Devolve o registro (com id) para imprimir o recibo.
+export async function pagarEquipe(dados, quem) {
+  const reg = { ...dados, valor: dinheiro(dados.valor), dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" };
+  const id = await store.criar("saidas", reg);
+  return { id, ...reg };
+}
+
+// Valor por extenso, para o recibo (ex.: 120,50 → "cento e vinte reais e cinquenta centavos").
+const EXT_U = ["zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+const EXT_D = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+const EXT_C = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+const ate999 = (n) => {
+  if (n === 100) return "cem";
+  const c = Math.floor(n / 100), r = n % 100, p = [];
+  if (c) p.push(EXT_C[c]);
+  if (r) p.push(r < 20 ? EXT_U[r] : EXT_D[Math.floor(r / 10)] + (r % 10 ? " e " + EXT_U[r % 10] : ""));
+  return p.join(" e ");
+};
+export function extenso(valor) {
+  const total = Math.round((Number(valor) || 0) * 100);
+  const reais = Math.floor(total / 100), cent = total % 100;
+  const milhar = Math.floor(reais / 1000), resto = reais % 1000;
+  let txt = "";
+  if (milhar) txt = (milhar === 1 ? "mil" : ate999(milhar) + " mil") + (resto ? (resto < 100 || resto % 100 === 0 ? " e " : " ") + ate999(resto) : "");
+  else txt = ate999(resto) || "zero";
+  const partes = [];
+  if (reais || !cent) partes.push(`${txt} ${reais === 1 ? "real" : "reais"}`);
+  if (cent) partes.push(`${ate999(cent)} ${cent === 1 ? "centavo" : "centavos"}`);
+  return partes.join(" e ");
+}
+
+// Recibo de pagamento a freelancer/funcionário, para a pessoa assinar e a loja guardar.
+export function cupomReciboEquipe(x, via = "") {
+  const lj = loja();
+  return [L(lj.nome, { b: true, g: true, c: true }), ...(lj.telefone ? [L(lj.telefone, { c: true })] : []), ...(lj.endereco ? [L(lj.endereco, { c: true })] : []),
+    SEP, L("RECIBO DE PAGAMENTO", { b: true, g: true, c: true }), ...(via ? [L(via, { c: true })] : []), L(hh(x.criadoEm)), SEP,
+    L(`Recebi de ${lj.nome} a quantia de`), L(lado("R$", r$(x.valor)), { b: true, g: true }), L(`(${extenso(x.valor)})`),
+    L(`referente a: ${x.funcao || "serviços prestados"}${x.obs ? " - " + x.obs : ""}`), L(`Forma de pagamento: ${x.forma}`), SEP,
+    L(`Nome: ${x.nome}`, { b: true }), L("CPF: ______________________________"),
+    L(""), L(""), L("______________________________", { c: true }), L(x.nome, { c: true }), L("Assinatura de quem recebeu", { c: true }),
+    L(""), L(`Pago por: ${x.por || "-"}`), ...rodape()];
+}
+export const imprimirReciboEquipe = (x, { vias = 1 } = {}) =>
+  store.lote(Array.from({ length: vias }, (_, i) => filaImpressao(loja().impressoraConta, `Recibo ${x.nome}`, cupomReciboEquipe(x, vias > 1 ? (i ? "VIA DE QUEM RECEBEU" : "VIA DA LOJA") : ""))));
 
 // ---------------------------------------------------------------------------
 //  Cupons (texto para impressora térmica)
