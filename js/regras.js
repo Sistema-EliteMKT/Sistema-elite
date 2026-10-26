@@ -11,7 +11,7 @@ import { fiscalDoItem, tPagDe } from "./fiscal.js";
 // ---------------------------------------------------------------------------
 export const D = {
   loja: null, categorias: [], produtos: [], usuarios: [], motoboys: [],
-  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [], caixa: null, caixasDia: [], movimentos: [], fiscal: null,
+  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [], caixa: null, caixasDia: [], movimentos: [], fiscal: null, leve: true,
   get pedidos() {
     const m = new Map();
     for (const p of [...this.doDia, ...this.abertos]) m.set(p.id, p);
@@ -29,21 +29,38 @@ const avisar = () => {
 const ordem = (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || String(a.nome).localeCompare(b.nome);
 
 let desligar = [];
+let desligarPesados = [];
+let leve = true; // começa leve (tela do PIN, garçom); o caixa/administrador liga o resto ao entrar. Celular do garçom: só o necessário (poupa leituras do banco, que têm limite diário no plano grátis)
+let ultimoPublico = false;
 // publico = cardápio do cliente (só lê cardápio e dados da loja)
 export function conectar({ publico = false } = {}) {
   desligar.forEach((f) => f());
-  const dia = hoje();
+  desligarPesados.forEach((f) => f());
+  desligar = []; desligarPesados = [];
+  ultimoPublico = publico;
   desligar = [
     store.ouvirDoc("config", "loja", (d) => { D.loja = d; avisar(); }),
     store.ouvir("categorias", (docs) => { D.categorias = docs.sort(ordem); avisar(); }),
     store.ouvir("produtos", (docs) => { D.produtos = docs.sort(ordem); avisar(); }),
   ];
   if (publico) return;
+  const dia = hoje();
   desligar.push(
-    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d; avisar(); }),
     store.ouvir("usuarios", (docs) => { D.usuarios = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
-    store.ouvir("motoboys", (docs) => { D.motoboys = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.abertos = docs; avisar(); }, ["aberto", "==", true]),
+  );
+  if (!leve) ligarPesados(dia);
+  // Virou o dia com o sistema aberto: reconecta para pegar o dia novo.
+  clearTimeout(conectar._t);
+  const amanha = new Date(); amanha.setHours(24, 0, 5, 0);
+  conectar._t = setTimeout(() => conectar({ publico }), amanha - Date.now());
+}
+
+// O que só o caixa/administrador usa: relatórios, fila de impressão, caixa aberto, equipe de motoboys…
+function ligarPesados(dia) {
+  desligarPesados = [
+    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d; avisar(); }),
+    store.ouvir("motoboys", (docs) => { D.motoboys = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.doDia = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("impressoes", (docs) => { D.impressoes = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
     store.ouvir("pagamentos", (docs) => { D.pagamentos = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
@@ -52,11 +69,17 @@ export function conectar({ publico = false } = {}) {
     store.ouvir("caixas", (docs) => { D.caixasDia = docs.filter((c) => c.status === "fechado").sort((a, b) => b.fechadoEm - a.fechadoEm); avisar(); }, ["dia", "==", dia]),
     store.ouvir("movimentos", (docs) => { D.movimentos = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("saidas", (docs) => { D.saidas = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),
-  );
-  // Virou o dia com o sistema aberto: reconecta para pegar o dia novo.
-  clearTimeout(conectar._t);
-  const amanha = new Date(); amanha.setHours(24, 0, 5, 0);
-  conectar._t = setTimeout(() => conectar({ publico }), amanha - Date.now());
+  ];
+}
+
+// Garçom: desliga o que não usa (menos leituras no banco). Caixa/administrador: religa tudo.
+export function modoLeve(sim) {
+  if (sim === leve || ultimoPublico) return;
+  leve = sim;
+  D.leve = sim;
+  if (sim) { desligarPesados.forEach((f) => f()); desligarPesados = []; }
+  else ligarPesados(hoje());
+  avisar();
 }
 
 export const loja = () => ({ ...LOJA_INICIAL, ...(D.loja || {}) });

@@ -2,7 +2,7 @@
 import { store } from "./store.js";
 import { MARCA } from "./config.js";
 import { $, $$, esc, toast, erro, rodapeMarca, fecharSheet, fecharTudo } from "./ui.js";
-import { D, conectar, aoMudar, loja, semearSePreciso } from "./regras.js";
+import { D, conectar, modoLeve, aoMudar, loja, semearSePreciso } from "./regras.js";
 import { iniciarEstacao } from "./estacao.js";
 import { temInternet, aoMudarRede, vigiarRede } from "./rede.js";
 import { telaCardapio } from "./telas/cardapio.js";
@@ -42,6 +42,7 @@ function iniciarEquipe(h) {
   const pessoa = id && D.usuarios.find((u) => u.id === id && u.ativo !== false);
   if (!pessoa) return telaPin();
   const sair = () => { salvarPessoa(null); rota(); };
+  modoLeve(pessoa.papel === "garcom");
   if (pessoa.papel === "garcom" || h.startsWith("garcom")) {
     document.body.className = "equipe garcom";
     const voltar = pessoa.papel !== "garcom" ? () => { location.hash = "#/"; } : sair;

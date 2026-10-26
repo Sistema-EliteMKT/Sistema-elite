@@ -14,7 +14,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
     const valorServ = () => (comServico ? dinheiro((baseServico(pedidos) * Math.min(30, Math.max(0, Number($("#spct", s)?.value) || 0))) / 100) : 0);
     const s = abrirSheet(`${cabecalhoSheet(titulo, pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean).join(", "))}<div class="sh-b">
       <div class="sum"><div><span>Subtotal</span><span>${brl(sub)}</span></div></div>
-      ${!D.caixa ? `<p class="ruim-txt pq">⚠️ O caixa está fechado. Abra na aba Caixa para o recebimento entrar no fechamento.</p>` : ""}
+      ${!D.caixa && !D.leve ? `<p class="ruim-txt pq">⚠️ O caixa está fechado. Abra na aba Caixa para o recebimento entrar no fechamento.</p>` : ""}
       ${servico > 0 ? `<div class="opt serv-lin"><label><input type="checkbox" id="serv" checked><span>Taxa de serviço</span></label>
         <input class="in" id="spct" type="number" min="0" max="30" step="0.5" value="${Number(lj.taxaServico) || 0}" aria-label="Porcentagem do serviço"><span>%</span><em id="servV">${brl(servico)}</em></div>` : ""}
       <label class="f" for="desc">Desconto (R$)</label><input class="in" id="desc" inputmode="decimal" placeholder="0,00">
