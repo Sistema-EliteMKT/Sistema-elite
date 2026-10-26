@@ -39,7 +39,8 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
       const achados = escopo.filter((p) => sem(p.nome + " " + p.desc).includes(q));
       lista = achados.map((p) => item(p, geral ? D.categorias.find((c) => c.id === p.cat)?.nome || "" : "")).join("");
       // Abas (categorias) cujo nome combina com o que foi digitado: tocar abre a aba.
-      const abasAchadas = abas.filter((a) => sem(a.nome).includes(q) || a.cats.some((c) => sem(c.nome).includes(q)));
+      const casa = (t) => { const n = sem(t); return n.includes(q) || (q.length > 4 && n.includes(q.slice(0, -1))); };
+      const abasAchadas = abas.filter((a) => casa(a.nome) || a.cats.some((c) => casa(c.nome)));
       if (abasAchadas.length) lista = `<div class="cat-hits"><small class="muted">Abas encontradas</small>${abasAchadas.map((a) => `<button class="cat-hit" data-hit="${esc(a.id)}">📂 ${esc(a.nome)}<span>${prods.filter((p) => a.cats.some((c) => c.id === p.cat)).length} itens</span></button>`).join("")}</div>` + lista;
       if (!achados.length) lista += `<p class="vazio">Nenhum item ${geral ? "no cardápio" : `em ${esc(atual?.nome || "esta aba")}`}.</p>`;
       if (!geral) lista += `<button class="btn ghost cheio" id="geral">Buscar em todas as abas</button>`;

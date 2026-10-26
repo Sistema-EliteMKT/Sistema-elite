@@ -406,6 +406,8 @@ export function abaAjustes(el) {
       <div class="opts dois"><div><label class="f" for="am">Número de mesas</label><input class="in" id="am" type="number" min="1" max="200" value="${lj.nMesas}"></div>
         <div><label class="f" for="asv">Taxa de serviço (%)</label><input class="in" id="asv" type="number" min="0" max="30" value="${lj.taxaServico}"></div></div>
       <label class="f" for="af">Formas de pagamento (separe por vírgula)</label><input class="in" id="af" value="${esc((lj.formasPagamento || []).join(", "))}">
+      <label class="opt"><input type="checkbox" id="amm" ${lj.meiaPorcaoMesa !== false ? "checked" : ""}><span>Vender meia porção na mesa</span></label>
+      <label class="opt"><input type="checkbox" id="amd" ${lj.meiaPorcaoDelivery ? "checked" : ""}><span>Vender meia porção no delivery e na retirada <small>(desligado: só na mesa)</small></span></label>
       <label class="opt"><input type="checkbox" id="ao" ${lj.aceitaOnline ? "checked" : ""}><span>Cardápio online aceitando pedidos</span></label>
       <button class="btn pri" id="salvarLoja">Salvar</button></div>
 
@@ -576,6 +578,7 @@ export function abaAjustes(el) {
     nome: $("#an", el).value.trim() || lj.nome, telefone: $("#at", el).value.trim(), endereco: $("#ae", el).value.trim(), slogan: $("#as", el).value.trim(),
     nMesas: Math.max(1, Math.min(200, Number($("#am", el).value) || lj.nMesas)), taxaServico: Math.max(0, Number($("#asv", el).value) || 0),
     formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean), aceitaOnline: $("#ao", el).checked,
+    meiaPorcaoMesa: $("#amm", el).checked, meiaPorcaoDelivery: $("#amd", el).checked,
   }).then(() => toast("Salvo ✓")).catch(erro);
 
   // Impressoras e setores (editados em memória e salvos juntos)

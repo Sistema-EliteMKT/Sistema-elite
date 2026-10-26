@@ -35,6 +35,8 @@ export const LOJA_INICIAL = {
   slogan: "Pizzas, esfihas e muito mais. Peça pelo app e receba em casa.",
   nMesas: 36,
   taxaServico: 10,            // % sugerido no fechamento da mesa (pode tirar na hora)
+  meiaPorcaoMesa: true,       // meia porção na mesa
+  meiaPorcaoDelivery: false,  // meia porção no delivery/retirada (desligado: só na mesa)
   aceitaOnline: true,         // cardápio do cliente aceita pedidos
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm
   imprimirCancelamento: false, // true: cancelar item/comanda também imprime o aviso CANCELADO no setor

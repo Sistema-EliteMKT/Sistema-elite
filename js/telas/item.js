@@ -29,7 +29,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   }
   const pizza = p.tipo === "pizza";
   const broto = pizza && p.precoBroto;
-  const meia = !pizza && Number(p.precoMeia) > 0 && onde === "mesa"; // meia porção: só no salão
+  // Meia porção: liga/desliga em Ajustes (padrão: vende na mesa, não vende no delivery/retirada).
+  const meiaLiberada = onde === "mesa" ? loja().meiaPorcaoMesa !== false : !!loja().meiaPorcaoDelivery;
+  const meia = !pizza && Number(p.precoMeia) > 0 && meiaLiberada;
   const bordas = grupo(p) === "salgada" ? loja().bordas || [] : [];
   const outros = pizza ? saboresPossiveis(p, onde).filter((x) => x.id !== p.id) : [];
   let qtd = inicial?.qtd || 1;
@@ -42,8 +44,11 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
       ${outros.length ? `<div class="grp">Sabores <small>vale o preço do mais caro</small></div>
       <div class="opts dois"><label class="opt"><input type="radio" name="ns" value="1" checked><span>1 sabor</span></label>
         <label class="opt"><input type="radio" name="ns" value="2"><span>Meio a meio</span></label></div>
-      <div class="sabor" id="s2" hidden><span class="muted">2º sabor</span><select class="in" id="s2sel">
-        ${outros.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)} · ${brl(x.preco)}</option>`).join("")}</select></div>` : ""}
+      <div class="sabor" id="s2" hidden><span class="muted">2º sabor</span>
+        <input type="hidden" id="s2sel" value="${esc(outros[0]?.id || "")}">
+        <input class="in" id="s2q" type="search" placeholder="Buscar sabor ou aba (ex.: calabresa, especial, doce)" autocomplete="off" aria-label="Buscar o 2º sabor">
+        <small class="muted" id="s2atual"></small>
+        <div class="s2lista" id="s2lista"></div></div>` : ""}
       ${bordas.length ? `<div class="grp">Borda</div><div class="opts">
         <label class="opt"><input type="radio" name="bor" value="" checked><span>Sem borda</span></label>
         ${bordas.map((b, i) => `<label class="opt"><input type="radio" name="bor" value="${i}"><span>${esc(b.nome)}</span><em>+ ${brl(b.preco)}</em></label>`).join("")}</div>` : ""}
@@ -90,6 +95,31 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     if (s2) s2.hidden = val("ns") !== "2";
     $$("[data-livre]", s).forEach((t) => (t.hidden = !$(`input[name="ad"][value="${t.dataset.livre}"]`, s).checked));
   };
+  // 2º sabor do meio a meio: busca por sabor, ingrediente ou aba; as pizzas aparecem agrupadas por aba.
+  const semAc = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const s2 = $("#s2sel", s);
+  if (s2) {
+    const marcar = () => {
+      const x = outros.find((o) => o.id === s2.value);
+      $("#s2atual", s).textContent = x ? `Escolhido: ${x.nome} · ${brl(x.preco)}` : "";
+      $$("[data-s2]", s).forEach((b) => b.classList.toggle("on", b.dataset.s2 === s2.value));
+    };
+    const lista = () => {
+      const q = semAc($("#s2q", s).value.trim());
+      // Casa pelo sabor/ingrediente ou pelo nome da aba (aceita "especial" para a aba "Especiais").
+      const daAba = (o) => { const n = semAc(categoria(o.cat)?.nome); return n.includes(q) || (q.length > 4 && n.includes(q.slice(0, -1))); };
+      const ach = outros.filter((o) => !q || semAc(`${o.nome} ${o.desc}`).includes(q) || daAba(o));
+      const cats = [...new Set(ach.map((o) => o.cat))];
+      $("#s2lista", s).innerHTML = cats.map((c) => `<h4 class="sel-sec">${esc(categoria(c)?.nome || "")}</h4>` + ach.filter((o) => o.cat === c).map((o) =>
+        `<button type="button" class="s2opt" data-s2="${esc(o.id)}"><span>${esc(o.nome)}</span><b>${brl(o.preco)}</b></button>`).join("")).join("") || `<p class="vazio">Nenhum sabor encontrado.</p>`;
+      $$("[data-s2]", s).forEach((b) => (b.onclick = () => { s2.value = b.dataset.s2; marcar(); atualizar(); }));
+      marcar();
+    };
+    s2._marcar = marcar;
+    $("#s2q", s).addEventListener("input", lista);
+    $("#s2q", s).addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+    lista();
+  }
   if (inicial) preencher(s, inicial, { bordas, adicionais });
   // Botões de observação rápida: tocar marca/desmarca e escreve na barra.
   const partes = () => $("#obs", s).value.split(",").map((x) => x.trim()).filter(Boolean);
@@ -166,7 +196,7 @@ export function editarLancado(pedido, item, quem, onde, aoFim = () => {}) {
 function preencher(s, e, { bordas, adicionais }) {
   const marcar = (sel) => { const i = $(sel, s); if (i) i.checked = true; };
   if (e.tam) marcar(`input[name="tam"][value="${e.tam}"]`);
-  if (e.segundo) { marcar('input[name="ns"][value="2"]'); const sel = $("#s2sel", s); if (sel) sel.value = e.segundo; }
+  if (e.segundo) { marcar('input[name="ns"][value="2"]'); const sel = $("#s2sel", s); if (sel) { sel.value = e.segundo; sel._marcar?.(); } }
   if (e.borda) { const i = bordas.findIndex((b) => b.nome === e.borda); if (i >= 0) marcar(`input[name="bor"][value="${i}"]`); }
   if (e.opcao) $$('input[name="op"]', s).forEach((i) => (i.checked = i.value === e.opcao));
   for (const x of e.extras || []) {
