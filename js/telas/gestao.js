@@ -419,6 +419,7 @@ export function abaAjustes(el) {
       <label class="f" for="aig">Conta pedida pelo garçom (e comprovante do garçom) sai na</label><select class="in" id="aig"></select>
       <label class="f" for="acol">Largura da bobina</label><select class="in" id="acol"><option value="48" ${lj.colunas == 48 ? "selected" : ""}>80 mm</option><option value="32" ${lj.colunas == 32 ? "selected" : ""}>58 mm</option></select>
       <label class="opt"><input type="checkbox" id="aic2" ${lj.imprimirCancelamento ? "checked" : ""}><span>Avisar o setor no papel quando cancelar item ou comanda (desmarcado: só cancela no sistema)</span></label>
+      <label class="opt"><input type="checkbox" id="aco" ${lj.imprimirCozinhaAoChegar !== false ? "checked" : ""}><span>Pedido do cardápio online: imprimir a via completa <b>e</b> os papéis da cozinha assim que chegar (sem esperar aceitar)</span></label>
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
       <button class="btn pri" id="salvarImp">Salvar impressoras</button></div>
 
@@ -591,9 +592,10 @@ export function abaAjustes(el) {
   const des = () => {
     $("#imps", el).innerHTML = imps.map((i, k) => `<div class="forma imp"><input class="in" data-in="${k}" value="${esc(i.nome)}" aria-label="Nome da impressora"><code>${esc(i.id)}</code>${imps.length > 1 ? `<button class="mini-x" data-ix="${k}">×</button>` : ""}</div>`).join("");
     const opImp = (sel) => imps.map((i) => `<option value="${esc(i.id)}" ${i.id === sel ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
-    $("#sets", el).innerHTML = `<div class="set-linha set-cab"><span>Setor</span><span>Salão (mesas)</span><span>Delivery / retirada</span><span></span></div>` + sets.map((x, k) => `<div class="set-linha"><input class="in" data-sn="${k}" value="${esc(x.nome)}" aria-label="Nome do setor">
+    $("#sets", el).innerHTML = `<div class="set-linha set-cab"><span>Setor</span><span>Salão (mesas)</span><span>Delivery / retirada</span><span title="No delivery e na retirada o setor não ganha papel separado: a via completa já serve (ex.: esfihas)">Só na via</span><span></span></div>` + sets.map((x, k) => `<div class="set-linha"><input class="in" data-sn="${k}" value="${esc(x.nome)}" aria-label="Nome do setor">
       <select class="in" data-si="${k}" aria-label="Impressora do salão">${opImp(x.impressora)}</select>
-      <select class="in" data-sd="${k}" aria-label="Impressora do delivery">${opImp(x.impressoraDelivery || x.impressora)}</select>${sets.length > 1 ? `<button class="mini-x" data-sx="${k}">×</button>` : "<span></span>"}</div>`).join("");
+      <select class="in" data-sd="${k}" aria-label="Impressora do delivery">${opImp(x.impressoraDelivery || x.impressora)}</select>
+      <label class="sw" title="No delivery/retirada, sem papel separado deste setor"><input type="checkbox" data-sv="${k}" ${x.soViaDelivery ? "checked" : ""} aria-label="Só na via completa no delivery"><span></span></label>${sets.length > 1 ? `<button class="mini-x" data-sx="${k}">×</button>` : "<span></span>"}</div>`).join("");
     const atual = $("#aic", el).value || lj.impressoraConta;
     $("#aic", el).innerHTML = imps.map((i) => `<option value="${esc(i.id)}" ${i.id === atual ? "selected" : ""}>${esc(i.nome)}</option>`).join("");
     const atualG = $("#aig", el).value || lj.impressoraContaGarcom || lj.impressoraConta;
@@ -603,6 +605,7 @@ export function abaAjustes(el) {
     $$("[data-sn]", el).forEach((e) => (e.oninput = () => (sets[e.dataset.sn].nome = e.value)));
     $$("[data-si]", el).forEach((e) => (e.onchange = () => (sets[e.dataset.si].impressora = e.value)));
     $$("[data-sd]", el).forEach((e) => (e.onchange = () => (sets[e.dataset.sd].impressoraDelivery = e.value)));
+    $$("[data-sv]", el).forEach((e) => (e.onchange = () => (sets[e.dataset.sv].soViaDelivery = e.checked)));
     $$("[data-sx]", el).forEach((e) => (e.onclick = () => { sets.splice(+e.dataset.sx, 1); des(); }));
   };
   $("#maisImp", el).onclick = () => { imps.push({ id: "imp" + (Math.max(0, ...imps.map((i) => parseInt(i.id.replace(/\D/g, "")) || 0)) + 1), nome: `Impressora ${imps.length + 1}` }); des(); };
@@ -617,7 +620,7 @@ export function abaAjustes(el) {
     const usados = new Set([...D.categorias.map((c) => c.setor), ...D.produtos.map((p) => p.setor).filter(Boolean)]);
     const falta = [...usados].filter((u) => !sets.some((s) => s.id === u));
     if (falta.length) return toast(`O setor "${falta[0]}" ainda é usado no cardápio. Mude as categorias antes de tirar.`);
-    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked })
+    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked, imprimirCozinhaAoChegar: $("#aco", el).checked })
       .then(() => toast("Impressoras salvas ✓")).catch(erro);
   };
   des();

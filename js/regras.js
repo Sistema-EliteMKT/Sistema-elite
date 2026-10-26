@@ -317,6 +317,7 @@ export async function aceitarPedido(p, quem) {
   await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now(), aceitoPor: quem?.nome || "" });
   // A via com tudo já saiu quando o pedido chegou; ao aceitar saem só os papéis dos setores.
   const novo = { ...p, numero, itens, aceitoPor: quem?.nome || "" };
+  if (p.producaoImpressa) return; // via e papéis da cozinha já saíram quando o pedido chegou
   if (p.viaImpressa) await imprimirProducao(novo, quem);
   else await imprimirNovoPedido(novo, quem);
 }
@@ -329,12 +330,16 @@ export async function imprimirViaOnline(p) {
   viaOnline.add(p.id);
   try {
     const numero = p.numero || (await numeroDoPedido());
-    const pegou = await store.transacao("pedidos", p.id, (d) => (d && !d.viaImpressa && d.status === "novo" ? { viaImpressa: Date.now(), numero: d.numero || numero } : null));
+    const comCozinha = loja().imprimirCozinhaAoChegar !== false;
+    const pegou = await store.transacao("pedidos", p.id, (d) => (d && !d.viaImpressa && d.status === "novo" ? { viaImpressa: Date.now(), numero: d.numero || numero, ...(comCozinha ? { producaoImpressa: true } : {}) } : null));
     if (!pegou) return false;
-    await store.lote([filaImpressao(loja().impressoraConta, `NOVO ONLINE ${titulo({ ...p, numero: pegou.numero })}`, [
-      { t: "*** PEDIDO NOVO PELO APP ***", b: true, c: true }, { t: "aguardando aceite no caixa", c: true }, { sep: true },
-      ...cupomEntrega({ ...p, numero: pegou.numero }),
+    const novo = { ...p, numero: pegou.numero };
+    await store.lote([filaImpressao(loja().impressoraConta, `NOVO ONLINE ${titulo(novo)}`, [
+      { t: "*** PEDIDO NOVO PELO APP ***", b: true, c: true }, { t: comCozinha ? "papéis da cozinha saem em seguida" : "aguardando aceite no caixa", c: true }, { sep: true },
+      ...cupomEntrega(novo),
     ], { pedido: p.id })]);
+    // Depois da via inteira, os papéis de cada setor para levar à cozinha (como no Insta Delivery).
+    if (comCozinha) await imprimirProducao({ ...novo, itens: p.itens.map((i) => ({ ...i, enviadoEm: Date.now() })) }, null);
     return true;
   } catch (e) { viaOnline.delete(p.id); console.error("via online", e); return false; }
 }
@@ -777,9 +782,12 @@ export async function imprimirProducao(p, quem, opts = {}) {
   const porSetor = new Map();
   for (const i of itens) {
     const s = i.setor || setorDe(produto(i.produtoId));
+    // Delivery/retirada/balcão: setor marcado "só na via" (esfihas) não ganha papel separado, a via completa já serve.
+    if (p.tipo !== "mesa" && lj.setores.find((x) => x.id === s)?.soViaDelivery) continue;
     if (!porSetor.has(s)) porSetor.set(s, []);
     porSetor.get(s).push(i);
   }
+  if (!porSetor.size) return;
   const ops = [];
   const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : opts.alteracao ? " (alterado)" : ""}`;
   // separado: um papel para cada setor (padrão da loja em Ajustes, ou forçado pelo botão)

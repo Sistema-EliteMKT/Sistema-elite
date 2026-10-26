@@ -57,7 +57,7 @@ export const LOJA_INICIAL = {
   // Amarílis: tudo do salão sai no bar; tudo de delivery e retirada sai no caixa.
   setores: [
     { id: "pizza", nome: "Pizzas", impressora: "imp2", impressoraDelivery: "imp1" },
-    { id: "esfiha", nome: "Esfihas", impressora: "imp2", impressoraDelivery: "imp1" },
+    { id: "esfiha", nome: "Esfihas", impressora: "imp2", impressoraDelivery: "imp1", soViaDelivery: true }, // delivery: sem papel separado (a via completa serve)
     { id: "cozinha", nome: "Cozinha (porções, pastéis e pratos)", impressora: "imp2", impressoraDelivery: "imp1" },
     { id: "bebidas", nome: "Refrigerantes e cervejas (pegar e levar)", impressora: "imp2", impressoraDelivery: "imp1" },
     { id: "preparo", nome: "Sucos e drinks (preparar)", impressora: "imp2", impressoraDelivery: "imp1" },
