@@ -692,6 +692,7 @@ export function cupomEntrega(p) {
   if (c.telefone) linhas.push(L(`Tel: ${c.telefone}`, { b: true }));
   if (p.tipo === "entrega") {
     linhas.push(L(c.endereco || "", { b: true }));
+    if (c.cep) linhas.push(L(`CEP: ${String(c.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2")}`, { b: true }));
     if (c.bairro) linhas.push(L(`Bairro: ${c.bairro}`, { b: true }));
     if (c.area) linhas.push(L(`Área de entrega: ${c.area}`));
     if (c.distanciaKm) linhas.push(L(`Distância: ${String(c.distanciaKm).replace(".", ",")} km`));

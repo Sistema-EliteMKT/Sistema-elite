@@ -4,8 +4,10 @@ import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
 import { statusOnline } from "../horario.js";
+import { buscarCep } from "../entrega.js";
 import { montarItem, editarItem } from "./item.js";
 
+const fmtCep = (c) => { const n = String(c || "").replace(/\D/g, "").slice(0, 8); return n.length > 5 ? n.slice(0, 5) + "-" + n.slice(5) : n; };
 const K = "se_cliente";
 const lerLocal = () => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch { return {}; } };
 const gravarLocal = (v) => { try { localStorage.setItem(K, JSON.stringify({ ...lerLocal(), ...v })); } catch {} };
@@ -72,8 +74,10 @@ export function telaCardapio(raiz) {
       <label class="f" for="cn">Seu nome</label><input class="in" id="cn" autocomplete="name" value="${esc(salvo.nome || "")}">
       <label class="f" for="ct">WhatsApp</label><input class="in" id="ct" type="tel" autocomplete="tel" inputmode="tel" value="${esc(salvo.telefone || "")}">
       <div id="end">
-        ${porRaio ? `<div id="loc"></div>` : ""}
-        <label class="f" for="ce">Endereço (rua, número, complemento)</label><input class="in" id="ce" autocomplete="street-address" value="${esc(salvo.endereco || "")}">
+        ${porRaio ? `<div id="loc"></div>` : `<label class="f" for="ccep">CEP <b class="obrig">*</b></label><input class="in" id="ccep" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000" value="${esc(fmtCep(salvo.cep))}"><small class="muted" id="cepMsg" role="status"></small>`}
+        <label class="f" for="ce">Rua <b class="obrig">*</b></label><input class="in" id="ce" autocomplete="address-line1" value="${esc(salvo.rua || salvo.endereco || "")}">
+        <div class="opts dois"><div><label class="f" for="cnum">Número da casa <b class="obrig">*</b></label><input class="in" id="cnum" inputmode="numeric" autocomplete="off" placeholder="Ex.: 120 ou S/N" value="${esc(salvo.numero || "")}"></div>
+          <div><label class="f" for="ccomp">Complemento</label><input class="in" id="ccomp" placeholder="Apto, bloco…" value="${esc(salvo.comp || "")}"></div></div>
         ${porRaio ? "" : taxas.length ? `<label class="f" for="cb">Bairro / região</label><select class="in" id="cb">${taxas.map((t) => `<option ${t.nome === salvo.bairro ? "selected" : ""}>${esc(t.nome)}</option>`).join("")}</select>` : ""}
         <label class="f" for="cr">Ponto de referência</label><input class="in" id="cr" value="${esc(salvo.referencia || "")}">
       </div>
@@ -95,10 +99,36 @@ export function telaCardapio(raiz) {
         const d = r || dados || {};
         // Preenche a rua sozinho, mas não apaga o que a pessoa já digitou.
         const campo = $("#ce", s);
-        if (d.rua && (!campo.value.trim() || campo.value === autoEnd)) campo.value = autoEnd = d.rua + (d.numero ? ", " + d.numero : ", ");
+        if (d.rua && (!campo.value.trim() || campo.value === autoEnd)) campo.value = autoEnd = d.rua;
+        if (d.numero && !$("#cnum", s).value.trim()) $("#cnum", s).value = d.numero;
         atualizar();
       } });
     }
+    // CEP obrigatório: sem o mapa, confere no ViaCEP e já preenche a rua.
+    let cepAchado = null; // null = ainda não conferido, true = existe, false = não existe
+    const cepCampo = $("#ccep", s);
+    if (cepCampo) {
+      const conferir = async () => {
+        const n = cepCampo.value.replace(/\D/g, "");
+        cepAchado = null;
+        if (n.length !== 8) return ($("#cepMsg", s).textContent = "");
+        $("#cepMsg", s).textContent = "Conferindo o CEP…";
+        try {
+          const r = await buscarCep(n);
+          cepAchado = true;
+          $("#cepMsg", s).innerHTML = `<span class="ok-txt">${esc([r.rua, r.bairro, r.cidade].filter(Boolean).join(" · ") || "CEP encontrado")}</span>`;
+          const campo = $("#ce", s);
+          if (r.rua && (!campo.value.trim() || campo.value === autoEnd)) campo.value = autoEnd = r.rua;
+        } catch (x) {
+          if (/não encontrado/i.test(x.message)) { cepAchado = false; $("#cepMsg", s).innerHTML = `<span class="ruim-txt">CEP não encontrado. Confira os números.</span>`; }
+          else $("#cepMsg", s).textContent = ""; // sem internet para conferir: vale o CEP digitado
+        }
+      };
+      cepCampo.oninput = () => { cepCampo.value = fmtCep(cepCampo.value); conferir(); };
+      if (cepCampo.value) conferir();
+    }
+    // Com o mapa, o número digitado aqui também vai para a busca do endereço.
+    if (porRaio) $("#cnum", s).addEventListener("input", () => { const n = $("[data-num]", s); if (n) n.value = $("#cnum", s).value; });
     const atualizar = () => {
       $$("[data-m]", s).forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === modo));
       $("#end", s).hidden = modo !== "entrega";
@@ -117,14 +147,24 @@ export function telaCardapio(raiz) {
     $("#enviar", s).onclick = async () => {
       const st = statusOnline(loja());
       if (!st.aberto) return ($("#err", s).textContent = `${st.texto}. Não estamos aceitando pedidos agora.`);
-      const c = { nome: $("#cn", s).value.trim(), telefone: $("#ct", s).value.trim(), endereco: $("#ce", s).value.trim(), bairro: porRaio ? loc?.bairro || "" : $("#cb", s)?.value || "", referencia: $("#cr", s).value.trim() };
-      if (porRaio && loc && !loc.fora) Object.assign(c, { lat: loc.ponto[0], lng: loc.ponto[1], distanciaKm: loc.km != null ? Math.round(loc.km * 10) / 10 : null, area: loc.area || "", cep: loc.cep || "" });
+      const rua = $("#ce", s).value.trim(), num = $("#cnum", s).value.trim(), comp = $("#ccomp", s).value.trim();
+      const cep = (porRaio ? $("[data-cep]", s)?.value || "" : $("#ccep", s)?.value || "").replace(/\D/g, "");
+      const c = { nome: $("#cn", s).value.trim(), telefone: $("#ct", s).value.trim(), rua, numero: num, comp, cep, endereco: `${rua}, ${num}${comp ? " - " + comp : ""}`, bairro: porRaio ? loc?.bairro || "" : $("#cb", s)?.value || "", referencia: $("#cr", s).value.trim() };
+      if (porRaio && loc && !loc.fora) Object.assign(c, { lat: loc.ponto[0], lng: loc.ponto[1], distanciaKm: loc.km != null ? Math.round(loc.km * 10) / 10 : null, area: loc.area || "" });
       const e = $("#err", s);
-      if (!c.nome) return (e.textContent = "Coloque seu nome.");
-      if (c.telefone.replace(/\D/g, "").length < 10) return (e.textContent = "Coloque um WhatsApp com DDD.");
-      if (modo === "entrega" && !c.endereco) return (e.textContent = "Coloque o endereço de entrega.");
-      if (modo === "entrega" && porRaio && !loc) return (e.textContent = "Use sua localização ou o CEP para calcular a entrega.");
-      if (modo === "entrega" && porRaio && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
+      e.textContent = "";
+      const falta = (msg, sel) => { e.textContent = msg; const i = $(sel, s); if (i) { i.classList.add("falta"); i.focus(); i.addEventListener("input", () => i.classList.remove("falta"), { once: true }); } };
+      if (!c.nome) return falta("Coloque seu nome.", "#cn");
+      if (c.telefone.replace(/\D/g, "").length < 10) return falta("Coloque um WhatsApp com DDD.", "#ct");
+      // Entrega: CEP (8 números), rua e número da casa são obrigatórios. "S/N" vale para casa sem número.
+      if (modo === "entrega") {
+        if (cep.length !== 8) return falta("Coloque o CEP completo (8 números). Sem o CEP não dá para entregar.", porRaio ? "[data-cep]" : "#ccep");
+        if (!porRaio && cepAchado === false) return falta("CEP não encontrado. Confira os números.", "#ccep");
+        if (!rua) return falta("Coloque o nome da rua.", "#ce");
+        if (!/\d/.test(num) && !/^s\s*\/?\s*n$/i.test(num)) return falta("Coloque o número da casa (ou S/N se não tiver).", "#cnum");
+        if (porRaio && !loc) return (e.textContent = "Use sua localização ou o CEP para calcular a entrega.");
+        if (porRaio && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
+      }
       const t = total();
       const forma = $("#cp", s).value;
       const trocoPara = forma === "Dinheiro" ? numero($("#cx", s).value) : 0;

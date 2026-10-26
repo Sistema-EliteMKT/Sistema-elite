@@ -27,6 +27,7 @@ service cloud.firestore {
         && request.resource.data.tipo in ['entrega', 'retirada']
         && !('numero' in request.resource.data)
         && !('pago' in request.resource.data)
+        && (request.resource.data.tipo != 'entrega' || (request.resource.data.cliente.cep is string && request.resource.data.cliente.cep.size() == 8 && request.resource.data.cliente.numero is string && request.resource.data.cliente.numero.size() > 0))
         && request.resource.data.itens is list
         && request.resource.data.itens.size() > 0
         && request.resource.data.itens.size() <= 60
