@@ -197,7 +197,8 @@ export async function lancarItens(comandaId, itens, quem) {
   if (!pedido || !pedido.aberto) throw new Error("Essa comanda já foi fechada.");
   // arrayUnion: funciona sem internet e não apaga o que outro garçom lançou ao mesmo tempo.
   await store.adicionarItens("pedidos", comandaId, novos, pedido.status === "conta" ? { status: "aberta" } : {});
-  await imprimirProducao({ ...pedido, itens: novos }, quem);
+  // Item a mais em pedido de delivery/retirada: o papel da cozinha sai marcado como ADICIONAL.
+  await imprimirProducao({ ...pedido, itens: novos }, quem, pedido.tipo !== "mesa" ? { adicional: true } : {});
 }
 
 // Altera um item já lançado (quantidade, escolhas e/ou valor).
@@ -613,8 +614,9 @@ function linhasItens(itens, { precos = false } = {}) {
 // alteracao: o item como era antes (sai "ANTES: ..." embaixo do item novo)
 const linhasAntes = (a) => (a ? [SEP, L(`ANTES: ${a.qtd}x ${a.nome}`), ...(a.det || []).map((d) => L(`   ${d}`)), ...(a.obs ? [L(`   OBS: ${a.obs}`)] : [])] : []);
 
-export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alteracao = null } = {}) {
+export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alteracao = null, adicional = false } = {}) {
   const linhas = [];
+  if (adicional) linhas.push(L("*** ADICIONAL ***", { b: true, g: true, c: true }), L("itens a mais neste pedido", { c: true }));
   if (cancelamento) linhas.push(L("*** CANCELADO ***", { b: true, g: true, c: true }));
   if (alteracao) linhas.push(L("*** ALTERADO ***", { b: true, g: true, c: true }));
   linhas.push(L(nomeSetor(setor).toUpperCase(), { b: true, c: true }), SEP);
@@ -629,8 +631,9 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alt
 }
 
 // Vários setores no mesmo papel: cabeçalho uma vez, depois cada setor com seu título.
-function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null } = {}) {
+function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null, adicional = false } = {}) {
   const linhas = [];
+  if (adicional) linhas.push(L("*** ADICIONAL ***", { b: true, g: true, c: true }));
   if (cancelamento) linhas.push(L("*** CANCELADO ***", { b: true, g: true, c: true }));
   if (alteracao) linhas.push(L("*** ALTERADO ***", { b: true, g: true, c: true }));
   linhas.push(L(titulo(p), { b: true, g: true }));
@@ -790,7 +793,7 @@ export async function imprimirProducao(p, quem, opts = {}) {
   }
   if (!porSetor.size) return;
   const ops = [];
-  const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : opts.alteracao ? " (alterado)" : ""}`;
+  const nome = `${titulo(p)}${opts.cancelamento ? " (cancelado)" : opts.alteracao ? " (alterado)" : opts.adicional ? " (adicional)" : ""}`;
   // separado: um papel para cada setor (padrão da loja em Ajustes, ou forçado pelo botão)
   if (opts.separado ?? lj.papelPorSetor) {
     for (const [s, its] of porSetor) ops.push(filaImpressao(impressoraDoSetor(s, p.tipo), `${nomeSetor(s)} · ${nome}`, cupomProducao(p, its, s, quem, opts), { setor: s, pedido: p.id }));

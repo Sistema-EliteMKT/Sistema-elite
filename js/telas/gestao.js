@@ -406,6 +406,9 @@ export function abaAjustes(el) {
       <label class="f" for="as">Frase do cardápio</label><input class="in" id="as" value="${esc(lj.slogan || "")}">
       <div class="opts dois"><div><label class="f" for="am">Número de mesas</label><input class="in" id="am" type="number" min="1" max="200" value="${lj.nMesas}"></div>
         <div><label class="f" for="asv">Taxa de serviço (%)</label><input class="in" id="asv" type="number" min="0" max="30" value="${lj.taxaServico}"></div></div>
+      <div class="grp">Previsão para o cliente <small>aparece no cardápio online</small></div>
+      <div class="opts dois"><div><label class="f" for="tem">Entrega: de (min)</label><input class="in" id="tem" type="number" min="0" value="${lj.tempoEntregaMin ?? ""}"></div><div><label class="f" for="teM">até (min)</label><input class="in" id="teM" type="number" min="0" value="${lj.tempoEntregaMax ?? ""}"></div>
+        <div><label class="f" for="trm">Retirada: de (min)</label><input class="in" id="trm" type="number" min="0" value="${lj.tempoRetiradaMin ?? ""}"></div><div><label class="f" for="trM">até (min)</label><input class="in" id="trM" type="number" min="0" value="${lj.tempoRetiradaMax ?? ""}"></div></div>
       <label class="f" for="af">Formas de pagamento (separe por vírgula)</label><input class="in" id="af" value="${esc((lj.formasPagamento || []).join(", "))}">
       <label class="opt"><input type="checkbox" id="amm" ${lj.meiaPorcaoMesa !== false ? "checked" : ""}><span>Vender meia porção na mesa</span></label>
       <label class="opt"><input type="checkbox" id="amd" ${lj.meiaPorcaoDelivery ? "checked" : ""}><span>Vender meia porção no delivery e na retirada <small>(desligado: só na mesa)</small></span></label>
@@ -584,6 +587,7 @@ export function abaAjustes(el) {
     nMesas: Math.max(1, Math.min(200, Number($("#am", el).value) || lj.nMesas)), taxaServico: Math.max(0, Number($("#asv", el).value) || 0),
     formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean),
     meiaPorcaoMesa: $("#amm", el).checked, meiaPorcaoDelivery: $("#amd", el).checked,
+    tempoEntregaMin: Number($("#tem", el).value) || 0, tempoEntregaMax: Number($("#teM", el).value) || 0, tempoRetiradaMin: Number($("#trm", el).value) || 0, tempoRetiradaMax: Number($("#trM", el).value) || 0,
   }).then(() => toast("Salvo ✓")).catch(erro);
 
   // Impressoras e setores (editados em memória e salvos juntos)

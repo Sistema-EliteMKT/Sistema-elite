@@ -44,6 +44,8 @@ export const LOJA_INICIAL = {
   taxaServico: 10,            // % sugerido no fechamento da mesa (pode tirar na hora)
   meiaPorcaoMesa: true,       // meia porção na mesa
   meiaPorcaoDelivery: false,  // meia porção no delivery/retirada (desligado: só na mesa)
+  tempoEntregaMin: 40, tempoEntregaMax: 60,      // previsão para o cliente (minutos)
+  tempoRetiradaMin: 20, tempoRetiradaMax: 30,
   aceitaOnline: true,         // false: cardápio fechado para pedidos (o horário fica em horarios / modoOnline / excecaoHoje)
   horarios: HORARIOS_PADRAO,
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm

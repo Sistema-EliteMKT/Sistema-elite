@@ -3,7 +3,7 @@ import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoS
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
-import { statusOnline } from "../horario.js";
+import { statusOnline, previsao } from "../horario.js";
 import { buscarCep } from "../entrega.js";
 import { montarItem, editarItem } from "./item.js";
 
@@ -27,7 +27,7 @@ export function telaCardapio(raiz) {
       <header class="c-hero"><div class="pat" aria-hidden="true"></div><div class="c-hero-in">
         ${lj.logoClaro ? `<img src="${esc(lj.logoClaro)}" alt="${esc(lj.nome)}">` : `<h1>${esc(lj.nome)}</h1>`}
         ${lj.slogan ? `<p>${esc(lj.slogan)}</p>` : ""}
-        <div class="facts"><span id="statusOnline" class="${statusOnline(lj).aberto ? "st-aberto" : "st-fechado"}">${statusOnline(lj).aberto ? "🟢" : "🔴"} ${esc(statusOnline(lj).texto)}</span>${lj.telefone ? `<span>${esc(lj.telefone)}</span>` : ""}</div>
+        <div class="facts"><span id="statusOnline" class="${statusOnline(lj).aberto ? "st-aberto" : "st-fechado"}">${statusOnline(lj).aberto ? "🟢" : "🔴"} ${esc(statusOnline(lj).texto)}</span>${previsao(lj, "entrega") ? `<span>🛵 Entrega ${esc(previsao(lj, "entrega"))}</span>` : ""}${previsao(lj, "retirada") ? `<span>🥡 Retirada ${esc(previsao(lj, "retirada"))}</span>` : ""}${lj.telefone ? `<span>${esc(lj.telefone)}</span>` : ""}</div>
       </div></header>
       <div class="c-wrap">
         <div id="acomp"></div>
@@ -71,6 +71,7 @@ export function telaCardapio(raiz) {
     const s = abrirSheet(`${cabecalhoSheet("Sua sacola")}<div class="sh-b">
       <div id="linhas"></div>
       <div class="seg" id="modo"><button data-m="entrega">Entrega</button><button data-m="retirada">Retirar no balcão</button></div>
+      <p class="previsao" id="previsao" role="status"></p>
       <label class="f" for="cn">Seu nome</label><input class="in" id="cn" autocomplete="name" value="${esc(salvo.nome || "")}">
       <label class="f" for="ct">WhatsApp</label><input class="in" id="ct" type="tel" autocomplete="tel" inputmode="tel" value="${esc(salvo.telefone || "")}">
       <div id="end">
@@ -132,6 +133,7 @@ export function telaCardapio(raiz) {
     const atualizar = () => {
       $$("[data-m]", s).forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === modo));
       $("#end", s).hidden = modo !== "entrega";
+      $("#previsao", s).textContent = previsao(lj, modo) ? `⏱️ Previsão: ${previsao(lj, modo)}` : "";
       $("#trocoBox", s).hidden = $("#cp", s).value !== "Dinheiro";
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
@@ -197,6 +199,13 @@ export function telaCardapio(raiz) {
     const fim = !acompanhando || ["concluido", "cancelado"].includes(acompanhando.status);
     if (!fim) timer = setTimeout(() => acompanhar(id), 15000);
   };
+  // "Previsão: entre 20:40 e 21:00", contada a partir da hora do pedido.
+  const previsaoHora = (p) => {
+    if (["pronto", "saiu", "concluido", "cancelado"].includes(p.status)) return "";
+    const lj = loja(), a = Number(lj[p.tipo === "entrega" ? "tempoEntregaMin" : "tempoRetiradaMin"]), b = Number(lj[p.tipo === "entrega" ? "tempoEntregaMax" : "tempoRetiradaMax"]);
+    if (!(a > 0)) return "";
+    return `<p class="previsao">⏱️ Previsão: ${b > a ? `entre ${hora(p.criadoEm + a * 60000)} e ${hora(p.criadoEm + b * 60000)}` : `por volta de ${hora(p.criadoEm + a * 60000)}`}</p>`;
+  };
   const desenharAcomp = () => {
     const el = $("#acomp", raiz);
     if (!el) return;
@@ -207,7 +216,7 @@ export function telaCardapio(raiz) {
     const nomes = { ...ETAPAS, novo: "Pedido recebido", concluido: p.tipo === "entrega" ? "Entregue" : "Retirado", pronto: "Pronto para retirar" };
     el.innerHTML = p.status === "cancelado"
       ? `<div class="track"><h3>Pedido cancelado</h3><p class="muted">${esc(p.motivo || "Fale com a gente pelo telefone.")}</p><button class="btn sec sm" id="okAc">Ok</button></div>`
-      : `<div class="track"><h3>Seu pedido${p.numero ? ` #${p.numero}` : ""}</h3><p class="muted">Feito às ${hora(p.criadoEm)} · ${brl(totalPedido(p))}</p>
+      : `<div class="track"><h3>Seu pedido${p.numero ? ` #${p.numero}` : ""}</h3><p class="muted">Feito às ${hora(p.criadoEm)} · ${brl(totalPedido(p))}</p>${previsaoHora(p)}
         <ol class="steps">${passos.map((k, i) => `<li class="${i < atual ? "done" : i === atual ? "now" : ""}">${esc(nomes[k])}</li>`).join("")}</ol></div>`;
     const ok = $("#okAc", el);
     if (ok) ok.onclick = () => { gravarLocal({ ultimo: null }); acompanhando = null; desenharAcomp(); };

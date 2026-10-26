@@ -357,3 +357,5 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .hor-lin{display:grid;grid-template-columns:110px 1fr auto 1fr;gap:8px;align-items:center;margin-bottom:6px}.hor-lin .opt{margin:0}
 .c-hero .facts .st-aberto{background:rgba(46,125,50,.9)}.c-hero .facts .st-fechado{background:rgba(198,40,40,.92)}
 .obrig{color:var(--bad)}input.falta{border-color:var(--bad)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--bad) 25%,transparent)}
+.busca-ped{margin:0 0 12px}.busca-ped .in{width:100%}
+.previsao{margin:6px 0 10px;font-weight:700;font-size:14.5px}.c-hero .facts span{white-space:nowrap}

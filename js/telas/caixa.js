@@ -30,6 +30,17 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   let primeira = true;
   const admin = usuario.papel === "admin";
   const mbEscolhido = {}; // motoboy escolhido no cartão, antes de despachar
+  let buscaPed = "", buscaMesa = "";
+  const sem = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // Casa o que foi digitado com nome, telefone, número do pedido/comanda, mesa, endereço ou atendente.
+  const casaPedido = (p, q) => {
+    const c = p.cliente || {};
+    const campos = [p.nome, c.nome, c.telefone, c.endereco, c.bairro, c.rua, p.numero && `#${p.numero}`, p.numero, p.mesa && `mesa ${p.mesa}`, p.garcom, p.atendente, p.criadoPor];
+    const dig = q.replace(/\D/g, "");
+    return campos.some((x) => x != null && sem(x).includes(q)) || (dig.length >= 4 && String(c.telefone || "").replace(/\D/g, "").includes(dig));
+  };
+  // Põe o foco de volta na barra de busca depois de redesenhar a aba.
+  const refocar = (el, sel) => { const n = $(sel, el); if (n) { n.focus(); const l = n.value.length; n.setSelectionRange(l, l); } };
 
   const desenhar = () => {
     // Aviso sonoro de pedido online novo
@@ -131,15 +142,26 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const por = (sts) => ps.filter((p) => sts.includes(p.status)).sort((a, b) => a.criadoEm - b.criadoEm);
     const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
     const col = (titulo, lista, vazio) => `<section class="coluna"><h3>${titulo}<span>${lista.length}</span></h3>${lista.length ? lista.map(cartao).join("") : `<p class="muted pq">${vazio}</p>`}</section>`;
+    const q = sem(buscaPed.trim());
+    const achados = q ? D.doDia.filter((p) => !["cancelado", "cancelada"].includes(p.status) && casaPedido(p, q)).sort((a, b) => b.criadoEm - a.criadoEm) : [];
+    const resultado = q ? `<div class="card"><div class="card-h"><b>${achados.length} ${achados.length === 1 ? "resultado" : "resultados"} para “${esc(buscaPed.trim())}”</b><button class="btn ghost sm" id="limparBusca">Limpar busca</button></div>
+      ${achados.map((p) => p.tipo === "mesa"
+        ? `<div class="cl"><div class="n"><b>Mesa ${p.mesa} · ${esc(rotuloComanda(p))}${p.nome ? " · " + esc(p.nome) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.garcom || "")} · ${p.aberto ? (p.status === "conta" ? "pediu a conta" : "aberta") : "fechada"}</small></div><div class="v">${brl(subtotal(p))}${p.aberto ? `<button class="btn ghost sm" data-abrirmesa="${p.mesa}">Abrir mesa</button>` : ""}</div></div>`
+        : cartao(p)).join("") || `<p class="vazio">Nada encontrado hoje.</p>`}</div>` : "";
     el.innerHTML = `${kpis()}
+      <div class="busca-ped"><input class="in" id="buscaPed" type="search" placeholder="🔎 Buscar pedido por nome, telefone, nº do pedido, comanda ou mesa" value="${esc(buscaPed)}" aria-label="Buscar pedido"></div>
+      ${resultado}
       <div id="barraOnline"></div>
       <div class="novos-ped"><button class="btn pri grande" data-novo="entrega">🛵 Novo pedido · Delivery</button><button class="btn sec grande" data-novo="retirada">🥡 Novo pedido · Retirada</button><button class="btn ghost grande" data-novo="balcao">🧾 Balcão</button></div>
-      <div class="colunas">
+      ${q ? "" : `<div class="colunas">
       ${col("Novos", por(["novo"]), "Nenhum.")}
       ${col("Em preparo", por(["preparo"]), "Nenhum.")}
       ${col("Pronto / na rua", por(["pronto", "saiu"]), "Nenhum.")}
-      ${col("Concluídos", feitos, "Nenhum ainda.")}</div>`;
+      ${col("Concluídos", feitos, "Nenhum ainda.")}</div>`}`;
     barraOnline($("#barraOnline", el));
+    $("#buscaPed", el).oninput = (e) => { buscaPed = e.target.value; abaPedidos(el); refocar(el, "#buscaPed"); };
+    $("#limparBusca", el) && ($("#limparBusca", el).onclick = () => { buscaPed = ""; abaPedidos(el); });
+    $$("[data-abrirmesa]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.abrirmesa)));
     $$("[data-novo]", el).forEach((b) => (b.onclick = () => novoPedido(b.dataset.novo)));
     $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.pedidos.find((p) => p.id === b.dataset.id))));
     $$("[data-mb]", el).forEach((s) => (s.onchange = () => (mbEscolhido[s.dataset.mb] = s.value)));
@@ -209,6 +231,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ${(p.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado || p.pago ? "" : `<button class="btn ghost sm" data-edl="${i.key}">Editar</button>${p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : ""}` })).join("")}
       ${p.cliente?.telefone ? `<p><a href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">WhatsApp ${esc(p.cliente.telefone)}</a></p>` : ""}
       <div class="linha-btn wrap">
+        ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
@@ -219,10 +242,33 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       if (motivo == null) return;
       try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); fecharSheet(); } catch (e) { erro(e); }
     }));
+    $("#addItens", s) && ($("#addItens", s).onclick = () => adicionarNoPedido(p));
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
     $("#voltarPreparo", s) && ($("#voltarPreparo", s).onclick = async () => { await mudarEtapa(p, "preparo"); fecharSheet(); });
     $("#cancelar", s).onclick = () => { fecharSheet(); acaoPedido("cancelar", p); };
+  }
+
+  // Cliente ligou para colocar mais coisa no pedido de delivery/retirada que já foi enviado.
+  function adicionarNoPedido(p) {
+    const itens = [];
+    const s = abrirSheet(`${cabecalhoSheet(`Adicionar ao pedido #${p.numero || ""}`, p.cliente?.nome || "")}<div class="sh-b novo-ped">
+      <div class="np-sel" id="sel"></div>
+      <div class="np-form"><div class="grp">Itens a adicionar</div><div id="itens"></div><div class="sum" id="somaAd"></div>
+        <button class="btn ok cheio grande" id="env">Adicionar e enviar para a cozinha</button></div></div>`, { largo: true });
+    const atualizar = () => {
+      $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="btn ghost sm" data-ed="${k}">Editar</button><button class="mini-x" data-rm="${k}">×</button>` })).join("") || `<p class="vazio">Escolha os produtos ao lado.</p>`;
+      $("#somaAd", s).innerHTML = itens.length ? `<div><span>Novo total do pedido</span><span>${brl(totalPedido(p) + itens.reduce((t, i) => t + i.unit * i.qtd, 0))}</span></div>` : "";
+      $$("[data-rm]", s).forEach((b) => (b.onclick = () => { itens.splice(+b.dataset.rm, 1); atualizar(); }));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(itens[b.dataset.ed], "delivery", (novo) => { itens[b.dataset.ed] = novo; atualizar(); })));
+    };
+    seletorProdutos($("#sel", s), (i) => { itens.push(i); atualizar(); }, { onde: "delivery" });
+    $("#env", s).onclick = async (ev) => {
+      if (!itens.length) return toast("Escolha os itens.");
+      ev.currentTarget.disabled = true;
+      try { await lancarItens(p.id, itens, usuario); toast("Itens adicionados e enviados para a cozinha ✓", "bom"); fecharSheet(); } catch (e) { erro(e); ev.currentTarget.disabled = false; }
+    };
+    atualizar();
   }
 
   const salvarCliente = (p) => {
@@ -326,11 +372,14 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   // -------------------------------------------------------------------- Mesas
   function abaMesas(el) {
     const n = Number(loja().nMesas) || 0;
-    const oc = Array.from({ length: n }, (_, i) => ({ m: i + 1, ...situacaoMesa(i + 1) })).filter((s) => s.status !== "livre")
+    const qm = sem(buscaMesa.trim());
+    const todas = Array.from({ length: n }, (_, i) => ({ m: i + 1, ...situacaoMesa(i + 1) })).filter((s) => s.status !== "livre");
+    const oc = todas.filter((s) => !qm || String(s.m) === qm.replace(/^mesa\s*/, "") || s.comandas.some((c) => casaPedido(c, qm)))
       .sort((a, b) => (b.status === "conta") - (a.status === "conta") || a.desde - b.desde);
-    el.innerHTML = `<div class="kpis"><div class="kpi"><b>${oc.length}/${n}</b><span>mesas ocupadas</span></div>
-      <div class="kpi"><b>${brl(oc.reduce((s, m) => s + m.total, 0))}</b><span>em comandas abertas</span></div>
-      <div class="kpi"><b>${oc.filter((m) => m.status === "conta").length}</b><span>pedindo a conta</span></div></div>
+    el.innerHTML = `<div class="kpis"><div class="kpi"><b>${todas.length}/${n}</b><span>mesas ocupadas</span></div>
+      <div class="kpi"><b>${brl(todas.reduce((s, m) => s + m.total, 0))}</b><span>em comandas abertas</span></div>
+      <div class="kpi"><b>${todas.filter((m) => m.status === "conta").length}</b><span>pedindo a conta</span></div></div>
+      <div class="busca-ped"><input class="in" id="buscaMesa" type="search" placeholder="🔎 Buscar mesa, comanda ou nome do cliente" value="${esc(buscaMesa)}" aria-label="Buscar mesa"></div>
       <div class="grade-mesas">${oc.map((s) => `<article class="card mesa-card ${s.status === "conta" ? "conta" : ""}">
         <div class="card-h"><b class="mc-t">Mesa ${s.m}</b><span class="pill ${s.status === "conta" ? "bad" : "st-ocupada"}">${s.status === "conta" ? "Pediu a conta" : "Aberta"}</span></div>
         <small class="muted">${esc(s.comandas[0].garcom || "")} · desde ${hora(s.desde)}${s.pessoas ? ` · ${s.pessoas} ${s.pessoas > 1 ? "pessoas" : "pessoa"}` : ""} · ${s.comandas.length} ${s.comandas.length > 1 ? "comandas" : "comanda"}</small>
@@ -339,7 +388,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         <div class="pe-t"><span>Total</span><b>${brl(s.total)}</b></div>
         <button class="btn pri cheio" data-fechar="${s.m}">Fechar conta</button>
         <div class="pe-links"><button data-imp="${s.m}">Imprimir conta</button><button data-set="${s.m}">Imprimir por setor</button><button data-det="${s.m}">Lançar / editar</button><button data-troc="${s.m}">Trocar mesa</button></div>
-      </article>`).join("") || `<p class="vazio">Nenhuma mesa aberta. Use “+ Abrir mesa” ou o app do garçom.</p>`}</div>`;
+      </article>`).join("") || `<p class="vazio">${qm ? "Nenhuma mesa com esse nome ou número." : "Nenhuma mesa aberta. Use “+ Abrir mesa” ou o app do garçom."}</p>`}</div>`;
+    $("#buscaMesa", el).oninput = (e) => { buscaMesa = e.target.value; abaMesas(el); refocar(el, "#buscaMesa"); };
     const cs = (m) => comandasDaMesa(+m);
     $$("[data-fechar]", el).forEach((b) => (b.onclick = () => escolher(cs(b.dataset.fechar), "Fechar conta", (sel) =>
       receber(sel, usuario, { servico: servicoDe(sel), titulo: `Fechar mesa ${b.dataset.fechar}` }))));

@@ -36,3 +36,10 @@ export function statusOnline(lj, agora = new Date()) {
   }
   return { aberto: false, texto: "Fechado no momento", motivo };
 }
+
+// Previsão mostrada ao cliente: "40 a 60 min" (tipo: "entrega" ou "retirada").
+export function previsao(lj, tipo) {
+  const a = Number(lj[tipo === "entrega" ? "tempoEntregaMin" : "tempoRetiradaMin"]), b = Number(lj[tipo === "entrega" ? "tempoEntregaMax" : "tempoRetiradaMax"]);
+  if (!(a > 0) && !(b > 0)) return "";
+  return a > 0 && b > a ? `${a} a ${b} min` : `${a || b} min`;
+}
