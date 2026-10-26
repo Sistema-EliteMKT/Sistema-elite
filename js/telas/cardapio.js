@@ -3,6 +3,7 @@ import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoS
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
+import { statusOnline } from "../horario.js";
 import { montarItem, editarItem } from "./item.js";
 
 const K = "se_cliente";
@@ -24,7 +25,7 @@ export function telaCardapio(raiz) {
       <header class="c-hero"><div class="pat" aria-hidden="true"></div><div class="c-hero-in">
         ${lj.logoClaro ? `<img src="${esc(lj.logoClaro)}" alt="${esc(lj.nome)}">` : `<h1>${esc(lj.nome)}</h1>`}
         ${lj.slogan ? `<p>${esc(lj.slogan)}</p>` : ""}
-        <div class="facts"><span>${lj.aceitaOnline ? "Aberto para pedidos" : "Fechado para pedidos agora"}</span>${lj.telefone ? `<span>${esc(lj.telefone)}</span>` : ""}</div>
+        <div class="facts"><span id="statusOnline" class="${statusOnline(lj).aberto ? "st-aberto" : "st-fechado"}">${statusOnline(lj).aberto ? "🟢" : "🔴"} ${esc(statusOnline(lj).texto)}</span>${lj.telefone ? `<span>${esc(lj.telefone)}</span>` : ""}</div>
       </div></header>
       <div class="c-wrap">
         <div id="acomp"></div>
@@ -41,7 +42,7 @@ export function telaCardapio(raiz) {
       document.getElementById("sec-" + cat)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
     $$("[data-p]", raiz).forEach((b) => (b.onclick = () => {
-      if (!loja().aceitaOnline) return toast("Estamos fechados para pedidos online agora.");
+      if (!statusOnline(loja()).aberto) return toast(`${statusOnline(loja()).texto}. Não estamos aceitando pedidos agora.`);
       const p = D.produtos.find((x) => x.id === b.dataset.p);
       montarItem(p, (item) => { sacola.push(item); toast("Adicionado à sacola"); desenhar(); }, { onde: "delivery" });
     }));
@@ -114,6 +115,8 @@ export function telaCardapio(raiz) {
     $$("[data-m]", s).forEach((b) => (b.onclick = () => { modo = b.dataset.m; atualizar(); }));
     $$("select", s).forEach((x) => (x.onchange = atualizar));
     $("#enviar", s).onclick = async () => {
+      const st = statusOnline(loja());
+      if (!st.aberto) return ($("#err", s).textContent = `${st.texto}. Não estamos aceitando pedidos agora.`);
       const c = { nome: $("#cn", s).value.trim(), telefone: $("#ct", s).value.trim(), endereco: $("#ce", s).value.trim(), bairro: porRaio ? loc?.bairro || "" : $("#cb", s)?.value || "", referencia: $("#cr", s).value.trim() };
       if (porRaio && loc && !loc.fora) Object.assign(c, { lat: loc.ponto[0], lng: loc.ponto[1], distanciaKm: loc.km != null ? Math.round(loc.km * 10) / 10 : null, area: loc.area || "", cep: loc.cep || "" });
       const e = $("#err", s);
@@ -170,8 +173,13 @@ export function telaCardapio(raiz) {
     if (ok) ok.onclick = () => { gravarLocal({ ultimo: null }); acompanhando = null; desenharAcomp(); };
   };
 
+  // O horário muda com o tempo: atualiza o "Aberto até…" sem redesenhar a tela toda.
+  const relogio = setInterval(() => {
+    const e = document.getElementById("statusOnline"), st = statusOnline(loja());
+    if (e) { e.textContent = `${st.aberto ? "🟢" : "🔴"} ${st.texto}`; e.className = st.aberto ? "st-aberto" : "st-fechado"; }
+  }, 30000);
   const parar = aoMudar(desenhar);
   desenhar();
   acompanhar(lerLocal().ultimo);
-  return () => { parar(); clearTimeout(timer); };
+  return () => { parar(); clearTimeout(timer); clearInterval(relogio); };
 }

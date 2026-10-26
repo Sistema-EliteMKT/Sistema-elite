@@ -8,6 +8,7 @@ const CANAIS = [["todos", "Mesa e delivery"], ["mesa", "Só mesa"], ["delivery",
 import { store, novoId } from "../store.js";
 import { lerEstacao, gravarEstacao } from "../estacao.js";
 import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
+import { cardHorario } from "./horario-ui.js";
 import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, zonasDe, CENTRO_PADRAO } from "../entrega.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
@@ -408,7 +409,6 @@ export function abaAjustes(el) {
       <label class="f" for="af">Formas de pagamento (separe por vírgula)</label><input class="in" id="af" value="${esc((lj.formasPagamento || []).join(", "))}">
       <label class="opt"><input type="checkbox" id="amm" ${lj.meiaPorcaoMesa !== false ? "checked" : ""}><span>Vender meia porção na mesa</span></label>
       <label class="opt"><input type="checkbox" id="amd" ${lj.meiaPorcaoDelivery ? "checked" : ""}><span>Vender meia porção no delivery e na retirada <small>(desligado: só na mesa)</small></span></label>
-      <label class="opt"><input type="checkbox" id="ao" ${lj.aceitaOnline ? "checked" : ""}><span>Cardápio online aceitando pedidos</span></label>
       <button class="btn pri" id="salvarLoja">Salvar</button></div>
 
     <div class="card inteiro"><b>Impressoras e setores</b>
@@ -434,6 +434,8 @@ export function abaAjustes(el) {
       <input class="in" readonly value="${esc(linkCardapio)}" id="link"><div class="linha-btn wrap"><button class="btn sec sm" id="copiar">Copiar link</button><a class="btn sec sm" href="${esc(linkCardapio)}" target="_blank" rel="noopener">Abrir</a>
       <a class="btn sec sm" target="_blank" rel="noopener" href="https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(linkCardapio)}">QR Code</a></div></div>
 
+    <div class="card inteiro" id="cardHorario"></div>
+
     <div class="card inteiro" id="cardRaio"><b>Taxa de entrega pelo mapa (raios e áreas)</b>
       <p class="muted pq">Duas formas, que podem ser usadas juntas: <b>raios</b> (círculos ao redor da pizzaria, em km) e <b>áreas desenhadas</b> (você clica nos cantos no mapa, dá o nome e a taxa). O cliente informa o CEP ou usa a localização do celular e a taxa é calculada sozinha. A área desenhada vale antes do raio. Fora de tudo, o app avisa que não entrega. Sem nada cadastrado, vale a lista de bairros.</p>
       <div class="loc-cep"><input class="in" id="rBusca" placeholder="CEP ou endereço da pizzaria" value="${esc(lj.endereco || "")}"><span></span><button class="btn ghost" id="rAchar">Buscar</button></div>
@@ -451,6 +453,8 @@ export function abaAjustes(el) {
       <div id="fiscalForm"><p class="muted">Carregando…</p></div></div>
 
   </div>`;
+
+  cardHorario($("#cardHorario", el));
 
   // Entrega por distância: mapa com a pizzaria e os raios desenhados
   {
@@ -577,7 +581,7 @@ export function abaAjustes(el) {
   $("#salvarLoja", el).onclick = () => store.salvar("config", "loja", {
     nome: $("#an", el).value.trim() || lj.nome, telefone: $("#at", el).value.trim(), endereco: $("#ae", el).value.trim(), slogan: $("#as", el).value.trim(),
     nMesas: Math.max(1, Math.min(200, Number($("#am", el).value) || lj.nMesas)), taxaServico: Math.max(0, Number($("#asv", el).value) || 0),
-    formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean), aceitaOnline: $("#ao", el).checked,
+    formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean),
     meiaPorcaoMesa: $("#amm", el).checked, meiaPorcaoDelivery: $("#amd", el).checked,
   }).then(() => toast("Salvo ✓")).catch(erro);
 

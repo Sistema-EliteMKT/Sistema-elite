@@ -13,6 +13,7 @@ import { receber } from "./pagamento.js";
 import { abaFluxo } from "./fluxo.js";
 import { abrirConta, trocarMesaUI } from "./conta.js";
 import { abaPromocoes } from "./promocoes.js";
+import { barraOnline } from "./horario-ui.js";
 import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
 import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
@@ -131,12 +132,14 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
     const col = (titulo, lista, vazio) => `<section class="coluna"><h3>${titulo}<span>${lista.length}</span></h3>${lista.length ? lista.map(cartao).join("") : `<p class="muted pq">${vazio}</p>`}</section>`;
     el.innerHTML = `${kpis()}
+      <div id="barraOnline"></div>
       <div class="novos-ped"><button class="btn pri grande" data-novo="entrega">🛵 Novo pedido · Delivery</button><button class="btn sec grande" data-novo="retirada">🥡 Novo pedido · Retirada</button><button class="btn ghost grande" data-novo="balcao">🧾 Balcão</button></div>
       <div class="colunas">
       ${col("Novos", por(["novo"]), "Nenhum.")}
       ${col("Em preparo", por(["preparo"]), "Nenhum.")}
       ${col("Pronto / na rua", por(["pronto", "saiu"]), "Nenhum.")}
       ${col("Concluídos", feitos, "Nenhum ainda.")}</div>`;
+    barraOnline($("#barraOnline", el));
     $$("[data-novo]", el).forEach((b) => (b.onclick = () => novoPedido(b.dataset.novo)));
     $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.pedidos.find((p) => p.id === b.dataset.id))));
     $$("[data-mb]", el).forEach((s) => (s.onchange = () => (mbEscolhido[s.dataset.mb] = s.value)));
@@ -454,6 +457,6 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   delete raiz.dataset.pronto;
   desenhar();
   // O aviso de impressão parada depende da hora que passa, não só de mudanças no banco.
-  const relogio = setInterval(() => { if (raiz.isConnected) avisoImpressora(); }, 20000);
+  const relogio = setInterval(() => { if (raiz.isConnected) { avisoImpressora(); const b = $("#barraOnline", raiz); if (b && aba === "pedidos") barraOnline(b); } }, 20000);
   return () => { parar(); clearInterval(relogio); };
 }

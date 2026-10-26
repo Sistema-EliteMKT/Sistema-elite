@@ -25,6 +25,13 @@ export const MARCA = {
   instagram: "@elitefilmsdigital",
 };
 
+// Horário de funcionamento do cardápio online, por dia da semana (0 = domingo). Muda em Caixa > Ajustes.
+export const HORARIOS_PADRAO = {
+  0: { ativo: true, de: "18:10", ate: "23:10" }, 1: { ativo: true, de: "18:10", ate: "22:45" }, 2: { ativo: true, de: "18:10", ate: "22:45" },
+  3: { ativo: true, de: "18:10", ate: "22:45" }, 4: { ativo: true, de: "18:10", ate: "22:45" }, 5: { ativo: true, de: "18:10", ate: "23:10" },
+  6: { ativo: true, de: "18:10", ate: "23:45" },
+};
+
 // 3) VALORES INICIAIS DA LOJA (usados só na primeira vez; depois, Caixa > Ajustes)
 export const LOJA_INICIAL = {
   nome: "Pizzaria Amarílis",
@@ -37,7 +44,8 @@ export const LOJA_INICIAL = {
   taxaServico: 10,            // % sugerido no fechamento da mesa (pode tirar na hora)
   meiaPorcaoMesa: true,       // meia porção na mesa
   meiaPorcaoDelivery: false,  // meia porção no delivery/retirada (desligado: só na mesa)
-  aceitaOnline: true,         // cardápio do cliente aceita pedidos
+  aceitaOnline: true,         // false: cardápio fechado para pedidos (o horário fica em horarios / modoOnline / excecaoHoje)
+  horarios: HORARIOS_PADRAO,
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm
   imprimirCancelamento: false, // true: cancelar item/comanda também imprime o aviso CANCELADO no setor
   papelPorSetor: true,        // true: um papel para cada setor (Amarílis) · false: um papel por impressora, dividido por setor
