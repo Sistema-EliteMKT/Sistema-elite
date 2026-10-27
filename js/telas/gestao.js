@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, hoje, dataHora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy } from "../regras.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy, pedidosPorBairro, imprimirRelatorioBairros } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -16,13 +16,13 @@ import { htmlCupom } from "../imprimir-navegador.js";
 // ----------------------------------------------------------------- Motoboys
 // Período do relatório (fica lembrado enquanto o painel está aberto).
 let perMb = { tipo: "hoje", de: "", ate: "" };
-const periodoMb = () => {
+const periodoDe = (perMb) => {
   const d = new Date(), h = hoje(), dia = (n) => hoje(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime());
   const mes = (n) => { const a = new Date(d.getFullYear(), d.getMonth() + n, 1), b = new Date(d.getFullYear(), d.getMonth() + n + 1, 0); return [hoje(a.getTime()), hoje(b.getTime())]; };
   return { hoje: [h, h], ontem: [dia(-1), dia(-1)], semana: [dia(-6), h], mes: mes(0), mespassado: mes(-1), outro: [perMb.de || h, perMb.ate || perMb.de || h] }[perMb.tipo];
 };
 function relatorioMotoboys(el) {
-  const [ini, fim] = periodoMb();
+  const [ini, fim] = periodoDe(perMb);
   const abas = [["hoje", "Hoje"], ["ontem", "Ontem"], ["semana", "7 dias"], ["mes", "Este mês"], ["mespassado", "Mês passado"], ["outro", "Escolher datas"]];
   el.innerHTML = `<div class="card inteiro"><div class="card-h"><div><b>📋 Relatório dos motoboys</b><small>Entregas, taxas e dinheiro a acertar de cada um no período.</small></div></div>
     <div class="chips" style="flex-wrap:wrap">${abas.map(([v, l]) => `<button class="chip ${perMb.tipo === v ? "on" : ""}" data-per="${v}">${l}</button>`).join("")}</div>
@@ -45,6 +45,27 @@ function relatorioMotoboys(el) {
     if (nomes.length) alvo.insertAdjacentHTML("beforeend", `<div class="sum"><div class="t"><span>Total (${tot.qtd} entregas)</span><span>${brl(tot.taxas)} em taxas</span></div></div>`);
     $$("[data-imp]", alvo).forEach((b) => (b.onclick = () => imprimirRelatorioMotoboy(b.dataset.imp, ini, fim, por[b.dataset.imp]).then(() => toast("Relatório enviado para impressão")).catch(erro)));
   }).catch((e) => { const a = $("#mbRes", el); if (a) a.innerHTML = `<p class="ruim-txt">${esc(e.message)}</p>`; });
+}
+
+let perBa = { tipo: "mes", de: "", ate: "" };
+function relatorioBairros(el) {
+  const [ini, fim] = periodoDe(perBa);
+  const abas = [["hoje", "Hoje"], ["ontem", "Ontem"], ["semana", "7 dias"], ["mes", "Este mês"], ["mespassado", "Mês passado"], ["outro", "Escolher datas"]];
+  el.innerHTML = `<div class="card inteiro"><div class="card-h"><div><b>📍 Pedidos por bairro</b><small>Quantos pedidos de entrega vieram de cada bairro e a porcentagem do total.</small></div></div>
+    <div class="chips" style="flex-wrap:wrap">${abas.map(([v, l]) => `<button class="chip ${perBa.tipo === v ? "on" : ""}" data-pb="${v}">${l}</button>`).join("")}</div>
+    ${perBa.tipo === "outro" ? `<div class="linha-btn wrap"><input class="in" type="date" id="baDe" value="${esc(ini)}" aria-label="De"><input class="in" type="date" id="baAte" value="${esc(fim)}" aria-label="Até"></div>` : ""}
+    <div id="baRes"><p class="muted">Carregando…</p></div></div>`;
+  $$("[data-pb]", el).forEach((b) => (b.onclick = () => { perBa.tipo = b.dataset.pb; relatorioBairros(el); }));
+  $("#baDe", el) && ($("#baDe", el).onchange = (e) => { perBa.de = e.target.value; relatorioBairros(el); });
+  $("#baAte", el) && ($("#baAte", el).onchange = (e) => { perBa.ate = e.target.value; relatorioBairros(el); });
+  pedidosPorBairro(ini, fim).then(({ linhas, total, valor }) => {
+    const alvo = $("#baRes", el); if (!alvo) return;
+    alvo.innerHTML = linhas.length ? `<table class="tab-rel"><thead><tr><th>Bairro</th><th>Pedidos</th><th>%</th><th>Valor</th></tr></thead><tbody>
+      ${linhas.map((l) => `<tr><td>${esc(l.bairro)}</td><td>${l.qtd}</td><td>${l.pct.toFixed(2).replace(".", ",")}%</td><td>${brl(l.valor)}</td></tr>`).join("")}
+      </tbody><tfoot><tr><td>Total</td><td>${total}</td><td>100%</td><td>${brl(valor)}</td></tr></tfoot></table>
+      <div class="linha-btn wrap"><button class="btn ghost sm" id="baImp">Imprimir</button></div>` : `<p class="vazio">Nenhum pedido de entrega neste período.</p>`;
+    $("#baImp", alvo) && ($("#baImp", alvo).onclick = () => imprimirRelatorioBairros(ini, fim, linhas, total, valor).then(() => toast("Relatório enviado para impressão")).catch(erro));
+  }).catch((e) => { const a = $("#baRes", el); if (a) a.innerHTML = `<p class="ruim-txt">${esc(e.message)}</p>`; });
 }
 
 export function abaMotoboys(el) {
@@ -264,7 +285,8 @@ export function abaRelatorio(el, { usuario }) {
       <div class="card"><b>Mais vendidos hoje</b><div class="sum">${top.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("") || `<p class="vazio">—</p>`}</div></div>
     </div>
     <div class="linha-btn"><button class="btn pri" id="fech">Imprimir fechamento do dia</button></div>
-    <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}<button class="btn ghost sm" data-desfaz="${p.id}">Desfazer</button></div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div>`;
+    <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}<button class="btn ghost sm" data-desfaz="${p.id}">Desfazer</button></div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div><div id="relBairros"></div>`;
+  relatorioBairros($("#relBairros", el));
   $$("[data-desfaz]", el).forEach((b) => (b.onclick = async () => {
     const pg = pags.find((x) => x.id === b.dataset.desfaz);
     const onde = pg.mesa ? `Mesa ${pg.mesa}` : nomesTipo[pg.tipo] || "pedido";

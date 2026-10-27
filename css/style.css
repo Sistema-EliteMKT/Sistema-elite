@@ -369,3 +369,7 @@ html,body{max-width:100%;overflow-x:clip}
 @media (max-width:640px){.p-top-in{padding:8px 12px}.p-quem .btn{flex:1 1 auto}.p-wrap{padding:8px 12px 20px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grade{grid-template-columns:minmax(0,1fr)}.card{min-width:0}.raio-lin,.hor-lin{grid-template-columns:1fr 1fr}.hor-lin .opt{grid-column:1/-1}}
 .conf-lin{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:8px;align-items:center;margin-bottom:8px}.conf-lin small{display:block;color:var(--muted)}.conf-dif{font-size:13px;font-weight:700;white-space:nowrap}@media (max-width:480px){.conf-lin{grid-template-columns:minmax(0,1fr) 110px}.conf-dif{grid-column:1/-1}}
 .cm-func{border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin:8px 0;background:var(--surface)}.cm-func summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-weight:700;padding:8px 0}
+.tab-rel{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+.tab-rel th,.tab-rel td{padding:8px 6px;border-bottom:1px solid var(--line,#e8dfc8);text-align:right}
+.tab-rel th:first-child,.tab-rel td:first-child{text-align:left}
+.tab-rel tfoot td{font-weight:800;border-bottom:0}

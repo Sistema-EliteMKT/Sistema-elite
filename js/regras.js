@@ -630,7 +630,7 @@ export const imprimirExtratoConsumo = (nome, mes, regs) => store.lote([filaImpre
 //  Relatório de motoboys: entregas, taxas e dinheiro a acertar num período
 // ---------------------------------------------------------------------------
 const cacheEntregas = new Map(); // a aba se redesenha a cada mudança: dias passados ficam em cache; o dia de hoje vem do que já está na tela
-export async function entregasPeriodo(ini, fim) {
+async function pedidosEntregaPeriodo(ini, fim) {
   const h = hoje();
   let ps = [];
   const fimPassado = fim >= h ? hoje(Date.now() - 86400000) : fim;
@@ -640,8 +640,23 @@ export async function entregasPeriodo(ini, fim) {
     else { ps = await store.consultar("pedidos", [["dia", ">=", ini], ["dia", "<=", fimPassado]]); cacheEntregas.set(k, { t: Date.now(), ps }); }
   }
   if (ini <= h && fim >= h) ps = [...ps, ...D.doDia];
-  return ps.filter((p) => p.tipo === "entrega" && p.motoboy?.nome && !["cancelado", "cancelada"].includes(p.status)).sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
+  return ps.filter((p) => p.tipo === "entrega" && !["cancelado", "cancelada"].includes(p.status)).sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
 }
+export async function entregasPeriodo(ini, fim) { return (await pedidosEntregaPeriodo(ini, fim)).filter((p) => p.motoboy?.nome); }
+// Pedidos de entrega por bairro num período, com a porcentagem sobre o total.
+export async function pedidosPorBairro(ini, fim) {
+  const todas = await pedidosEntregaPeriodo(ini, fim);
+  const por = {};
+  for (const p of todas) { const b = (p.cliente?.bairro || "").trim() || "Sem bairro"; const k = b.toLocaleUpperCase("pt-BR"); (por[k] ||= { bairro: b, qtd: 0, valor: 0 }); por[k].qtd++; por[k].valor += totalPedido(p); }
+  const total = todas.length;
+  const linhas = Object.values(por).map((l) => ({ ...l, valor: dinheiro(l.valor), pct: total ? (l.qtd / total) * 100 : 0 })).sort((a, b) => b.qtd - a.qtd || a.bairro.localeCompare(b.bairro));
+  return { linhas, total, valor: dinheiro(linhas.reduce((t, l) => t + l.valor, 0)) };
+}
+export const imprimirRelatorioBairros = (ini, fim, linhas, total, valor) => store.lote([filaImpressao(loja().impressoraConta, "Pedidos por bairro", [
+  L(loja().nome, { b: true, g: true, c: true }), SEP, L("PEDIDOS POR BAIRRO", { b: true, g: true, c: true }), L(ini === fim ? dm(ini) : `${dm(ini)} a ${dm(fim)}`, { c: true }), SEP,
+  ...linhas.map((l) => L(lado(`${l.bairro} (${l.qtd})`, `${l.pct.toFixed(1).replace(".", ",")}%`))),
+  SEP, L(lado("Total de pedidos", String(total)), { b: true }), L(lado("Valor", r2(valor))), ...rodape()])]);
+
 // Resumo de um motoboy a partir das entregas dele.
 export function resumoMotoboy(es) {
   return { qtd: es.length, taxas: dinheiro(es.reduce((t, p) => t + (Number(p.taxaEntrega) || 0), 0)),
