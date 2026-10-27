@@ -9,6 +9,7 @@ import { store, novoId } from "../store.js";
 import { lerEstacao, gravarEstacao } from "../estacao.js";
 import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
 import { cardHorario } from "./horario-ui.js";
+import { cardConsumo } from "./consumo.js";
 import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, zonasDe, CENTRO_PADRAO } from "../entrega.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
@@ -56,7 +57,7 @@ export function abaEquipe(el, { usuario, admin }) {
   const extras = Object.keys(vendas).filter((n) => !nomes.has(n)).map((nome) => ({ nome, id: "", papel: "garcom" }));
   const total = D.saidas.reduce((s, x) => s + x.valor, 0);
   const sugestao = (u) => (Number(u.diaria) || 0) + ((vendas[u.nome]?.servico || 0) * (Number(u.pctServico) || 0)) / 100;
-  el.innerHTML = `<div class="kpis"><div class="kpi"><b>${brl(total)}</b><span>pago hoje à equipe</span></div>
+  el.innerHTML = `<div id="cardConsumo"></div><div class="kpis"><div class="kpi"><b>${brl(total)}</b><span>pago hoje à equipe</span></div>
       <div class="kpi"><b>${D.saidas.length}</b><span>pagamentos</span></div></div>
     <div class="linha-btn wrap"><button class="btn pri" id="outro">+ Pagar outra pessoa</button><span class="muted pq">Ajudante de cozinha, motoboy, extra… Cadastre garçons freelancers em Ajustes › Equipe.</span></div>
     <div class="grade">${[...garcons, ...extras].map((u) => {
@@ -69,6 +70,8 @@ export function abaEquipe(el, { usuario, admin }) {
     }).join("") || `<p class="vazio">Nenhum garçom cadastrado.</p>`}</div>
     <div class="card"><b>Pagamentos de hoje</b>${D.saidas.map((x) => `<div class="cl"><div class="n"><b>${esc(x.nome)}</b><small>${hora(x.criadoEm)} · ${esc(x.funcao || "")} · ${esc(x.forma)}${x.obs ? " · " + esc(x.obs) : ""} · por ${esc(x.por)}</small></div>
       <div class="v">${brl(x.valor)}<button class="btn ghost sm" data-recibo="${x.id}">Recibo</button>${admin ? `<button class="mini-x" data-del="${x.id}" title="Apagar">×</button>` : ""}</div></div>`).join("") || `<p class="muted pq">Nenhum pagamento ainda.</p>`}</div>`;
+
+  cardConsumo($("#cardConsumo", el), { usuario, admin });
 
   const pagar = ({ nome = "", funcao = "Garçom", valor = 0 } = {}) => {
     const formas = loja().formasPagamento || ["Dinheiro", "Pix"];
@@ -406,6 +409,7 @@ export function abaAjustes(el) {
       <label class="f" for="as">Frase do cardápio</label><input class="in" id="as" value="${esc(lj.slogan || "")}">
       <div class="opts dois"><div><label class="f" for="am">Número de mesas</label><input class="in" id="am" type="number" min="1" max="200" value="${lj.nMesas}"></div>
         <div><label class="f" for="asv">Taxa de serviço (%)</label><input class="in" id="asv" type="number" min="0" max="30" value="${lj.taxaServico}"></div></div>
+      <label class="f" for="adq">Desconto no consumo de funcionário (%) <small>padrão ao lançar consumo da equipe</small></label><input class="in" id="adq" type="number" min="0" max="100" value="${Number(lj.descontoEquipe) || 0}">
       <div class="grp">Previsão para o cliente <small>aparece no cardápio online</small></div>
       <div class="opts dois"><div><label class="f" for="tem">Entrega: de (min)</label><input class="in" id="tem" type="number" min="0" value="${lj.tempoEntregaMin ?? ""}"></div><div><label class="f" for="teM">até (min)</label><input class="in" id="teM" type="number" min="0" value="${lj.tempoEntregaMax ?? ""}"></div>
         <div><label class="f" for="trm">Retirada: de (min)</label><input class="in" id="trm" type="number" min="0" value="${lj.tempoRetiradaMin ?? ""}"></div><div><label class="f" for="trM">até (min)</label><input class="in" id="trM" type="number" min="0" value="${lj.tempoRetiradaMax ?? ""}"></div></div>
@@ -587,6 +591,7 @@ export function abaAjustes(el) {
     nMesas: Math.max(1, Math.min(200, Number($("#am", el).value) || lj.nMesas)), taxaServico: Math.max(0, Number($("#asv", el).value) || 0),
     formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean),
     meiaPorcaoMesa: $("#amm", el).checked, meiaPorcaoDelivery: $("#amd", el).checked,
+    descontoEquipe: Math.min(100, Math.max(0, Number($("#adq", el).value) || 0)),
     tempoEntregaMin: Number($("#tem", el).value) || 0, tempoEntregaMax: Number($("#teM", el).value) || 0, tempoRetiradaMin: Number($("#trm", el).value) || 0, tempoRetiradaMax: Number($("#trM", el).value) || 0,
   }).then(() => toast("Salvo ✓")).catch(erro);
 

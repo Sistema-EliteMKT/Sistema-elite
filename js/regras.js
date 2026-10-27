@@ -441,6 +441,30 @@ export async function desfazerPagamento(pag, quem) {
   await store.lote(ops);
 }
 
+// Texto do pedido para copiar/colar ou mandar no WhatsApp do cliente.
+export function textoPedido(p) {
+  const lj = loja(), c = p.cliente || {};
+  const real = (v) => "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
+  const tipo = { entrega: "Entrega", retirada: "Retirada", balcao: "Balcão", mesa: "Mesa" }[p.tipo] || "";
+  const linhas = [`*${lj.nome}*${p.numero ? ` · Pedido #${p.numero}` : ""}`, tipo + (c.nome ? ` · ${c.nome}` : "")];
+  if (p.tipo === "entrega" && c.endereco) linhas.push(`Endereço: ${c.endereco}${c.bairro ? " - " + c.bairro : ""}${c.cep ? " · CEP " + String(c.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""}`);
+  linhas.push("", "*Itens:*");
+  for (const i of itensValidos(p)) {
+    linhas.push(`• ${i.qtd}x ${i.nome} — ${real(i.unit * i.qtd)}`);
+    for (const d of i.det || []) linhas.push(`    ${d}`);
+    if (i.obs) linhas.push(`    Obs: ${i.obs}`);
+  }
+  if (p.taxaEntrega) linhas.push(`Entrega: ${real(p.taxaEntrega)}`);
+  linhas.push(`*Total: ${real(totalPedido(p))}*`);
+  const pg = p.pagamento || {};
+  if (pg.forma) linhas.push(`Pagamento: ${pg.forma}${p.pago ? " (pago)" : ""}${pg.trocoPara ? ` · troco para ${real(pg.trocoPara)}` : ""}`);
+  const min = Number(lj[p.tipo === "entrega" ? "tempoEntregaMin" : "tempoRetiradaMin"]), max = Number(lj[p.tipo === "entrega" ? "tempoEntregaMax" : "tempoRetiradaMax"]);
+  if (min > 0 && (p.tipo === "entrega" || p.tipo === "retirada")) linhas.push(`Previsão: ${max > min ? `${min} a ${max} min` : `${min} min`}`);
+  if (p.obs) linhas.push(`Obs do pedido: ${p.obs}`);
+  linhas.push("", "Obrigado pela preferência! 🍕");
+  return linhas.join("\n");
+}
+
 // Pedido de entrega/retirada concluído (e pago) sai da tela de pedidos abertos.
 export const concluirPedido = (p) => store.salvar("pedidos", p.id, { status: "concluido", aberto: false, concluidoEm: Date.now() });
 
@@ -496,7 +520,7 @@ export async function resumoCaixa(cx) {
   const f = [["criadoEm", ">=", cx.abertoEm]];
   const [pags, saidas, movs] = await Promise.all([store.consultar("pagamentos", f), store.consultar("saidas", f), store.consultar("movimentos", f)]);
   const dentro = (x) => x.criadoEm <= ate;
-  const pg = pags.filter(dentro), sd = saidas.filter(dentro), mv = movs.filter(dentro);
+  const pg = pags.filter(dentro), sd = saidas.filter(dentro), mv = movs.filter(dentro).filter((m) => TIPOS_MOV[m.tipo]); // consumo da equipe também fica em "movimentos", mas não é do caixa
   const porForma = {};
   let troco = 0, servico = 0, desconto = 0, vendas = 0;
   for (const p of pg) {
@@ -514,9 +538,9 @@ export async function resumoCaixa(cx) {
     sangrias, suprimentos, despesas, freelaDinheiro, freelaTotal, dinheiroVendas, esperado, contas: pg.length };
 }
 
-export async function fecharCaixa(cx, contado, obs, quem) {
+export async function fecharCaixa(cx, contado, obs, quem, conferencia = {}) {
   const r = await resumoCaixa(cx);
-  const fechamento = { status: "fechado", fechadoEm: Date.now(), fechadoPor: quem?.nome || "", contado: dinheiro(contado), esperado: r.esperado, diferenca: dinheiro(contado - r.esperado), obs: obs || "",
+  const fechamento = { status: "fechado", fechadoEm: Date.now(), fechadoPor: quem?.nome || "", contado: dinheiro(contado), esperado: r.esperado, diferenca: dinheiro(contado - r.esperado), obs: obs || "", conferencia,
     resumo: { porForma: r.porForma, vendas: r.vendas, servico: r.servico, desconto: r.desconto, sangrias: r.sangrias, suprimentos: r.suprimentos, despesas: r.despesas, freelaDinheiro: r.freelaDinheiro, contas: r.contas } };
   await store.lote([
     { tipo: "salvar", col: "caixas", id: cx.id, dados: fechamento },
@@ -544,12 +568,53 @@ export function cupomFechamentoCaixa(cx, r) {
     ...(r.despesas ? [L(lado("- Despesas", r2(r.despesas)))] : []), ...(r.freelaDinheiro ? [L(lado("- Freelancers (dinheiro)", r2(r.freelaDinheiro)))] : []),
     L(lado("= ESPERADO", r2(cx.esperado ?? r.esperado)), { b: true }), L(lado("CONTADO", r2(cx.contado)), { b: true, g: true }),
     L(lado(cx.diferenca < 0 ? "FALTOU" : cx.diferenca > 0 ? "SOBROU" : "DIFERENÇA", r2(Math.abs(cx.diferenca || 0))), { b: true, g: true })];
+  const conf = Object.entries(cx.conferencia || {});
+  if (conf.length) linhas.push(SEP, L("CONFERÊNCIA DE CARTÃO / PIX", { b: true }), ...conf.flatMap(([f, c]) => {
+    const d = dinheiro(c.informado - c.sistema);
+    return [L(lado(f, r2(c.informado))), L(`   sistema ${r2(c.sistema)} · ${d === 0 ? "bateu" : d < 0 ? "faltou " + r2(-d) : "sobrou " + r2(d)}`)];
+  }));
   if (r.movimentos?.length) linhas.push(SEP, L("MOVIMENTAÇÕES", { b: true }), ...r.movimentos.map((m) => L(lado(`${hh(m.criadoEm).slice(-5)} ${TIPOS_MOV[m.tipo].split(" ")[0]}${m.motivo ? " " + m.motivo : ""}`, (m.tipo === "suprimento" ? "+" : "-") + r2(m.valor)))));
   if (r.saidas?.length) linhas.push(SEP, L("PAGAMENTOS A FREELANCERS", { b: true }), ...r.saidas.map((x) => L(lado(`${x.nome} (${x.forma})`, r2(x.valor)))));
   if (cx.obs) linhas.push(SEP, L(`OBS: ${cx.obs}`));
   linhas.push(SEP, L(""), L("______________________________", { c: true }), L("Responsável", { c: true }), ...rodape());
   return linhas;
 }
+
+// ---------------------------------------------------------------------------
+//  Consumo da equipe: o que funcionário consome é lançado e somado no mês
+// ---------------------------------------------------------------------------
+// Fica na coleção "movimentos" (tipo "consumo", com o campo "mes") para não precisar de regra nova no banco.
+export async function lancarConsumo({ nome, funcionarioId = "", itens, descontoPct = 0, imprimir = true }, quem) {
+  if (!nome) throw new Error("Escolha o funcionário.");
+  if (!itens.length) throw new Error("Escolha os itens.");
+  const subtotalItens = dinheiro(itens.reduce((t, i) => t + i.unit * i.qtd, 0));
+  const pct = Math.min(100, Math.max(0, Number(descontoPct) || 0));
+  const total = dinheiro(subtotalItens * (1 - pct / 100));
+  const agora = Date.now(), dia = hoje();
+  const reg = { tipo: "consumo", funcionario: nome, funcionarioId, itens: itens.map((i) => ({ nome: i.nome, qtd: i.qtd, unit: i.unit, det: i.det || [], obs: i.obs || "" })),
+    subtotal: subtotalItens, descontoPct: pct, total, dia, mes: dia.slice(0, 7), criadoEm: agora, por: quem?.nome || "" };
+  const id = await store.criar("movimentos", reg);
+  if (imprimir) await imprimirProducao({ id, tipo: "consumo", nome, numero: "", itens: itens.map((i) => ({ ...i, enviadoEm: agora })) }, quem);
+  return { id, ...reg };
+}
+export const consumosDoMes = async (mes) => (await store.consultar("movimentos", ["mes", "==", mes])).filter((m) => m.tipo === "consumo").sort((a, b) => a.criadoEm - b.criadoEm);
+
+// Extrato do mês de um funcionário, para imprimir e assinar.
+export function cupomExtratoConsumo(nome, mes, regs) {
+  const [a, m] = mes.split("-");
+  const total = dinheiro(regs.reduce((t, x) => t + x.total, 0));
+  const linhas = [L(loja().nome, { b: true, g: true, c: true }), SEP, L("CONSUMO DA EQUIPE", { b: true, g: true, c: true }), L(`${m}/${a}`, { c: true }), SEP, L(nome, { b: true, g: true }), SEP];
+  for (const x of regs) {
+    linhas.push(L(hh(x.criadoEm), { b: true }));
+    for (const i of x.itens) linhas.push(L(lado(`${i.qtd}x ${i.nome}`, r2(i.unit * i.qtd))));
+    if (x.descontoPct) linhas.push(L(lado(`Desconto ${x.descontoPct}%`, "-" + r2(x.subtotal - x.total))));
+    linhas.push(L(lado("Subtotal do dia", r2(x.total)), { b: true }), SEP);
+  }
+  linhas.push(L(lado("TOTAL DO MÊS", r2(total)), { b: true, g: true }), L(`${regs.length} ${regs.length === 1 ? "lançamento" : "lançamentos"}`), SEP,
+    L(""), L("______________________________", { c: true }), L(nome, { c: true }), L("Ciente do valor acima", { c: true }), ...rodape());
+  return linhas;
+}
+export const imprimirExtratoConsumo = (nome, mes, regs) => store.lote([filaImpressao(loja().impressoraConta, `Consumo ${nome} ${mes}`, cupomExtratoConsumo(nome, mes, regs))]);
 
 // Pagamento a freelancer/equipe: sai do caixa e entra no fechamento. Devolve o registro (com id) para imprimir o recibo.
 export async function pagarEquipe(dados, quem) {
@@ -616,6 +681,7 @@ const hh = (t = Date.now()) => new Date(t).toLocaleString("pt-BR", { day: "2-dig
 const rodape = () => [SEP, L(`${MARCA.sistema} · ${MARCA.empresa}`, { c: true })];
 
 const titulo = (p) => {
+  if (p.tipo === "consumo") return `CONSUMO · ${p.nome}`;
   if (p.tipo === "mesa") return `MESA ${p.mesa}${p.numero ? ` · COMANDA ${p.numero}` : ""}${p.nome && p.nome !== "Mesa inteira" ? " · " + p.nome : ""}`;
   const n = p.numero ? ` #${p.numero}` : "";
   if (p.tipo === "entrega") return `ENTREGA${n}`;
@@ -748,7 +814,7 @@ export function cupomEntrega(p) {
 export function impressoraDoSetor(setor, tipo = "mesa") {
   const lj = loja();
   const s = lj.setores.find((x) => x.id === setor);
-  const imp = tipo === "mesa" ? s?.impressora : s?.impressoraDelivery || s?.impressora;
+  const imp = tipo === "mesa" || tipo === "consumo" ? s?.impressora : s?.impressoraDelivery || s?.impressora;
   return imp || lj.impressoras[0]?.id;
 }
 
@@ -810,7 +876,7 @@ export async function imprimirProducao(p, quem, opts = {}) {
   for (const i of itens) {
     const s = i.setor || setorDe(produto(i.produtoId));
     // Delivery/retirada/balcão: setor marcado "só na via" (esfihas) não ganha papel separado, a via completa já serve.
-    if (p.tipo !== "mesa" && lj.setores.find((x) => x.id === s)?.soViaDelivery) continue;
+    if (p.tipo !== "mesa" && p.tipo !== "consumo" && lj.setores.find((x) => x.id === s)?.soViaDelivery) continue;
     if (!porSetor.has(s)) porSetor.set(s, []);
     porSetor.get(s).push(i);
   }

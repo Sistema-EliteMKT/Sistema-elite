@@ -69,12 +69,15 @@ function movimento(tipo, usuario) {
 async function fechar(cx, usuario) {
   let r;
   try { r = await resumoCaixa(cx); } catch (e) { return erro(e); }
+  // Todas as formas de pagamento (menos dinheiro), mesmo as que não tiveram venda: débito, crédito, Pix, vale…
+  const formasCartao = [...new Set([...(loja().formasPagamento || []), ...Object.keys(r.porForma)])].filter((f) => f !== "Dinheiro");
   const s = abrirSheet(`${cabecalhoSheet("Fechar caixa", `Aberto às ${dataHora(cx.abertoEm)}`)}<div class="sh-b">
     <div class="sum"><div><span>Dinheiro que deve ter na gaveta</span><b>${brl(r.esperado)}</b></div></div>
     <label class="f" for="cont">Dinheiro contado na gaveta (R$)</label><input class="in" id="cont" inputmode="decimal" placeholder="0,00">
     <div class="sum" id="dif"></div>
-    <div class="grp">Conferir nas maquininhas / Pix</div>
-    <div class="sum">${Object.entries(r.porForma).filter(([f]) => f !== "Dinheiro").map(([f, v]) => `<div><span>${esc(f)}</span><span>${brl(v)}</span></div>`).join("") || `<p class="vazio">Sem cartão/Pix.</p>`}</div>
+    <div class="grp">Conferir cartão e Pix <small>coloque o total que a maquininha mostra</small></div>
+    ${formasCartao.map((f, i) => `<div class="conf-lin"><div><b>${esc(f)}</b><small>sistema: ${brl(r.porForma[f] || 0)}</small></div>
+      <input class="in" inputmode="decimal" data-cf="${i}" placeholder="0,00" aria-label="Total de ${esc(f)} na maquininha"><span class="conf-dif" data-cd="${i}"></span></div>`).join("")}
     <label class="f" for="obs">Observação (opcional)</label><input class="in" id="obs" maxlength="120">
     <div class="err" id="err"></div><button class="btn ok cheio" id="ok">Fechar caixa e imprimir</button></div>`);
   const dif = () => {
@@ -82,9 +85,20 @@ async function fechar(cx, usuario) {
     $("#dif", s).innerHTML = $("#cont", s).value.trim() === "" ? "" : d === 0 ? `<div class="troco"><span>Bateu certinho ✓</span><span>${brl(0)}</span></div>` : d < 0 ? `<div class="falta"><span>Faltou</span><span>${brl(-d)}</span></div>` : `<div class="troco"><span>Sobrou</span><span>${brl(d)}</span></div>`;
   };
   $("#cont", s).oninput = dif;
+  const difCartao = () => formasCartao.forEach((f, i) => {
+    const v = $(`[data-cf="${i}"]`, s).value.trim(), alvo = $(`[data-cd="${i}"]`, s);
+    if (v === "") return (alvo.textContent = "");
+    const d = Math.round((numero(v) - (r.porForma[f] || 0)) * 100) / 100;
+    alvo.className = "conf-dif " + (d === 0 ? "ok-txt" : "ruim-txt");
+    alvo.textContent = d === 0 ? "bateu ✓" : d < 0 ? `faltou ${brl(-d)}` : `sobrou ${brl(d)}`;
+  });
+  $$("[data-cf]", s).forEach((e) => (e.oninput = difCartao));
   $("#ok", s).onclick = async (ev) => {
     if ($("#cont", s).value.trim() === "") return ($("#err", s).textContent = "Conte o dinheiro da gaveta e coloque o valor.");
     ev.currentTarget.disabled = true;
-    try { await fecharCaixa(cx, numero($("#cont", s).value), $("#obs", s).value.trim(), usuario); fecharSheet(); toast("Caixa fechado. Resumo enviado para impressão ✓", "bom"); } catch (e) { $("#err", s).textContent = e.message; ev.currentTarget.disabled = false; }
+    // Só vai para o fechamento o que foi preenchido.
+    const conferencia = {};
+    formasCartao.forEach((f, i) => { const v = $(`[data-cf="${i}"]`, s).value.trim(); if (v !== "") conferencia[f] = { sistema: r.porForma[f] || 0, informado: numero(v) }; });
+    try { await fecharCaixa(cx, numero($("#cont", s).value), $("#obs", s).value.trim(), usuario, conferencia); fecharSheet(); toast("Caixa fechado. Resumo enviado para impressão ✓", "bom"); } catch (e) { $("#err", s).textContent = e.message; ev.currentTarget.disabled = false; }
   };
 }

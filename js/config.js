@@ -46,6 +46,7 @@ export const LOJA_INICIAL = {
   meiaPorcaoDelivery: false,  // meia porção no delivery/retirada (desligado: só na mesa)
   tempoEntregaMin: 40, tempoEntregaMax: 60,      // previsão para o cliente (minutos)
   tempoRetiradaMin: 20, tempoRetiradaMax: 30,
+  descontoEquipe: 0,          // % de desconto padrão no consumo dos funcionários
   aceitaOnline: true,         // false: cardápio fechado para pedidos (o horário fica em horarios / modoOnline / excecaoHoje)
   horarios: HORARIOS_PADRAO,
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm

@@ -4,7 +4,7 @@ import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
   abrirComanda, lancarItens, imprimirConta, imprimirVia, pedirConta, imprimirPorSetor, imprimirJunto,
-  rotuloComanda, desvioDe, desviarImpressora, imprimirViaOnline,
+  rotuloComanda, desvioDe, desviarImpressora, imprimirViaOnline, textoPedido,
 } from "../regras.js";
 import { store } from "../store.js";
 import { seletorProdutos, linhaItem } from "./seletor.js";
@@ -19,7 +19,7 @@ import { servicoDe } from "./garcom.js";
 import { abaMotoboys, abaImpressao, abaRelatorio, abaCardapio, abaAjustes, abaEquipe } from "./gestao.js";
 
 const ABAS = [
-  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["fluxo", "Caixa"], ["motoboys", "Motoboys"], ["equipe", "Freelancers"], ["relatorio", "Resumo"],
+  ["pedidos", "Pedidos"], ["mesas", "Mesas"], ["fluxo", "Caixa"], ["motoboys", "Motoboys"], ["equipe", "Equipe"], ["relatorio", "Resumo"],
   ["impressao", "Impressoras"], ["cardapio", "Cardápio"], ["promocoes", "Promoções"], ["ajustes", "Ajustes"],
 ];
 const TIPO = { entrega: "Delivery", retirada: "Retirada", balcao: "Balcão" };
@@ -229,13 +229,19 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   function maisPedido(p) {
     const s = abrirSheet(`${cabecalhoSheet(`Pedido #${p.numero || ""}`, p.cliente?.nome || "")}<div class="sh-b">
       ${(p.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado || p.pago ? "" : `<button class="btn ghost sm" data-edl="${i.key}">Editar</button>${p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : ""}` })).join("")}
-      ${p.cliente?.telefone ? `<p><a href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}" target="_blank" rel="noopener">WhatsApp ${esc(p.cliente.telefone)}</a></p>` : ""}
+      <div class="linha-btn wrap"><button class="btn sec" id="copiarPed">📋 Copiar pedido</button>
+        ${p.cliente?.telefone ? `<a class="btn ok" id="zapPed" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}?text=${encodeURIComponent(textoPedido(p))}">💬 Enviar para o cliente no WhatsApp</a>` : ""}</div>
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
         <button class="btn perigo" id="cancelar">Cancelar pedido</button></div></div>`);
+    $("#copiarPed", s).onclick = async () => {
+      const t = textoPedido(p);
+      try { await navigator.clipboard.writeText(t); toast("Pedido copiado ✓ É só colar na conversa.", "bom"); }
+      catch { const a = document.createElement("textarea"); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand("copy"); toast("Pedido copiado ✓", "bom"); } catch { toast("Não consegui copiar neste aparelho."); } a.remove(); }
+    };
     $$("[data-edl]", s).forEach((b) => (b.onclick = () => editarLancado(p, p.itens.find((i) => i.key === b.dataset.edl), usuario, "delivery", () => fecharSheet())));
     $$("[data-ci]", s).forEach((b) => (b.onclick = async () => {
       const motivo = await pedirTexto("Cancelar item", "Motivo", { ok: "Cancelar item" });

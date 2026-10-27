@@ -300,8 +300,8 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .grade .card.inteiro{grid-column:1/-1}
 .grade{grid-auto-flow:dense}
 .forma.imp .in{max-width:none}
-.novo-ped{display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
-@media (max-width:820px){.novo-ped{grid-template-columns:1fr}.np-sel .sel-lista{max-height:40vh}}
+.novo-ped{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}.novo-ped>*,.np-sel,.np-form{min-width:0}
+@media (max-width:820px){.novo-ped{grid-template-columns:minmax(0,1fr)}.np-sel .sel-lista{max-height:40vh}}
 .ad-linha{display:grid;grid-template-columns:1fr 1.6fr 100px 64px 34px;gap:8px;align-items:center;margin-bottom:7px}
 .set-linha{display:grid;grid-template-columns:1.3fr 1fr 1fr 64px 34px;gap:8px;align-items:center;margin-bottom:7px}
 .ad-cab,.set-cab{font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:2px}
@@ -359,3 +359,12 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .obrig{color:var(--bad)}input.falta{border-color:var(--bad)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--bad) 25%,transparent)}
 .busca-ped{margin:0 0 12px}.busca-ped .in{width:100%}
 .previsao{margin:6px 0 10px;font-weight:700;font-size:14.5px}.c-hero .facts span{white-space:nowrap}
+
+/* nada de arrastar para o lado: telas e janelas cabem na largura do aparelho */
+html,body{max-width:100%;overflow-x:clip}
+.sheet .sh-b,.sheet{min-width:0}
+.sheet img,.sheet .in,.sheet select{max-width:100%}
+.mapa-entrega,.leaflet-container{max-width:100%;overflow:hidden}
+@media (max-width:640px){.p-top-in{padding:8px 12px}.p-quem .btn{flex:1 1 auto}.p-wrap{padding:8px 12px 20px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grade{grid-template-columns:minmax(0,1fr)}.card{min-width:0}.raio-lin,.hor-lin{grid-template-columns:1fr 1fr}.hor-lin .opt{grid-column:1/-1}}
+.conf-lin{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:8px;align-items:center;margin-bottom:8px}.conf-lin small{display:block;color:var(--muted)}.conf-dif{font-size:13px;font-weight:700;white-space:nowrap}@media (max-width:480px){.conf-lin{grid-template-columns:minmax(0,1fr) 110px}.conf-dif{grid-column:1/-1}}
+.cm-func{border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin:8px 0;background:var(--surface)}.cm-func summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-weight:700;padding:8px 0}
