@@ -111,8 +111,9 @@ label.f{display:block;font-weight:700;font-size:13.5px;margin:12px 0 5px}
 .sum div.t{color:var(--ink);font-weight:800;font-size:19px}
 .sum .troco{color:var(--ok);font-weight:800}
 .sum .falta{color:var(--bad);font-weight:800}
-.forma{display:flex;gap:8px;align-items:center;margin-bottom:7px}
-.forma .in:last-of-type{max-width:130px}
+.forma{display:flex;gap:8px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+.forma .in[data-v]{max-width:130px}
+.forma .conv-func,.forma [data-fo]{flex:1 1 100%;max-width:none}
 .forma code{flex:none}
 .dividir{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:14px}
 .dividir .chip{padding:4px 11px}

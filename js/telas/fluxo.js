@@ -70,7 +70,7 @@ async function fechar(cx, usuario) {
   let r;
   try { r = await resumoCaixa(cx); } catch (e) { return erro(e); }
   // Todas as formas de pagamento (menos dinheiro), mesmo as que não tiveram venda: débito, crédito, Pix, vale…
-  const formasCartao = [...new Set([...(loja().formasPagamento || []), ...Object.keys(r.porForma)])].filter((f) => f !== "Dinheiro");
+  const formasCartao = [...new Set([...(loja().formasPagamento || []), ...Object.keys(r.porForma)])].filter((f) => f !== "Dinheiro" && f !== "Convênio");
   const s = abrirSheet(`${cabecalhoSheet("Fechar caixa", `Aberto às ${dataHora(cx.abertoEm)}`)}<div class="sh-b">
     <div class="sum"><div><span>Dinheiro que deve ter na gaveta</span><b>${brl(r.esperado)}</b></div></div>
     <label class="f" for="cont">Dinheiro contado na gaveta (R$)</label><input class="in" id="cont" inputmode="decimal" placeholder="0,00">

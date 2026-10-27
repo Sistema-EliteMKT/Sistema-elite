@@ -390,6 +390,7 @@ function itensFiscais(pedidos) {
 }
 
 // pedidos: lista de pedidos/comandas pagos juntos; valores: {servico, desconto, pagamentos:[{forma,valor}]}
+export const FORMA_CONVENIO = "Convênio";
 export async function registrarPagamento(pedidos, valores, quem) {
   const sub = dinheiro(pedidos.reduce((s, p) => s + totalPedido(p), 0));
   const total = dinheiro(sub + (Number(valores.servico) || 0) - (Number(valores.desconto) || 0));
@@ -404,14 +405,21 @@ export async function registrarPagamento(pedidos, valores, quem) {
     pedidos: pedidos.map((p) => p.id), numeros: pedidos.map((p) => p.numero).filter(Boolean),
     nomes: pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean),
     subtotal: sub, servico: dinheiro(valores.servico), desconto: dinheiro(valores.desconto), total,
-    pagamentos: valores.pagamentos.filter((x) => Number(x.valor) > 0).map((x) => ({ forma: x.forma, valor: dinheiro(x.valor), tPag: tPagDe(x.forma) })),
+    pagamentos: valores.pagamentos.filter((x) => Number(x.valor) > 0).map((x) => ({ forma: x.forma, valor: dinheiro(x.valor), tPag: tPagDe(x.forma), ...(x.forma === FORMA_CONVENIO ? { funcionario: x.func || "" } : {}) })),
     troco, cpf: valores.cpf || "", caixa: D.caixa?.id || null,
     // Dados para a nota fiscal (NFC-e), que será emitida depois a partir daqui.
     nfce: { status: "pendente" }, itensFiscais: itensFiscais(pedidos),
   };
   // Comanda paga fecha na hora; pedido de entrega/retirada continua aberto até ser concluído.
   const fim = (p) => (p.tipo === "mesa" ? { status: "fechada", aberto: false } : {});
+  const conv = pag.pagamentos.map((x, i) => ({ x, i })).filter(({ x }) => x.forma === FORMA_CONVENIO);
+  if (conv.some(({ x }) => !x.funcionario)) throw new Error("Escolha o funcionário do convênio.");
+  const itensConv = pedidos.flatMap((p) => (p.itens || []).filter((i) => !i.cancelado).map((i) => ({ nome: i.nome, qtd: i.qtd, unit: i.unit, det: i.det || [], obs: i.obs || "" })));
+  // Convênio: o valor vai para a conta do funcionário, que é descontada no fim do mês (mesmo lugar do consumo da equipe).
   await store.lote([
+    ...conv.map(({ x, i }) => ({ tipo: "criar", col: "movimentos", id: `conv-${pid}-${i}`, dados: {
+      tipo: "consumo", origem: "convenio", funcionario: x.funcionario, funcionarioId: "", itens: itensConv, subtotal: x.valor, descontoPct: 0, total: x.valor,
+      pagamentoId: pid, pedidoNumeros: pag.numeros, dia: pag.dia, mes: pag.dia.slice(0, 7), criadoEm: agora, por: quem?.nome || "" } })),
     { tipo: "criar", col: "pagamentos", id: pid, dados: pag },
     ...pedidos.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { pago: true, pagamentoId: pid, pagoEm: agora, ...fim(p) } })),
     ...liberarComandas(pedidos),
@@ -438,6 +446,7 @@ export async function desfazerPagamento(pag, quem) {
     }
   }
   ops.push({ tipo: "apagar", col: "pagamentos", id: pag.id });
+  (pag.pagamentos || []).forEach((x, i) => { if (x.forma === FORMA_CONVENIO) ops.push({ tipo: "apagar", col: "movimentos", id: `conv-${pag.id}-${i}` }); });
   await store.lote(ops);
 }
 
@@ -606,6 +615,7 @@ export function cupomExtratoConsumo(nome, mes, regs) {
   const linhas = [L(loja().nome, { b: true, g: true, c: true }), SEP, L("CONSUMO DA EQUIPE", { b: true, g: true, c: true }), L(`${m}/${a}`, { c: true }), SEP, L(nome, { b: true, g: true }), SEP];
   for (const x of regs) {
     linhas.push(L(hh(x.criadoEm), { b: true }));
+    if (x.origem === "convenio") linhas.push(L(`Convênio${x.pedidoNumeros?.length ? " - comanda/pedido " + x.pedidoNumeros.join(", ") : ""}`));
     for (const i of x.itens) linhas.push(L(lado(`${i.qtd}x ${i.nome}`, r2(i.unit * i.qtd))));
     if (x.descontoPct) linhas.push(L(lado(`Desconto ${x.descontoPct}%`, "-" + r2(x.subtotal - x.total))));
     linhas.push(L(lado("Subtotal do dia", r2(x.total)), { b: true }), SEP);

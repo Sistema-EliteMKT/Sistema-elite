@@ -1,12 +1,13 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
 import { $, $$, esc, brl, numero, valorCampo, toast, erro, avisoDesfazer, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
-import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico, desfazerPagamento } from "../regras.js";
+import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico, desfazerPagamento, FORMA_CONVENIO } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
 export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
   return new Promise((res) => {
     const lj = loja();
-    const formas = lj.formasPagamento || ["Dinheiro"];
+    const formas = [...(lj.formasPagamento || ["Dinheiro"]).filter((f) => f !== FORMA_CONVENIO), FORMA_CONVENIO];
+    const equipe = [...D.usuarios.filter((u) => u.ativo !== false), ...D.motoboys.filter((m) => m.ativo !== false)].map((u) => u.nome);
     const sub = dinheiro(pedidos.reduce((s, p) => s + totalPedido(p), 0));
     const linhas = [{ forma: forma || formas[0], valor: 0 }];
     let comServico = servico > 0;
@@ -32,8 +33,10 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
     const pago = () => dinheiro(linhas.reduce((x, l) => x + (Number(l.valor) || 0), 0));
     const desenharFormas = () => {
       $("#formas", s).innerHTML = linhas.map((l, i) => `<div class="forma"><select class="in" data-f="${i}">${formas.map((f) => `<option ${f === l.forma ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>
-        <input class="in" data-v="${i}" inputmode="decimal" value="${valorCampo(l.valor)}" aria-label="Valor">${linhas.length > 1 ? `<button class="mini-x" data-x="${i}" aria-label="Tirar">×</button>` : ""}</div>`).join("");
-      $$("[data-f]", s).forEach((e) => (e.onchange = () => { linhas[e.dataset.f].forma = e.value; }));
+        <input class="in" data-v="${i}" inputmode="decimal" value="${valorCampo(l.valor)}" aria-label="Valor">${l.forma === FORMA_CONVENIO ? `<select class="in conv-func" data-fn="${i}" aria-label="Funcionário"><option value="">Funcionário…</option>${equipe.map((n) => `<option ${n === l.func ? "selected" : ""}>${esc(n)}</option>`).join("")}<option value="__outro" ${l.func && !equipe.includes(l.func) ? "selected" : ""}>Outro…</option></select>${l.func && !equipe.includes(l.func) || l.outro ? `<input class="in" data-fo="${i}" placeholder="Nome do funcionário" value="${esc(l.func || "")}">` : ""}` : ""}${linhas.length > 1 ? `<button class="mini-x" data-x="${i}" aria-label="Tirar">×</button>` : ""}</div>`).join("");
+      $$("[data-f]", s).forEach((e) => (e.onchange = () => { linhas[e.dataset.f].forma = e.value; desenharFormas(); }));
+      $$("[data-fn]", s).forEach((e) => (e.onchange = () => { const l = linhas[e.dataset.fn]; l.outro = e.value === "__outro"; l.func = l.outro ? "" : e.value; desenharFormas(); }));
+      $$("[data-fo]", s).forEach((e) => (e.oninput = () => { linhas[e.dataset.fo].func = e.value.trim(); }));
       $$("[data-v]", s).forEach((e) => (e.oninput = () => { linhas[e.dataset.v].valor = numero(e.value); resumo(); }));
       $$("[data-x]", s).forEach((e) => (e.onclick = () => { linhas.splice(+e.dataset.x, 1); completar(); }));
     };
