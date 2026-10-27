@@ -689,14 +689,16 @@ const titulo = (p) => {
   return `BALCÃO${n}`;
 };
 
-function linhasItens(itens, { precos = false } = {}) {
+function linhasItens(itens, { precos = false, espaco = 0 } = {}) {
   const out = [];
-  for (const i of itens) {
+  itens.forEach((i, k) => {
+    // Espaço entre os itens (para a cozinha riscar com caneta marca-texto): linhas em branco antes do próximo.
+    if (espaco && k > 0) for (let n = 0; n < espaco; n++) out.push(L(""));
     if (precos) out.push(L(lado(`${i.qtd}x ${i.nome}`, r$(i.unit * i.qtd))));
     else out.push(L(`${i.qtd}x ${i.nome}`, { b: true, g: true }));
     for (const d of i.det || []) out.push(L(`   ${d}`, { b: !precos }));
     if (i.obs) out.push(L(`   OBS: ${i.obs}`, { b: true }));
-  }
+  });
   return out;
 }
 
@@ -712,7 +714,7 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alt
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
-  linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasItens(itens), ...linhasAntes(alteracao));
+  linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasItens(itens, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   if (cancelamento && itens[0]?.motivo) linhas.push(SEP, L(`Motivo: ${itens[0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
@@ -729,7 +731,7 @@ function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null, a
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
   for (const [s, its] of grupos) {
-    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its), ...linhasAntes(alteracao));
+    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   }
   if (cancelamento && grupos[0]?.[1][0]?.motivo) linhas.push(SEP, L(`Motivo: ${grupos[0][1][0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
@@ -839,7 +841,7 @@ export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
   // tamanho/fonte escolhidos em Impressoras vão junto com o cupom (o agente usa direto)
   const imp = loja().impressoras.find((i) => i.id === impressora) || {};
   const estilo = {
-    tamanho: imp.tamanho || "medio", fonte: imp.fonte || "arial", corte: imp.corte || "total", avanco: Number(imp.avanco ?? 4),
+    tamanho: imp.tamanho || "medio", fonte: imp.fonte || "arial", corte: imp.corte || "total", avanco: Number(imp.avanco ?? 4), entrelinhas: imp.entrelinhas || "normal",
     ...(imp.colunas ? { colunas: Number(imp.colunas) } : {}),
   };
   const dados = { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra };

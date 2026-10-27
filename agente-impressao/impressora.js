@@ -80,6 +80,8 @@ export function escpos(linhas, imp, acentosPadrao = "sem-acentos") {
   const b = [ESC, 0x40]; // inicia
   if (!bema && fonteB) b.push(ESC, 0x4d, 1); // fonte compacta
   if (PAGINAS[pagina] && !bema) b.push(ESC, 0x74, PAGINAS[pagina].n);
+  const esp = { medio: 44, grande: 60 }[imp.entrelinhas]; // ESC 3 n: altura da linha em pontos (o normal é 30)
+  if (esp) b.push(ESC, 0x33, esp);
   for (const l of linhas) {
     if (l.sep) { b.push(...texto("-".repeat(colunas), pagina), 0x0a); continue; }
     b.push(ESC, 0x61, l.c ? 1 : 0); // alinhamento

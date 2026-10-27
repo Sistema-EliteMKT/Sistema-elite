@@ -16,6 +16,8 @@ const par = pares.find(([r, b]) => existsSync(r) && existsSync(b));
 if (par) { GlobalFonts.registerFromPath(par[0], FAMILIA); GlobalFonts.registerFromPath(par[1], FAMILIA); }
 
 // Tamanho da letra em pontos da impressora (203 dpi): texto normal e linha em destaque.
+// Espaço entre as linhas (para riscar com caneta).
+const MULT = { normal: 1, medio: 1.4, grande: 1.8 };
 const TAMANHOS = { pequeno: [22, 28], medio: [26, 34], grande: [30, 42] };
 
 export function cupomImagem(linhas, imp) {
@@ -47,7 +49,7 @@ export function cupomImagem(linhas, imp) {
   for (const l of linhas) {
     if (l.sep) { ops.push({ sep: true, y: y + 6 }); y += 14; continue; }
     medidor.font = fonte(l);
-    const alt = Math.round((l.g ? destaque : normal) * 1.25);
+    const alt = Math.round((l.g ? destaque : normal) * 1.25 * (MULT[imp.entrelinhas] || 1));
     if (l.d != null) {
       const dw = larg(String(l.d));
       const partes = quebrar(String(l.e ?? l.t), W - 2 * M - dw - 12);

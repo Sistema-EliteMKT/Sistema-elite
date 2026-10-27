@@ -45,7 +45,7 @@ export function abaMotoboys(el) {
 }
 
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
-const VERSAO_AGENTE = "2026.10.20-5";
+const VERSAO_AGENTE = "2026.10.27-6";
 
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
@@ -123,12 +123,15 @@ export function abaImpressao(el, { admin }) {
         <small class="muted">${ult ? `Último impresso às ${hora(ult.impressoEm || ult.criadoEm)}` : "Nada impresso hoje"}</small>
         ${ult && ult.por !== "navegador" ? (ult.agente === VERSAO_AGENTE ? `<small class="ok-txt">Agente atualizado (${esc(ult.agente)})</small>`
           : `<small class="ruim-txt"><b>Agente desatualizado${ult.agente ? ` (${esc(ult.agente)})` : ""}.</b> Troque os arquivos do agente no computador do caixa para o tamanho da letra e o corte funcionarem.</small>`) : ""}
+        ${imp.entrelinhas && imp.entrelinhas !== "normal" && ult && ult.por !== "navegador" && String(ult.agente || "") < "2026.10.27-6" ? `<small class="ruim-txt">O espaço entre as linhas só funciona no agente novo (2026.10.27-6). Atualize o agente no computador do caixa.</small>` : ""}
         <div class="opts dois letra"><div><label class="f" for="tam-${imp.id}">Tamanho da letra</label><select class="in" id="tam-${imp.id}" data-tam="${imp.id}">
             ${[["grande", "Grande (dupla)"], ["medio", "Médio"], ["pequeno", "Pequeno"]].map(([v, l]) => `<option value="${v}" ${(imp.tamanho || "medio") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="fon-${imp.id}">Fonte</label><select class="in" id="fon-${imp.id}" data-fon="${imp.id}">
             ${[["arial", "Arial (igual ao sistema antigo)"], ["A", "Da impressora"], ["B", "Da impressora, compacta"]].map(([v, l]) => `<option value="${v}" ${(imp.fonte || "arial") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="cor-${imp.id}">Corte do papel</label><select class="in" id="cor-${imp.id}" data-cor="${imp.id}">
             ${[["total", "Automático (separa)"], ["parcial", "Parcial (pontinha)"], ["compat", "Compatível (antigas)"], ["nenhum", "Sem corte"]].map(([v, l]) => `<option value="${v}" ${(imp.corte || "total") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          <div><label class="f" for="ent-${imp.id}">Espaço entre as linhas</label><select class="in" id="ent-${imp.id}" data-ent="${imp.id}">
+            ${[["normal", "Normal"], ["medio", "Médio (mais espaçado)"], ["grande", "Grande (bem espaçado)"]].map(([v, l]) => `<option value="${v}" ${(imp.entrelinhas || "normal") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
           <div><label class="f" for="ava-${imp.id}">Espaço antes do corte</label><select class="in" id="ava-${imp.id}" data-ava="${imp.id}">
             ${[2, 3, 4, 5, 6, 8].map((v) => `<option value="${v}" ${Number(imp.avanco ?? 4) === v ? "selected" : ""}>${v} linhas</option>`).join("")}</select></div>
           <div><label class="f" for="col-${imp.id}">Letras por linha</label><select class="in" id="col-${imp.id}" data-col="${imp.id}">
@@ -178,6 +181,7 @@ export function abaImpressao(el, { admin }) {
   $$("[data-col]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.col, "colunas", Number(e.value))));
   $$("[data-cor]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.cor, "corte", e.value)));
   $$("[data-ava]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.ava, "avanco", Number(e.value))));
+  $$("[data-ent]", el).forEach((e) => (e.onchange = () => mudarEstilo(e.dataset.ent, "entrelinhas", e.value)));
   $$("[data-re]", el).forEach((b) => (b.onclick = () => reimprimir(D.impressoes.find((j) => j.id === b.dataset.re)).then(() => toast("Enviado de novo")).catch(erro)));
   $$("[data-ver]", el).forEach((b) => (b.onclick = () => {
     const j = D.impressoes.find((x) => x.id === b.dataset.ver);
@@ -425,6 +429,8 @@ export function abaAjustes(el) {
       <label class="f" for="aic">Conta feita no caixa, via de entrega e fechamento saem na</label><select class="in" id="aic"></select>
       <label class="f" for="aig">Conta pedida pelo garçom (e comprovante do garçom) sai na</label><select class="in" id="aig"></select>
       <label class="f" for="acol">Largura da bobina</label><select class="in" id="acol"><option value="48" ${lj.colunas == 48 ? "selected" : ""}>80 mm</option><option value="32" ${lj.colunas == 32 ? "selected" : ""}>58 mm</option></select>
+      <label class="f" for="aei">Espaço entre os itens nos papéis da cozinha <small>(para riscar com caneta)</small></label>
+      <select class="in" id="aei">${[[0, "Sem espaço"], [1, "1 linha em branco entre os itens"], [2, "2 linhas em branco entre os itens"]].map(([v, l]) => `<option value="${v}" ${Number(lj.espacoItens ?? 1) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
       <label class="opt"><input type="checkbox" id="aic2" ${lj.imprimirCancelamento ? "checked" : ""}><span>Avisar o setor no papel quando cancelar item ou comanda (desmarcado: só cancela no sistema)</span></label>
       <label class="opt"><input type="checkbox" id="aco" ${lj.imprimirCozinhaAoChegar !== false ? "checked" : ""}><span>Pedido do cardápio online: imprimir a via completa <b>e</b> os papéis da cozinha assim que chegar (sem esperar aceitar)</span></label>
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
@@ -629,7 +635,7 @@ export function abaAjustes(el) {
     const usados = new Set([...D.categorias.map((c) => c.setor), ...D.produtos.map((p) => p.setor).filter(Boolean)]);
     const falta = [...usados].filter((u) => !sets.some((s) => s.id === u));
     if (falta.length) return toast(`O setor "${falta[0]}" ainda é usado no cardápio. Mude as categorias antes de tirar.`);
-    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked, imprimirCozinhaAoChegar: $("#aco", el).checked })
+    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked, espacoItens: Number($("#aei", el).value) || 0, imprimirCozinhaAoChegar: $("#aco", el).checked })
       .then(() => toast("Impressoras salvas ✓")).catch(erro);
   };
   des();

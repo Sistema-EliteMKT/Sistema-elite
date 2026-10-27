@@ -51,6 +51,7 @@ export const LOJA_INICIAL = {
   horarios: HORARIOS_PADRAO,
   colunas: 48,                // 48 = bobina 80 mm · 32 = bobina 58 mm
   imprimirCancelamento: false, // true: cancelar item/comanda também imprime o aviso CANCELADO no setor
+  espacoItens: 1,             // linhas em branco entre os itens nos papéis da cozinha (0 = sem espaço)
   papelPorSetor: true,        // true: um papel para cada setor (Amarílis) · false: um papel por impressora, dividido por setor
   impressoras: [
     { id: "imp1", nome: "Caixa (Bematech MP-4200 TH)", tamanho: "medio", fonte: "arial", colunas: 42 },

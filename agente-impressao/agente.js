@@ -13,7 +13,7 @@ const pasta = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(pasta, "config.json"), "utf8"));
 const log = (...a) => console.log(new Date().toLocaleTimeString("pt-BR"), ...a);
 // Versão do agente: vai gravada em cada cupom impresso, para o sistema avisar se estiver desatualizado.
-export const VERSAO = "2026.10.20-5";
+export const VERSAO = "2026.10.27-6";
 
 // ------------------------------------------------------------------ fila
 const app = initializeApp(cfg.firebase);
