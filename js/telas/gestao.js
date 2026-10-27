@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
-import { $, $$, esc, brl, hora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento } from "../regras.js";
+import { $, $$, esc, brl, hora, hoje, dataHora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -14,9 +14,43 @@ import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, zonasDe,
 import { htmlCupom } from "../imprimir-navegador.js";
 
 // ----------------------------------------------------------------- Motoboys
+// Período do relatório (fica lembrado enquanto o painel está aberto).
+let perMb = { tipo: "hoje", de: "", ate: "" };
+const periodoMb = () => {
+  const d = new Date(), h = hoje(), dia = (n) => hoje(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime());
+  const mes = (n) => { const a = new Date(d.getFullYear(), d.getMonth() + n, 1), b = new Date(d.getFullYear(), d.getMonth() + n + 1, 0); return [hoje(a.getTime()), hoje(b.getTime())]; };
+  return { hoje: [h, h], ontem: [dia(-1), dia(-1)], semana: [dia(-6), h], mes: mes(0), mespassado: mes(-1), outro: [perMb.de || h, perMb.ate || perMb.de || h] }[perMb.tipo];
+};
+function relatorioMotoboys(el) {
+  const [ini, fim] = periodoMb();
+  const abas = [["hoje", "Hoje"], ["ontem", "Ontem"], ["semana", "7 dias"], ["mes", "Este mês"], ["mespassado", "Mês passado"], ["outro", "Escolher datas"]];
+  el.innerHTML = `<div class="card inteiro"><div class="card-h"><div><b>📋 Relatório dos motoboys</b><small>Entregas, taxas e dinheiro a acertar de cada um no período.</small></div></div>
+    <div class="chips" style="flex-wrap:wrap">${abas.map(([v, l]) => `<button class="chip ${perMb.tipo === v ? "on" : ""}" data-per="${v}">${l}</button>`).join("")}</div>
+    ${perMb.tipo === "outro" ? `<div class="linha-btn wrap"><input class="in" type="date" id="mbDe" value="${esc(ini)}" aria-label="De"><input class="in" type="date" id="mbAte" value="${esc(fim)}" aria-label="Até"></div>` : ""}
+    <div id="mbRes"><p class="muted">Carregando…</p></div></div>`;
+  $$("[data-per]", el).forEach((b) => (b.onclick = () => { perMb.tipo = b.dataset.per; relatorioMotoboys(el); }));
+  $("#mbDe", el) && ($("#mbDe", el).onchange = (e) => { perMb.de = e.target.value; relatorioMotoboys(el); });
+  $("#mbAte", el) && ($("#mbAte", el).onchange = (e) => { perMb.ate = e.target.value; relatorioMotoboys(el); });
+  entregasPeriodo(ini, fim).then((todas) => {
+    const alvo = $("#mbRes", el); if (!alvo) return;
+    const por = {};
+    for (const p of todas) (por[p.motoboy.nome] ||= []).push(p);
+    const nomes = Object.keys(por).sort((a, b) => a.localeCompare(b));
+    const tot = resumoMotoboy(todas);
+    alvo.innerHTML = nomes.map((n) => { const es = por[n], r = resumoMotoboy(es); return `<details class="cm-func"><summary><span>🛵 ${esc(n)} · ${r.qtd} ${r.qtd === 1 ? "entrega" : "entregas"}</span><b>${brl(r.taxas)}</b></summary>
+        <div class="sum"><div><span>Taxas de entrega</span><span>${brl(r.taxas)}</span></div><div><span>Total entregue</span><span>${brl(r.total)}</span></div><div><span>Dinheiro a acertar</span><span>${brl(r.dinheiro)}</span></div></div>
+        ${es.map((p) => `<div class="cl"><div class="n"><b>${esc(tituloPedido(p))} · ${esc(p.cliente?.nome || "")}</b><small>${esc(dataHora(p.saiuEm || p.criadoEm))} · ${esc(p.cliente?.bairro || "")} · ${esc(p.pagamento?.forma || "")} · taxa ${brl(p.taxaEntrega || 0)}</small></div><div class="v">${brl(totalPedido(p))}</div></div>`).join("")}
+        <div class="linha-btn wrap"><button class="btn ghost sm" data-imp="${esc(n)}">Imprimir relatório</button></div></details>`; }).join("")
+      || `<p class="vazio">Nenhuma entrega com motoboy neste período.</p>`;
+    if (nomes.length) alvo.insertAdjacentHTML("beforeend", `<div class="sum"><div class="t"><span>Total (${tot.qtd} entregas)</span><span>${brl(tot.taxas)} em taxas</span></div></div>`);
+    $$("[data-imp]", alvo).forEach((b) => (b.onclick = () => imprimirRelatorioMotoboy(b.dataset.imp, ini, fim, por[b.dataset.imp]).then(() => toast("Relatório enviado para impressão")).catch(erro)));
+  }).catch((e) => { const a = $("#mbRes", el); if (a) a.innerHTML = `<p class="ruim-txt">${esc(e.message)}</p>`; });
+}
+
 export function abaMotoboys(el) {
   const entregas = D.doDia.filter((p) => p.tipo === "entrega" && p.motoboy?.id && p.status !== "cancelado");
   el.innerHTML = `<div class="linha-btn"><button class="btn pri" id="novoMb">+ Cadastrar motoboy</button></div>
+    <div id="relMb"></div>
     <div class="grade">${D.motoboys.map((m) => {
       const es = entregas.filter((p) => p.motoboy.id === m.id);
       const rua = es.filter((p) => p.status === "saiu");
@@ -39,6 +73,7 @@ export function abaMotoboys(el) {
     };
     $("#del", s) && ($("#del", s).onclick = async () => { if (await confirmar("Excluir motoboy", `Excluir ${m.nome}? As entregas antigas continuam no relatório.`, { ok: "Excluir", perigo: true })) store.apagar("motoboys", m.id).catch(erro); });
   };
+  relatorioMotoboys($("#relMb", el));
   $("#novoMb", el).onclick = () => editar();
   $$("[data-ed]", el).forEach((b) => (b.onclick = () => editar(D.motoboys.find((m) => m.id === b.dataset.ed))));
   $$("[data-at]", el).forEach((b) => (b.onchange = () => store.salvar("motoboys", b.dataset.at, { ativo: b.checked }).catch(erro)));

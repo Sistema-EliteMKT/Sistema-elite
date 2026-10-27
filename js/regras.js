@@ -626,6 +626,42 @@ export function cupomExtratoConsumo(nome, mes, regs) {
 }
 export const imprimirExtratoConsumo = (nome, mes, regs) => store.lote([filaImpressao(loja().impressoraConta, `Consumo ${nome} ${mes}`, cupomExtratoConsumo(nome, mes, regs))]);
 
+// ---------------------------------------------------------------------------
+//  Relatório de motoboys: entregas, taxas e dinheiro a acertar num período
+// ---------------------------------------------------------------------------
+const cacheEntregas = new Map(); // a aba se redesenha a cada mudança: dias passados ficam em cache; o dia de hoje vem do que já está na tela
+export async function entregasPeriodo(ini, fim) {
+  const h = hoje();
+  let ps = [];
+  const fimPassado = fim >= h ? hoje(Date.now() - 86400000) : fim;
+  if (ini <= fimPassado) {
+    const k = `${ini}|${fimPassado}`, c = cacheEntregas.get(k);
+    if (c && Date.now() - c.t < 120000) ps = c.ps;
+    else { ps = await store.consultar("pedidos", [["dia", ">=", ini], ["dia", "<=", fimPassado]]); cacheEntregas.set(k, { t: Date.now(), ps }); }
+  }
+  if (ini <= h && fim >= h) ps = [...ps, ...D.doDia];
+  return ps.filter((p) => p.tipo === "entrega" && p.motoboy?.nome && !["cancelado", "cancelada"].includes(p.status)).sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
+}
+// Resumo de um motoboy a partir das entregas dele.
+export function resumoMotoboy(es) {
+  return { qtd: es.length, taxas: dinheiro(es.reduce((t, p) => t + (Number(p.taxaEntrega) || 0), 0)),
+    dinheiro: dinheiro(es.filter((p) => p.pagamento?.forma === "Dinheiro").reduce((t, p) => t + totalPedido(p), 0)), total: dinheiro(es.reduce((t, p) => t + totalPedido(p), 0)) };
+}
+const dm = (d) => d.split("-").reverse().slice(0, 2).join("/");
+export function cupomRelatorioMotoboy(nome, ini, fim, es) {
+  const r = resumoMotoboy(es);
+  const linhas = [L(loja().nome, { b: true, g: true, c: true }), SEP, L("RELATÓRIO DO MOTOBOY", { b: true, g: true, c: true }), L(ini === fim ? dm(ini) : `${dm(ini)} a ${dm(fim)}`, { c: true }), SEP, L(nome, { b: true, g: true }), SEP];
+  let dia = "";
+  for (const p of es) {
+    if (p.dia !== dia) { dia = p.dia; linhas.push(L(dm(dia), { b: true })); }
+    linhas.push(L(lado(`${hh(p.saiuEm || p.criadoEm).slice(-5)} ${titulo(p)} ${p.cliente?.bairro || p.cliente?.nome || ""}`, r2(totalPedido(p)))), L(`   taxa ${r2(p.taxaEntrega)} · ${p.pagamento?.forma || ""}`));
+  }
+  linhas.push(SEP, L(lado("Entregas", String(r.qtd)), { b: true }), L(lado("Taxas de entrega", r2(r.taxas)), { b: true }), L(lado("Total entregue", r2(r.total))), L(lado("Dinheiro a acertar", r2(r.dinheiro)), { b: true, g: true }),
+    SEP, L(""), L("______________________________", { c: true }), L(nome, { c: true }), ...rodape());
+  return linhas;
+}
+export const imprimirRelatorioMotoboy = (nome, ini, fim, es) => store.lote([filaImpressao(loja().impressoraConta, `Motoboy ${nome}`, cupomRelatorioMotoboy(nome, ini, fim, es))]);
+
 // Pagamento a freelancer/equipe: sai do caixa e entra no fechamento. Devolve o registro (com id) para imprimir o recibo.
 export async function pagarEquipe(dados, quem) {
   const reg = { ...dados, valor: dinheiro(dados.valor), dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" };
