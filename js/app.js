@@ -32,6 +32,7 @@ function marcaDoApp(cliente) {
   const set = (sel, attr, v) => document.querySelector(sel)?.setAttribute(attr, v);
   set('link[rel="manifest"]', "href", cliente ? "manifest-cardapio.webmanifest" : "manifest.webmanifest");
   set('link[rel="apple-touch-icon"]', "href", cliente ? "assets/amarilis-apple-touch.png" : "assets/apple-touch-icon.png");
+  set('link[rel="icon"]', "href", cliente ? "assets/amarilis-192.png" : "assets/elite-logo-128.png");
   set('meta[name="theme-color"]', "content", cliente ? "#B00B16" : "#111111");
   set('meta[name="apple-mobile-web-app-title"]', "content", cliente ? "Amarílis" : "Sistema Elite");
 }

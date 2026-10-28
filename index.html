@@ -8,9 +8,17 @@
   <meta name="theme-color" content="#111111" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Sistema Elite" />
-  <link rel="manifest" href="manifest.webmanifest" />
+  <script>
+    // O app instalado pelo link do cardápio leva o nome e o ícone da pizzaria; pelo link da equipe, o Sistema Elite.
+    // Tem que ser escolhido aqui, antes do navegador ler o manifesto.
+    (function () {
+      var cli = /^#\/?cardapio/.test(location.hash);
+      var l = document.createElement("link"); l.rel = "manifest"; l.href = cli ? "manifest-cardapio.webmanifest" : "manifest.webmanifest"; document.head.appendChild(l);
+      if (cli) { document.write('<link rel="apple-touch-icon" href="assets/amarilis-apple-touch.png">'); }
+    })();
+  </script>
   <link rel="icon" href="assets/elite-logo-128.png" type="image/png" />
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <script>if (!/^#\/?cardapio/.test(location.hash)) document.write('<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">');</script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
