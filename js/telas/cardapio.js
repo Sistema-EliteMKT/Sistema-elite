@@ -66,7 +66,7 @@ export function telaCardapio(raiz) {
     const taxas = lj.taxasEntrega || [];
     const porRaio = entregaPorRaio(lj);
     let loc = salvo.lat != null && porRaio ? { ponto: [salvo.lat, salvo.lng], ...taxaDoPonto(lj, [salvo.lat, salvo.lng]) } : null;
-    let ctl = null, autoEnd = "";
+    let ctl = null, autoEnd = "", cupomAplicado = null;
     const formas = lj.formasPagamento || [];
     const s = abrirSheet(`${cabecalhoSheet("Sua sacola")}<div class="sh-b">
       <div id="linhas"></div>
@@ -84,6 +84,7 @@ export function telaCardapio(raiz) {
       </div>
       <label class="f" for="cp">Pagamento (na entrega ou retirada)</label><select class="in" id="cp">${formas.map((f) => `<option>${esc(f)}</option>`).join("")}</select>
       <div id="trocoBox" hidden><label class="f" for="cx">Troco para quanto? (deixe vazio se não precisar)</label><input class="in" id="cx" inputmode="decimal"></div>
+      ${(lj.cupons || []).some((c) => c.ativo !== false) ? `<label class="f" for="ccup">Cupom de desconto</label><div class="linha-btn"><input class="in" id="ccup" autocomplete="off" autocapitalize="characters" placeholder="Digite o cupom"><button type="button" class="btn ghost" id="aplicarCup">Aplicar</button></div><small id="cupMsg" role="status"></small>` : ""}
       <label class="f" for="co">Observação do pedido</label><input class="in" id="co" maxlength="160">
       <div class="sum" id="sum"></div>
       <div class="err" id="err"></div>
@@ -91,7 +92,8 @@ export function telaCardapio(raiz) {
     const total = () => {
       const sub = sacola.reduce((x, l) => x + l.unit * l.qtd, 0);
       const t = modo !== "entrega" ? 0 : porRaio ? (loc && !loc.fora ? loc.taxa : 0) : taxas.find((t) => t.nome === $("#cb", s)?.value)?.taxa || 0;
-      return { sub, taxa: t, total: sub + t };
+      const desc = cupomAplicado ? Math.round(sub * cupomAplicado.pct) / 100 : 0;
+      return { sub, taxa: t, desc, total: Math.max(0, sub - desc + t) };
     };
     // Entrega por raio: mapa + CEP/localização calculam a taxa e preenchem o endereço.
     if (porRaio) {
@@ -129,7 +131,11 @@ export function telaCardapio(raiz) {
       if (cepCampo.value) conferir();
     }
     // Com o mapa, o número digitado aqui também vai para a busca do endereço.
-    if (porRaio) $("#cnum", s).addEventListener("input", () => { const n = $("[data-num]", s); if (n) n.value = $("#cnum", s).value; });
+    if (porRaio) {
+      $("#cnum", s).addEventListener("input", () => { const n = $("[data-num]", s); if (n) n.value = $("#cnum", s).value; });
+      // Terminou de digitar o número: refaz a busca para o ponto no mapa ficar mais certo.
+      $("#cnum", s).addEventListener("change", () => { if (($("[data-cep]", s)?.value || "").replace(/\D/g, "").length === 8) ctl?.buscar(); });
+    }
     const atualizar = () => {
       $$("[data-m]", s).forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === modo));
       $("#end", s).hidden = modo !== "entrega";
@@ -138,13 +144,26 @@ export function telaCardapio(raiz) {
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
-      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "informe o endereço" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
+      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
       $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
-      $("#enviar", s).disabled = !sacola.length || (modo === "entrega" && porRaio && (!loc || loc.fora));
+      $("#enviar", s).disabled = !sacola.length || (modo === "entrega" && porRaio && loc && loc.fora);
     };
     $$("[data-m]", s).forEach((b) => (b.onclick = () => { modo = b.dataset.m; atualizar(); }));
+    // Cupom: confere na lista da loja; cada aparelho usa o mesmo cupom uma vez só.
+    const usados = () => { try { return JSON.parse(localStorage.getItem("se_cupons") || "[]"); } catch { return []; } };
+    $("#aplicarCup", s) && ($("#aplicarCup", s).onclick = () => {
+      const cod = $("#ccup", s).value.trim().toUpperCase().replace(/\s+/g, "");
+      const c = (lj.cupons || []).find((x) => x.ativo !== false && String(x.codigo || "").toUpperCase() === cod);
+      const msg = $("#cupMsg", s);
+      cupomAplicado = null;
+      if (!cod) msg.innerHTML = "";
+      else if (!c) msg.innerHTML = `<span class="ruim-txt">Cupom não encontrado ou fora da validade.</span>`;
+      else if (usados().includes(c.codigo.toUpperCase())) msg.innerHTML = `<span class="ruim-txt">Esse cupom já foi usado neste aparelho.</span>`;
+      else { cupomAplicado = { codigo: c.codigo.toUpperCase(), pct: Math.min(50, Number(c.pct) || 0) }; msg.innerHTML = `<span class="ok-txt">Cupom aplicado: ${cupomAplicado.pct}% de desconto nos itens ✓</span>`; }
+      atualizar();
+    });
     $$("select", s).forEach((x) => (x.onchange = atualizar));
     $("#enviar", s).onclick = async () => {
       const st = statusOnline(loja());
@@ -164,8 +183,7 @@ export function telaCardapio(raiz) {
         if (!porRaio && cepAchado === false) return falta("CEP não encontrado. Confira os números.", "#ccep");
         if (!rua) return falta("Coloque o nome da rua.", "#ce");
         if (!/\d/.test(num) && !/^s\s*\/?\s*n$/i.test(num)) return falta("Coloque o número da casa (ou S/N se não tiver).", "#cnum");
-        if (porRaio && !loc) return (e.textContent = "Use sua localização ou o CEP para calcular a entrega.");
-        if (porRaio && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
+        if (porRaio && loc && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
       }
       const t = total();
       const forma = $("#cp", s).value;
@@ -177,8 +195,11 @@ export function telaCardapio(raiz) {
         const id = await criarPedido({
           tipo: modo, origem: "online", cliente: modo === "entrega" ? c : { nome: c.nome, telefone: c.telefone },
           itens: sacola.map((l) => ({ ...l })), taxaEntrega: t.taxa, pagamento: { forma, trocoPara }, obs: $("#co", s).value.trim(),
+          ...(t.desc ? { cupom: { codigo: cupomAplicado.codigo, pct: cupomAplicado.pct }, descontoCupom: t.desc } : {}),
+          ...(modo === "entrega" && porRaio && !loc ? { taxaPendente: true } : {}),
         });
         gravarLocal({ ...c, modo, ultimo: id });
+        if (cupomAplicado) try { localStorage.setItem("se_cupons", JSON.stringify([...usados(), cupomAplicado.codigo])); } catch {}
         sacola.length = 0;
         fecharSheet();
         toast("Pedido enviado! Acompanhe aqui em cima.");

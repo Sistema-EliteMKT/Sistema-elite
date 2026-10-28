@@ -100,6 +100,30 @@ export function abaMotoboys(el) {
   $$("[data-at]", el).forEach((b) => (b.onchange = () => store.salvar("motoboys", b.dataset.at, { ativo: b.checked }).catch(erro)));
 }
 
+
+// Cupons de desconto do cardápio online (ex.: PRIMEIRO10 = 10% nos itens do pedido).
+function cardCupons(el) {
+  const lista = () => (loja().cupons || []).map((c) => ({ ...c }));
+  const salvar = (l) => store.salvar("config", "loja", { cupons: l }).catch(erro);
+  const desenhar = () => {
+    const cs = lista();
+    el.innerHTML = `<b>🏷️ Cupons de desconto (cardápio online)</b><p class="muted pq">O cliente digita o cupom na sacola e o desconto vale sobre os itens (não sobre a entrega). Cada celular usa o mesmo cupom uma vez só. Confira no pedido se é mesmo a primeira compra da pessoa.</p>
+      ${cs.map((c, i) => `<div class="cl"><div class="n"><b>${esc(c.codigo)}</b><small>${Number(c.pct) || 0}% de desconto · ${c.ativo === false ? "desligado" : "valendo"}</small></div>
+        <div class="v"><button class="btn ghost sm" data-liga="${i}">${c.ativo === false ? "Ligar" : "Desligar"}</button><button class="mini-x" data-rm="${i}" aria-label="Remover">×</button></div></div>`).join("") || `<p class="vazio">Nenhum cupom ainda.</p>`}
+      <div class="linha-btn wrap"><input class="in" id="cuc" placeholder="Código (ex.: PRIMEIRO10)" autocapitalize="characters"><input class="in" id="cup" type="number" min="1" max="50" placeholder="%" style="max-width:90px"><button class="btn pri" id="cua">Criar cupom</button></div>`;
+    $("#cua", el).onclick = async () => {
+      const codigo = $("#cuc", el).value.trim().toUpperCase().replace(/\s+/g, ""), pct = Math.min(50, Number($("#cup", el).value) || 0);
+      if (!codigo || !pct) return toast("Coloque o código e a porcentagem.");
+      const l = lista().filter((c) => String(c.codigo).toUpperCase() !== codigo);
+      l.push({ codigo, pct, ativo: true });
+      await salvar(l); toast("Cupom criado ✓", "bom"); setTimeout(desenhar, 300);
+    };
+    $$("[data-liga]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l[b.dataset.liga].ativo = l[b.dataset.liga].ativo === false; await salvar(l); setTimeout(desenhar, 300); }));
+    $$("[data-rm]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l.splice(+b.dataset.rm, 1); await salvar(l); setTimeout(desenhar, 300); }));
+  };
+  desenhar();
+}
+
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
 const VERSAO_AGENTE = "2026.10.27-6";
 
@@ -506,6 +530,7 @@ export function abaAjustes(el) {
       <a class="btn sec sm" target="_blank" rel="noopener" href="https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(linkCardapio)}">QR Code</a></div></div>
 
     <div class="card inteiro" id="cardHorario"></div>
+    <div class="card inteiro" id="cardCupons"></div>
 
     <div class="card inteiro" id="cardRaio"><b>Taxa de entrega pelo mapa (raios e áreas)</b>
       <p class="muted pq">Duas formas, que podem ser usadas juntas: <b>raios</b> (círculos ao redor da pizzaria, em km) e <b>áreas desenhadas</b> (você clica nos cantos no mapa, dá o nome e a taxa). O cliente informa o CEP ou usa a localização do celular e a taxa é calculada sozinha. A área desenhada vale antes do raio. Fora de tudo, o app avisa que não entrega. Sem nada cadastrado, vale a lista de bairros.</p>
@@ -526,6 +551,7 @@ export function abaAjustes(el) {
   </div>`;
 
   cardHorario($("#cardHorario", el));
+  cardCupons($("#cardCupons", el));
 
   // Entrega por distância: mapa com a pizzaria e os raios desenhados
   {

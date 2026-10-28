@@ -187,7 +187,9 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ${p.tipo === "entrega" && c.endereco ? `<small class="muted">${esc(c.endereco)}${c.bairro ? " · " + esc(c.bairro) : ""}</small>` : ""}
       <small class="muted">${esc(pg.forma || "")}${pg.trocoPara ? ` · troco p/ ${brl(pg.trocoPara)}` : ""}${p.origem === "online" ? " · pelo app" : ""}${!fim && p.status !== "novo" ? ` · há ${minutos(p.criadoEm)} min` : ""}</small>
       <div class="pe-itens">${itensValidos(p).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}${i.det?.length ? `<small>${esc(i.det.join(" · "))}</small>` : ""}${i.obs ? `<small class="obs">${esc(i.obs)}</small>` : ""}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}
-        ${p.taxaEntrega ? `<div><span>Taxa de entrega</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}</div>
+        ${p.descontoCupom ? `<div><span>Cupom ${esc(p.cupom?.codigo || "")}</span><span>- ${brl(p.descontoCupom)}</span></div>` : ""}
+        ${p.taxaEntrega ? `<div><span>Taxa de entrega</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}
+        ${p.taxaPendente ? `<div class="ruim-txt"><span><b>Taxa de entrega a confirmar</b> (endereço sem ponto no mapa)</span><span></span></div>` : ""}</div>
       ${p.obs ? `<small class="obs">Obs: ${esc(p.obs)}</small>` : ""}
       <div class="pe-t"><span>Total</span><b>${brl(totalPedido(p))}</b></div>
       ${p.motoboy?.nome ? `<small class="muted">Motoboy: <b>${esc(p.motoboy.nome)}</b></small>` : ""}
@@ -233,6 +235,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         ${p.cliente?.telefone ? `<a class="btn ok" id="zapPed" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}?text=${encodeURIComponent(textoPedido(p))}">💬 Enviar para o cliente no WhatsApp</a>` : ""}</div>
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
+        ${p.tipo === "entrega" && !p.pago ? `<button class="btn ${p.taxaPendente ? "pri" : "ghost"}" id="defTaxa">${p.taxaPendente ? "Definir taxa de entrega" : "Mudar taxa de entrega"}</button>` : ""}
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
         ${p.status === "saiu" || p.status === "pronto" ? `<button class="btn sec" id="voltarPreparo">Voltar para preparo</button>` : ""}
@@ -249,6 +252,12 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); fecharSheet(); } catch (e) { erro(e); }
     }));
     $("#addItens", s) && ($("#addItens", s).onclick = () => adicionarNoPedido(p));
+    $("#defTaxa", s) && ($("#defTaxa", s).onclick = async () => {
+      const v = await pedirTexto("Taxa de entrega", "Valor da taxa (R$)", { valor: p.taxaEntrega ? String(p.taxaEntrega).replace(".", ",") : "", ok: "Salvar" });
+      if (v == null) return;
+      const taxa = numero(v);
+      store.salvar("pedidos", p.id, { taxaEntrega: taxa, taxaPendente: false }).then(() => { toast(`Taxa de entrega: ${brl(taxa)} ✓`, "bom"); fecharSheet(); }).catch(erro);
+    });
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
     $("#voltarPreparo", s) && ($("#voltarPreparo", s).onclick = async () => { await mudarEtapa(p, "preparo"); fecharSheet(); });

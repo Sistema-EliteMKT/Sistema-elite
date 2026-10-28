@@ -187,7 +187,7 @@ export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotulo
     } catch (e) { msg(e.message, true); } finally { b.disabled = false; }
   };
   const buscar = async () => {
-    const b = q("[data-achar]"); b.disabled = true; msg("Procurando…"); aoMudar(null, dados);
+    const b = q("[data-achar]"); if (b.disabled) return; b.disabled = true; msg("Procurando…"); aoMudar(null, dados);
     try {
       const c = await buscarCep(q("[data-cep]").value);
       dados = { rua: c.rua, bairro: c.bairro, cidade: c.cidade, cep: c.cep, uf: c.uf, numero: q("[data-num]").value.trim() };
@@ -196,8 +196,9 @@ export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotulo
     } catch (e) { msg(e.message, true); } finally { b.disabled = false; }
   };
   q("[data-achar]").onclick = buscar;
-  q("[data-cep]").oninput = (e) => { const n = e.target.value.replace(/\D/g, "").slice(0, 8); e.target.value = n.length > 5 ? n.slice(0, 5) + "-" + n.slice(5) : n; };
+  // Busca sozinho quando o CEP fica completo (não depende de apertar "Buscar").
+  q("[data-cep]").oninput = (e) => { const n = e.target.value.replace(/\D/g, "").slice(0, 8); e.target.value = n.length > 5 ? n.slice(0, 5) + "-" + n.slice(5) : n; if (n.length === 8) buscar(); };
   q("[data-cep]").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); buscar(); } };
   if (inicial?.lat != null) mostrar([inicial.lat, inicial.lng]);
-  return { destruir() { try { mp?.mapa.remove(); } catch {} } };
+  return { buscar, destruir() { try { mp?.mapa.remove(); } catch {} } };
 }

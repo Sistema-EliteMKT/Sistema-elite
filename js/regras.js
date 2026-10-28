@@ -132,7 +132,7 @@ export async function semearSePreciso() {
 // ---------------------------------------------------------------------------
 export const itensValidos = (p) => (p.itens || []).filter((i) => !i.cancelado);
 export const subtotal = (p) => itensValidos(p).reduce((s, i) => s + i.unit * i.qtd, 0);
-export const totalPedido = (p) => subtotal(p) + (Number(p.taxaEntrega) || 0);
+export const totalPedido = (p) => Math.max(0, subtotal(p) + (Number(p.taxaEntrega) || 0) - (Number(p.descontoCupom) || 0));
 export const dinheiro = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
 // ---------------------------------------------------------------------------
@@ -463,7 +463,9 @@ export function textoPedido(p) {
     for (const d of i.det || []) linhas.push(`    ${d}`);
     if (i.obs) linhas.push(`    Obs: ${i.obs}`);
   }
+  if (p.descontoCupom) linhas.push(`Cupom ${p.cupom?.codigo || ""}: -${real(p.descontoCupom)}`);
   if (p.taxaEntrega) linhas.push(`Entrega: ${real(p.taxaEntrega)}`);
+  if (p.taxaPendente) linhas.push("Entrega: a confirmar (vamos te avisar o valor)");
   linhas.push(`*Total: ${real(totalPedido(p))}*`);
   const pg = p.pagamento || {};
   if (pg.forma) linhas.push(`Pagamento: ${pg.forma}${p.pago ? " (pago)" : ""}${pg.trocoPara ? ` · troco para ${real(pg.trocoPara)}` : ""}`);
@@ -814,6 +816,7 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
     if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `${rotuloComanda(p)}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
     else linhas.push(SEP);
     linhas.push(...linhasItens(itensValidos(p), { precos: true }));
+    if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
     if (p.taxaEntrega) linhas.push(L(lado("Taxa de entrega", r$(p.taxaEntrega))));
   }
   const sub = pedidos.reduce((s, p) => s + totalPedido(p), 0);
@@ -858,7 +861,9 @@ export function cupomEntrega(p) {
   linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasItens(its, { precos: true }));
   linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
   if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
+  if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
   if (p.taxaEntrega) linhas.push(L(lado("Entrega", r$(p.taxaEntrega))));
+  if (p.taxaPendente) linhas.push(L("TAXA DE ENTREGA A CONFIRMAR", { b: true, g: true }));
   linhas.push(SEP, L(lado("TOTAL R$", r$(totalPedido(p))), { b: true, g: true }));
   const pg = p.pagamento || {};
   if (pg.forma) linhas.push(L(`Pagamento: ${pg.forma}${p.pago ? " (PAGO)" : ""}`, { b: true }));
