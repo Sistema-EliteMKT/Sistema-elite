@@ -22,11 +22,22 @@ const montar = (fn) => { desmontar(); pararPin?.(); pararPin = null; fecharTudo(
 function rota() {
   const h = location.hash.replace(/^#\/?/, "");
   if (h.startsWith("cardapio")) return iniciarCardapio();
+  marcaDoApp(false);
   iniciarEquipe(h);
 }
 
 // ------------------------------------------------------------- Cliente
+// Quem instala pelo cardápio leva o app do cardápio (nome e ícone da pizzaria), não o "Sistema Elite" da equipe.
+function marcaDoApp(cliente) {
+  const set = (sel, attr, v) => document.querySelector(sel)?.setAttribute(attr, v);
+  set('link[rel="manifest"]', "href", cliente ? "manifest-cardapio.webmanifest" : "manifest.webmanifest");
+  set('link[rel="apple-touch-icon"]', "href", cliente ? "assets/amarilis-apple-touch.png" : "assets/apple-touch-icon.png");
+  set('meta[name="theme-color"]', "content", cliente ? "#B00B16" : "#111111");
+  set('meta[name="apple-mobile-web-app-title"]', "content", cliente ? "Amarílis" : "Sistema Elite");
+}
+
 function iniciarCardapio() {
+  marcaDoApp(true);
   document.body.className = "cliente";
   document.title = `${loja().nome} · Cardápio`;
   conectar({ publico: true });
