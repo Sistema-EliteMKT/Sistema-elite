@@ -234,9 +234,11 @@ export async function alterarItem(pedidoId, key, novo, quem) {
   const antes = (p.itens || []).find((i) => i.key === key && !i.cancelado);
   if (!antes) throw new Error("Item não encontrado.");
   const item = {
-    ...antes, ...novo, key, enviadoEm: antes.enviadoEm, por: antes.por,
+    ...antes, ...novo, key, enviadoEm: antes.enviadoEm ?? null, por: antes.por ?? "",
     alteradoPor: quem?.nome || "", alteradoEm: Date.now(), ...(antes.unitOriginal == null && Number(novo.unit) !== Number(antes.unit) ? { unitOriginal: antes.unit } : {}),
   };
+  // O banco não aceita campo "undefined" (item de pedido online não tem alguns campos).
+  for (const k of Object.keys(item)) if (item[k] === undefined) delete item[k];
   // Transação: não apaga item que outro garçom lançou ao mesmo tempo. Sem internet, grava direto.
   try {
     if (!temInternet()) throw Object.assign(new Error("offline"), { offline: true });

@@ -167,7 +167,7 @@ function criarStoreFirebase() {
       auth = a.getAuth(appFb);
       // Cache offline: se a internet cair, o garçom continua lançando e tudo sobe quando voltar.
       try {
-        db = f.initializeFirestore(appFb, { localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }) });
+        db = f.initializeFirestore(appFb, { ignoreUndefinedProperties: true, localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }) });
       } catch {
         db = f.getFirestore(appFb);
       }
