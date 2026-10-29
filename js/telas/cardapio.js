@@ -1,6 +1,6 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
 import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
-import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm } from "../regras.js";
+import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
 import { statusOnline, previsao } from "../horario.js";
@@ -66,7 +66,7 @@ export function telaCardapio(raiz) {
     const taxas = lj.taxasEntrega || [];
     const porRaio = entregaPorRaio(lj);
     let loc = salvo.lat != null && porRaio ? { ponto: [salvo.lat, salvo.lng], ...taxaDoPonto(lj, [salvo.lat, salvo.lng]) } : null;
-    let ctl = null, autoEnd = "", cupomAplicado = null;
+    let ctl = null, autoEnd = "", cupomAplicado = null, ruaEditada = false; // ruaEditada: a pessoa mexeu na rua; aí o CEP não troca mais
     const formas = lj.formasPagamento || [];
     const s = abrirSheet(`${cabecalhoSheet("Sua sacola")}<div class="sh-b">
       <div id="linhas"></div>
@@ -102,7 +102,7 @@ export function telaCardapio(raiz) {
         const d = r || dados || {};
         // Preenche a rua sozinho, mas não apaga o que a pessoa já digitou.
         const campo = $("#ce", s);
-        if (d.rua && (!campo.value.trim() || campo.value === autoEnd)) campo.value = autoEnd = d.rua;
+        if (d.rua && (!campo.value.trim() || !ruaEditada)) campo.value = autoEnd = d.rua;
         if (d.numero && !$("#cnum", s).value.trim()) $("#cnum", s).value = d.numero;
         atualizar();
       } });
@@ -121,7 +121,7 @@ export function telaCardapio(raiz) {
           cepAchado = true;
           $("#cepMsg", s).innerHTML = `<span class="ok-txt">${esc([r.rua, r.bairro, r.cidade].filter(Boolean).join(" · ") || "CEP encontrado")}</span>`;
           const campo = $("#ce", s);
-          if (r.rua && (!campo.value.trim() || campo.value === autoEnd)) campo.value = autoEnd = r.rua;
+          if (r.rua && (!campo.value.trim() || !ruaEditada)) campo.value = autoEnd = r.rua;
         } catch (x) {
           if (/não encontrado/i.test(x.message)) { cepAchado = false; $("#cepMsg", s).innerHTML = `<span class="ruim-txt">CEP não encontrado. Confira os números.</span>`; }
           else $("#cepMsg", s).textContent = ""; // sem internet para conferir: vale o CEP digitado
@@ -130,6 +130,9 @@ export function telaCardapio(raiz) {
       cepCampo.oninput = () => { cepCampo.value = fmtCep(cepCampo.value); conferir(); };
       if (cepCampo.value) conferir();
     }
+    // Rua digitada à mão não é trocada pelo CEP; rua que veio de um pedido anterior (ou do CEP) é.
+    $("#ce", s).addEventListener("input", () => { ruaEditada = true; atualizar(); });
+    $("#cnum", s).addEventListener("input", () => atualizar());
     // Com o mapa, o número digitado aqui também vai para a busca do endereço.
     if (porRaio) {
       $("#cnum", s).addEventListener("input", () => { const n = $("[data-num]", s); if (n) n.value = $("#cnum", s).value; });
@@ -144,7 +147,7 @@ export function telaCardapio(raiz) {
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
-      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>`;
+      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
       $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
@@ -231,14 +234,22 @@ export function telaCardapio(raiz) {
     const el = $("#acomp", raiz);
     if (!el) return;
     const p = acompanhando;
-    if (!p || (p.status === "concluido" && Date.now() - (p.concluidoEm || 0) > 3600e3)) { el.innerHTML = ""; return; }
+    if (!p || (p.status === "concluido" && Date.now() - (p.concluidoEm || 0) > 6 * 3600e3)) { el.innerHTML = ""; return; }
     const passos = p.tipo === "entrega" ? ["novo", "preparo", "saiu", "concluido"] : ["novo", "preparo", "pronto", "concluido"];
     const atual = passos.indexOf(p.status);
     const nomes = { ...ETAPAS, novo: "Pedido recebido", concluido: p.tipo === "entrega" ? "Entregue" : "Retirado", pronto: "Pronto para retirar" };
     el.innerHTML = p.status === "cancelado"
       ? `<div class="track"><h3>Pedido cancelado</h3><p class="muted">${esc(p.motivo || "Fale com a gente pelo telefone.")}</p><button class="btn sec sm" id="okAc">Ok</button></div>`
       : `<div class="track"><h3>Seu pedido${p.numero ? ` #${p.numero}` : ""}</h3><p class="muted">Feito às ${hora(p.criadoEm)} · ${brl(totalPedido(p))}</p>${previsaoHora(p)}
-        <ol class="steps">${passos.map((k, i) => `<li class="${i < atual ? "done" : i === atual ? "now" : ""}">${esc(nomes[k])}</li>`).join("")}</ol></div>`;
+        <ol class="steps">${passos.map((k, i) => `<li class="${i < atual ? "done" : i === atual ? "now" : ""}">${esc(nomes[k])}</li>`).join("")}</ol>
+        <details class="track-itens"><summary>Ver o que pedi</summary>
+          ${itensValidos(p).map((i) => `<div class="cl"><div class="n"><b>${i.qtd}x ${esc(i.nome)}</b>${(i.det || []).map((d) => `<small>${esc(d)}</small>`).join("")}${i.obs ? `<small>Obs: ${esc(i.obs)}</small>` : ""}</div><div class="v">${brl(i.unit * i.qtd)}</div></div>`).join("")}
+          ${p.descontoCupom ? `<div class="cl"><div class="n"><b>Cupom ${esc(p.cupom?.codigo || "")}</b></div><div class="v">- ${brl(p.descontoCupom)}</div></div>` : ""}
+          ${p.tipo === "entrega" ? `<div class="cl"><div class="n"><b>Entrega</b>${p.taxaPendente ? `<small>Valor a confirmar pela pizzaria</small>` : ""}</div><div class="v">${p.taxaPendente ? "a confirmar" : brl(p.taxaEntrega || 0)}</div></div>` : ""}
+          <div class="cl"><div class="n"><b>Total</b></div><div class="v"><b>${brl(totalPedido(p))}</b></div></div>
+          ${p.tipo === "entrega" && p.cliente?.endereco ? `<small class="muted">📍 ${esc(p.cliente.endereco)}${p.cliente.bairro ? " · " + esc(p.cliente.bairro) : ""}</small>` : ""}
+          <small class="muted">Pagamento: ${esc(p.pagamento?.forma || "")}${p.pagamento?.trocoPara ? ` · troco para ${brl(p.pagamento.trocoPara)}` : ""}</small>
+        </details></div>`;
     const ok = $("#okAc", el);
     if (ok) ok.onclick = () => { gravarLocal({ ultimo: null }); acompanhando = null; desenharAcomp(); };
   };

@@ -73,6 +73,14 @@ export async function achar({ rua, numero, bairro, cidade, uf, cep, texto }) {
     const q = Object.fromEntries(Object.entries(t).filter(([, v]) => v));
     try { const r = (await nominatim(q))[0]; if (r) return { ponto: [Number(r.lat), Number(r.lon)], nome: r.display_name }; } catch (e) { console.warn("busca de endereço", e); }
   }
+  // Reserva: o BrasilAPI devolve a coordenada do CEP quando o mapa não achou a rua.
+  if (cep) {
+    try {
+      const r = await json(`https://brasilapi.com.br/api/cep/v2/${cep.replace(/\D/g, "")}`);
+      const c = r?.location?.coordinates;
+      if (c && Number.isFinite(Number(c.latitude)) && Number.isFinite(Number(c.longitude))) return { ponto: [Number(c.latitude), Number(c.longitude)], nome: "CEP" };
+    } catch (e) { console.warn("coordenada do CEP", e); }
+  }
   return null;
 }
 export async function enderecoDoPonto(ponto) {

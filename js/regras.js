@@ -794,6 +794,7 @@ function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null, a
   if (alteracao) linhas.push(L("*** ALTERADO ***", { b: true, g: true, c: true }));
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
+  if (p.taxaPendente) linhas.push(L("** TAXA DE ENTREGA A CONFIRMAR **", { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
   for (const [s, its] of grupos) {
     linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));

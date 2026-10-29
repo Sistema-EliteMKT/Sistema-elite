@@ -189,7 +189,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="pe-itens">${itensValidos(p).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}${i.det?.length ? `<small>${esc(i.det.join(" · "))}</small>` : ""}${i.obs ? `<small class="obs">${esc(i.obs)}</small>` : ""}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}
         ${p.descontoCupom ? `<div><span>Cupom ${esc(p.cupom?.codigo || "")}</span><span>- ${brl(p.descontoCupom)}</span></div>` : ""}
         ${p.taxaEntrega ? `<div><span>Taxa de entrega</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}
-        ${p.taxaPendente ? `<div class="ruim-txt"><span><b>Taxa de entrega a confirmar</b> (endereço sem ponto no mapa)</span><span></span></div>` : ""}</div>
+        ${p.taxaPendente ? `<div class="ruim-txt"><span><b>Taxa de entrega a confirmar</b> (endereço sem ponto no mapa)</span><span><button class="btn pri sm" data-acao="taxa" data-id="${p.id}">Definir taxa</button></span></div>` : ""}</div>
       ${p.obs ? `<small class="obs">Obs: ${esc(p.obs)}</small>` : ""}
       <div class="pe-t"><span>Total</span><b>${brl(totalPedido(p))}</b></div>
       ${p.motoboy?.nome ? `<small class="muted">Motoboy: <b>${esc(p.motoboy.nome)}</b></small>` : ""}
@@ -209,13 +209,16 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         await cancelarPedido(p, motivo || "Pedido cancelado pela loja.", usuario);
       }
       else if (acao === "pronto") await mudarEtapa(p, "pronto");
+      else if (acao === "taxa") await definirTaxa(p);
       else if (acao === "despachar") {
+        if (p.taxaPendente && !(await definirTaxa(p))) return toast("Defina a taxa de entrega antes de sair.");
         const m = D.motoboys.find((x) => x.id === mbEscolhido[p.id]);
         if (!m && D.motoboys.some((x) => x.ativo !== false)) return toast("Escolha o motoboy.");
         await mudarEtapa(p, "saiu", { motoboy: m ? { id: m.id, nome: m.nome } : null });
         toast("Saiu para entrega");
       }
       else if (acao === "concluir") {
+        if (p.taxaPendente && !(await definirTaxa(p))) return toast("Defina a taxa de entrega antes de concluir.");
         if (!p.pago) {
           const pag = await receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara, titulo: `Receber #${p.numero}` });
           if (!pag) return;
@@ -252,12 +255,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); fecharSheet(); } catch (e) { erro(e); }
     }));
     $("#addItens", s) && ($("#addItens", s).onclick = () => adicionarNoPedido(p));
-    $("#defTaxa", s) && ($("#defTaxa", s).onclick = async () => {
-      const v = await pedirTexto("Taxa de entrega", "Valor da taxa (R$)", { valor: p.taxaEntrega ? String(p.taxaEntrega).replace(".", ",") : "", ok: "Salvar" });
-      if (v == null) return;
-      const taxa = numero(v);
-      store.salvar("pedidos", p.id, { taxaEntrega: taxa, taxaPendente: false }).then(() => { toast(`Taxa de entrega: ${brl(taxa)} ✓`, "bom"); fecharSheet(); }).catch(erro);
-    });
+    $("#defTaxa", s) && ($("#defTaxa", s).onclick = () => definirTaxa(p).then((ok) => ok && fecharSheet()).catch(erro));
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
     $("#voltarPreparo", s) && ($("#voltarPreparo", s).onclick = async () => { await mudarEtapa(p, "preparo"); fecharSheet(); });
@@ -292,6 +290,17 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   };
 
   // -------------------------------------------------------------- Novo pedido
+  // Taxa de entrega de pedido que chegou sem ponto no mapa: precisa ser definida antes de o pedido sair.
+  async function definirTaxa(p) {
+    const v = await pedirTexto("Taxa de entrega", `Valor da taxa para ${p.cliente?.bairro || p.cliente?.endereco || "este endereço"} (R$)`, { valor: p.taxaEntrega ? String(p.taxaEntrega).replace(".", ",") : "", ok: "Salvar" });
+    if (v == null) return false;
+    const taxa = numero(v);
+    if (!taxa && !(await confirmar("Sem taxa?", "Entregar sem cobrar taxa de entrega?", { ok: "Sem taxa" }))) return false;
+    await store.salvar("pedidos", p.id, { taxaEntrega: taxa, taxaPendente: false });
+    toast(`Taxa de entrega: ${brl(taxa)} ✓`, "bom");
+    return true;
+  }
+
   function novoPedido(tipoInicial = "entrega") {
     const lj = loja();
     const itens = [];

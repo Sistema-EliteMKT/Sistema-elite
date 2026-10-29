@@ -66,8 +66,8 @@ export function seletorProdutos(el, aoAdicionar, { onde = "" } = {}) {
     $$("[data-gc]", el).forEach((b) => (b.onclick = () => { aba = b.dataset.gc; geral = false; desenhar(); el.querySelector(".sel-lista")?.scrollTo?.(0, 0); }));
     $$("[data-gp]", el).forEach((b) => (b.onclick = () => {
       const p = D.produtos.find((x) => x.id === b.dataset.gp);
-      // No salão sempre abre a janela do item (tem a barra de observação: copo com gelo, sem cebola…). Delivery/telefone segue com 1 toque.
-      montarItem(p, aoAdicionar, { onde, rapido: onde !== "mesa" });
+      // Sempre abre a janela do item (quantidade, observação rápida: copo com gelo, sem cebola…), no salão e no delivery/telefone.
+      montarItem(p, aoAdicionar, { onde, rapido: false });
     }));
   };
   desenhar();

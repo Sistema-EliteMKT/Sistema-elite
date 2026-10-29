@@ -373,3 +373,7 @@ html,body{max-width:100%;overflow-x:clip}
 .tab-rel th,.tab-rel td{padding:8px 6px;border-bottom:1px solid var(--line,#e8dfc8);text-align:right}
 .tab-rel th:first-child,.tab-rel td:first-child{text-align:left}
 .tab-rel tfoot td{font-weight:800;border-bottom:0}
+.addr-conf{color:var(--ink)!important;font-size:13px;border-top:1px dashed var(--line);padding-top:6px;margin-top:4px;text-align:right}
+.addr-conf span:first-child{white-space:nowrap}
+.track-itens{margin-top:8px;font-size:14px}
+.track-itens summary{cursor:pointer;font-weight:700;color:var(--accent-txt)}
