@@ -377,3 +377,12 @@ html,body{max-width:100%;overflow-x:clip}
 .addr-conf span:first-child{white-space:nowrap}
 .track-itens{margin-top:8px;font-size:14px}
 .track-itens summary{cursor:pointer;font-weight:700;color:var(--accent-txt)}
+/* 2º sabor do meio a meio: tudo empilhado na largura da janela (no celular a lista passava para fora) */
+#s2.sabor{display:block;margin-top:10px}
+#s2.sabor[hidden]{display:none}
+#s2 > .muted{display:block;font-weight:700;margin-bottom:2px}
+#s2 .in{width:100%;margin-top:6px}
+#s2 #s2atual{display:block;margin-top:6px;font-weight:600;color:var(--ink)}
+.s2lista{width:100%;max-height:240px;box-sizing:border-box}
+.s2lista .sel-sec{font-size:15px;margin:10px 0 2px;border-bottom-width:1px}
+.s2opt{min-width:0}.s2opt span{min-width:0;flex:1;overflow-wrap:anywhere}

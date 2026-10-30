@@ -46,7 +46,7 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
         <label class="opt"><input type="radio" name="ns" value="2"><span>Meio a meio</span></label></div>
       <div class="sabor" id="s2" hidden><span class="muted">2º sabor</span>
         <input type="hidden" id="s2sel" value="${esc(outros[0]?.id || "")}">
-        <input class="in" id="s2q" type="search" placeholder="Buscar sabor ou aba (ex.: calabresa, especial, doce)" autocomplete="off" aria-label="Buscar o 2º sabor">
+        <input class="in" id="s2q" type="search" placeholder="Buscar sabor (ex.: calabresa)" autocomplete="off" aria-label="Buscar o 2º sabor">
         <small class="muted" id="s2atual"></small>
         <div class="s2lista" id="s2lista"></div></div>` : ""}
       ${bordas.length ? `<div class="grp">Borda</div><div class="opts">

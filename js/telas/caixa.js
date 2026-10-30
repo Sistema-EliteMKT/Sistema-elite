@@ -188,7 +188,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <small class="muted">${esc(pg.forma || "")}${pg.trocoPara ? ` · troco p/ ${brl(pg.trocoPara)}` : ""}${p.origem === "online" ? " · pelo app" : ""}${!fim && p.status !== "novo" ? ` · há ${minutos(p.criadoEm)} min` : ""}</small>
       <div class="pe-itens">${itensValidos(p).map((i) => `<div><span>${i.qtd}x ${esc(i.nome)}${i.det?.length ? `<small>${esc(i.det.join(" · "))}</small>` : ""}${i.obs ? `<small class="obs">${esc(i.obs)}</small>` : ""}</span><span>${brl(i.unit * i.qtd)}</span></div>`).join("")}
         ${p.descontoCupom ? `<div><span>Cupom ${esc(p.cupom?.codigo || "")}</span><span>- ${brl(p.descontoCupom)}</span></div>` : ""}
-        ${p.taxaEntrega ? `<div><span>Taxa de entrega</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}
+        ${p.taxaEntrega ? `<div><span>Taxa de entrega${c.area ? ` · ${esc(c.area)}` : ""}</span><span>${brl(p.taxaEntrega)}</span></div>` : ""}
         ${p.taxaPendente ? `<div class="ruim-txt"><span><b>Taxa de entrega a confirmar</b> (endereço sem ponto no mapa)</span><span><button class="btn pri sm" data-acao="taxa" data-id="${p.id}">Definir taxa</button></span></div>` : ""}</div>
       ${p.obs ? `<small class="obs">Obs: ${esc(p.obs)}</small>` : ""}
       <div class="pe-t"><span>Total</span><b>${brl(totalPedido(p))}</b></div>
@@ -238,6 +238,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
         ${p.cliente?.telefone ? `<a class="btn ok" id="zapPed" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}?text=${encodeURIComponent(textoPedido(p))}">💬 Enviar para o cliente no WhatsApp</a>` : ""}</div>
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
+        ${p.tipo !== "mesa" ? `<button class="btn sec" id="edCli">Editar dados do cliente</button>` : ""}
         ${p.tipo === "entrega" && !p.pago ? `<button class="btn ${p.taxaPendente ? "pri" : "ghost"}" id="defTaxa">${p.taxaPendente ? "Definir taxa de entrega" : "Mudar taxa de entrega"}</button>` : ""}
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
@@ -255,6 +256,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       try { await cancelarItem(p.id, b.dataset.ci, motivo, usuario); toast(`Item cancelado.${loja().imprimirCancelamento ? " Aviso enviado ao setor." : ""}`); fecharSheet(); } catch (e) { erro(e); }
     }));
     $("#addItens", s) && ($("#addItens", s).onclick = () => adicionarNoPedido(p));
+    $("#edCli", s) && ($("#edCli", s).onclick = () => editarCliente(p));
     $("#defTaxa", s) && ($("#defTaxa", s).onclick = () => definirTaxa(p).then((ok) => ok && fecharSheet()).catch(erro));
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
@@ -290,6 +292,29 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   };
 
   // -------------------------------------------------------------- Novo pedido
+  // Corrige nome, telefone e endereço de um pedido já lançado (ex.: cliente do cardápio digitou errado).
+  function editarCliente(p) {
+    const c = p.cliente || {};
+    const s = abrirSheet(`${cabecalhoSheet("Dados do cliente", `Pedido #${p.numero || ""}`)}<div class="sh-b">
+      <label class="f" for="ecn">Nome <b class="obrig">*</b></label><input class="in" id="ecn" value="${esc(c.nome || "")}" autocomplete="off">
+      <label class="f" for="ect">Telefone / WhatsApp <b class="obrig">*</b></label><input class="in" id="ect" type="tel" inputmode="tel" value="${esc(c.telefone || "")}">
+      ${p.tipo === "entrega" ? `<label class="f" for="ece">Endereço (rua, número, complemento)</label><input class="in" id="ece" value="${esc(c.endereco || "")}">
+        <label class="f" for="ecb">Bairro</label><input class="in" id="ecb" value="${esc(c.bairro || "")}">
+        <label class="f" for="ecr">Referência</label><input class="in" id="ecr" value="${esc(c.referencia || "")}">` : ""}
+      <label class="f" for="eco">Observação do pedido</label><input class="in" id="eco" value="${esc(p.obs || "")}">
+      <div class="err" id="err"></div><button class="btn ok cheio" id="ecok">Salvar</button></div>`, { nivel: 2 });
+    $("#ecok", s).onclick = async (ev) => {
+      const nome = $("#ecn", s).value.trim(), tel = $("#ect", s).value.trim();
+      if (!nome) return ($("#err", s).textContent = "Coloque o nome do cliente.");
+      if (tel.replace(/\D/g, "").length < 10) return ($("#err", s).textContent = "Coloque o telefone com DDD.");
+      ev.currentTarget.disabled = true;
+      const cliente = { ...c, nome, telefone: tel };
+      if (p.tipo === "entrega") Object.assign(cliente, { endereco: $("#ece", s).value.trim(), bairro: $("#ecb", s).value.trim(), referencia: $("#ecr", s).value.trim() });
+      try { await store.salvar("pedidos", p.id, { cliente, obs: $("#eco", s).value.trim() }); fecharSheet(); toast("Dados do cliente atualizados ✓", "bom"); }
+      catch (x) { $("#err", s).textContent = x.message; ev.currentTarget.disabled = false; }
+    };
+  }
+
   // Taxa de entrega de pedido que chegou sem ponto no mapa: precisa ser definida antes de o pedido sair.
   async function definirTaxa(p) {
     const v = await pedirTexto("Taxa de entrega", `Valor da taxa para ${p.cliente?.bairro || p.cliente?.endereco || "este endereço"} (R$)`, { valor: p.taxaEntrega ? String(p.taxaEntrega).replace(".", ",") : "", ok: "Salvar" });
@@ -309,8 +334,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="np-sel" id="sel"></div>
       <div class="np-form">
         <div class="seg" id="tipo"><button data-t="entrega">Delivery</button><button data-t="retirada">Retirada</button><button data-t="balcao">Balcão</button></div>
-        <label class="f" for="tel">Telefone</label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Digite e o cliente aparece">
-        <label class="f" for="nom">Nome</label><input class="in" id="nom">
+        <label class="f" for="tel">Telefone <b class="obrig">*</b></label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Digite e o cliente aparece">
+        <label class="f" for="nom">Nome <b class="obrig">*</b></label><input class="in" id="nom">
         <div id="endBox"><label class="f" for="end">Endereço</label><input class="in" id="end">
           <label class="f" for="bai">Bairro / taxa</label><select class="in" id="bai">${(lj.taxasEntrega || []).map((t) => `<option value="${esc(t.nome)}">${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}<option value="">Outra taxa…</option></select>
           <input class="in" id="taxaLivre" inputmode="decimal" placeholder="Taxa de entrega (R$)" hidden>
@@ -377,6 +402,8 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       const e = $("#err", s);
       if (!itens.length) return (e.textContent = "Coloque pelo menos um item.");
       const cliente = { nome: $("#nom", s).value.trim(), telefone: $("#tel", s).value.trim() };
+      if (!cliente.nome) return (e.textContent = "Coloque o nome do cliente.");
+      if (tipo !== "balcao" && cliente.telefone.replace(/\D/g, "").length < 10) return (e.textContent = "Coloque o telefone do cliente com DDD.");
       if (tipo === "entrega") Object.assign(cliente, { endereco: $("#end", s).value.trim(), bairro: $("#bai", s).value || geo?.bairro || "", referencia: $("#ref", s).value.trim() }, geo ? { lat: geo.lat, lng: geo.lng, distanciaKm: geo.distanciaKm, area: geo.area, cep: geo.cep } : {});
       if (tipo === "entrega" && !cliente.endereco) return (e.textContent = "Coloque o endereço.");
       const forma = $("#pg", s).value;

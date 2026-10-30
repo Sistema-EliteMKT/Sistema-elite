@@ -865,7 +865,7 @@ export function cupomEntrega(p) {
   linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
   if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
   if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
-  if (p.taxaEntrega) linhas.push(L(lado("Entrega", r$(p.taxaEntrega))));
+  if (p.taxaEntrega) linhas.push(L(lado(`Entrega${p.cliente?.area ? " (" + p.cliente.area + ")" : ""}`, r$(p.taxaEntrega))));
   if (p.taxaPendente) linhas.push(L("TAXA DE ENTREGA A CONFIRMAR", { b: true, g: true }));
   linhas.push(SEP, L(lado("TOTAL R$", r$(totalPedido(p))), { b: true, g: true }));
   const pg = p.pagamento || {};
