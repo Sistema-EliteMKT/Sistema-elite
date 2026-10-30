@@ -190,7 +190,8 @@ export function localizador(el, lj, { inicial = null, aoMudar = () => {}, rotulo
     try {
       const ponto = await minhaLocalizacao();
       const e = await enderecoDoPonto(ponto);
-      if (e) { dados = { ...dados, ...e }; if (e.cep) q("[data-cep]").value = e.cep.replace(/^(\d{5})(\d{3})$/, "$1-$2"); if (e.numero) q("[data-num]").value = e.numero; }
+      // A localização dá o ponto no mapa; não troca CEP e número que a pessoa já digitou.
+      if (e) { dados = { ...dados, ...e }; if (e.cep && !q("[data-cep]").value.trim()) q("[data-cep]").value = e.cep.replace(/^(\d{5})(\d{3})$/, "$1-$2"); if (e.numero && !q("[data-num]").value.trim()) q("[data-num]").value = e.numero; }
       await mostrar(ponto);
     } catch (e) { msg(e.message, true); } finally { b.disabled = false; }
   };

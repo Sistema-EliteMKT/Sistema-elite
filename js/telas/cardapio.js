@@ -1,5 +1,5 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
-import { $, $$, esc, brl, hora, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
+import { $, $$, esc, brl, hora, toast, erro, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
@@ -187,6 +187,11 @@ export function telaCardapio(raiz) {
         if (!rua) return falta("Coloque o nome da rua.", "#ce");
         if (!/\d/.test(num) && !/^s\s*\/?\s*n$/i.test(num)) return falta("Coloque o número da casa (ou S/N se não tiver).", "#cnum");
         if (porRaio && loc && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
+      }
+      // Última conferência: a pessoa vê exatamente o endereço que vai no pedido.
+      if (modo === "entrega") {
+        const qual = `${rua}, ${num}${comp ? " - " + comp : ""}${c.bairro ? " · " + c.bairro : ""} · CEP ${fmtCep(cep)}`;
+        if (!(await confirmar("O endereço está certo?", qual, { ok: "Está certo, enviar pedido" }))) return;
       }
       const t = total();
       const forma = $("#cp", s).value;
