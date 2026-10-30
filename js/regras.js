@@ -754,6 +754,28 @@ const titulo = (p) => {
   return `BALCÃO${n}`;
 };
 
+// Esfihas (salgadas e doces): no papel o título do grupo já diz o que é, então o nome sai sem a palavra "Esfiha".
+const catEsfiha = (i) => {
+  const c = categoria(produto(i.produtoId)?.cat);
+  const nome = String(c?.nome || i.nome || "");
+  if (c?.id === "esfdoces" || (/esfih/i.test(nome) && /doce/i.test(nome))) return "doce";
+  if (c?.id === "esfihas" || /esfih/i.test(nome)) return "salgada";
+  return null;
+};
+const semEsfiha = (i) => ({ ...i, nome: String(i.nome || "").replace(/^esfihas?\s+(doces?\s+)?/i, "") || i.nome });
+const TITULO_ESFIHA = { salgada: "ESFIHAS SALGADAS", doce: "ESFIHAS DOCES" };
+// Itens de um papel de setor: esfihas salgadas e doces em grupos com título; o resto como sempre.
+function linhasProducao(itens, opts) {
+  const sal = itens.filter((i) => catEsfiha(i) === "salgada"), doc = itens.filter((i) => catEsfiha(i) === "doce");
+  const resto = itens.filter((i) => !catEsfiha(i));
+  if (!sal.length && !doc.length) return linhasItens(itens, opts);
+  const out = [];
+  const grupo = (tipo, its) => { if (!its.length) return; if (out.length) out.push(L("")); out.push(L(`${TITULO_ESFIHA[tipo]} (${its.reduce((t, i) => t + i.qtd, 0)})`, { b: true, g: true }), ...linhasItens(its.map(semEsfiha), opts)); };
+  grupo("salgada", sal); grupo("doce", doc);
+  if (resto.length) { if (out.length) out.push(L("")); out.push(...linhasItens(resto, opts)); }
+  return out;
+}
+
 function linhasItens(itens, { precos = false, espaco = 0 } = {}) {
   const out = [];
   itens.forEach((i, k) => {
@@ -779,7 +801,7 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alt
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
-  linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasItens(itens, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
+  linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasProducao(itens, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   if (cancelamento && itens[0]?.motivo) linhas.push(SEP, L(`Motivo: ${itens[0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
@@ -797,7 +819,7 @@ function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null, a
   if (p.taxaPendente) linhas.push(L("** TAXA DE ENTREGA A CONFIRMAR **", { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
   for (const [s, its] of grupos) {
-    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasItens(its, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
+    linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasProducao(its, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   }
   if (cancelamento && grupos[0]?.[1][0]?.motivo) linhas.push(SEP, L(`Motivo: ${grupos[0][1][0].motivo}`));
   if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
@@ -846,17 +868,19 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
 function linhasPorCategoria(its, opts) {
   const grupos = new Map();
   for (const i of its) {
+    const tipo = catEsfiha(i);
     const c = categoria(produto(i.produtoId)?.cat);
-    const k = c?.id || "_";
-    if (!grupos.has(k)) grupos.set(k, { nome: c?.nome || "Outros", ordem: c?.ordem ?? 999, itens: [] });
+    const k = tipo ? `esfiha-${tipo}` : c?.id || "_";
+    const ordem = tipo ? (categoria(tipo === "doce" ? "esfdoces" : "esfihas")?.ordem ?? c?.ordem ?? 999) : c?.ordem ?? 999;
+    if (!grupos.has(k)) grupos.set(k, { nome: tipo ? TITULO_ESFIHA[tipo] : c?.nome || "Outros", ordem, esfiha: !!tipo, itens: [] });
     grupos.get(k).itens.push(i);
   }
   const lista = [...grupos.values()].sort((a, b) => a.ordem - b.ordem);
-  if (lista.length < 2) return linhasItens(its, opts);
+  if (lista.length < 2 && !lista[0]?.esfiha) return linhasItens(its, opts);
   const out = [];
   lista.forEach((g, n) => {
     if (n) out.push(L(""));
-    out.push(L(`${g.nome.replace(/^[^\p{L}\p{N}]+/u, "").toUpperCase()} (${g.itens.reduce((t, i) => t + i.qtd, 0)})`, { b: true, g: true }), ...linhasItens(g.itens, opts));
+    out.push(L(`${g.nome.replace(/^[^\p{L}\p{N}]+/u, "").toUpperCase()} (${g.itens.reduce((t, i) => t + i.qtd, 0)})`, { b: true, g: true }), ...linhasItens(g.esfiha ? g.itens.map(semEsfiha) : g.itens, opts));
   });
   return out;
 }
