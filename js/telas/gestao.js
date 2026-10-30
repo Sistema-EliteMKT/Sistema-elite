@@ -284,7 +284,13 @@ export function abaRelatorio(el, { usuario }) {
   const cancel = D.doDia.filter((p) => ["cancelado", "cancelada"].includes(p.status));
   const prod = {};
   for (const p of pedidos) for (const i of itensValidos(p)) prod[i.nome] = (prod[i.nome] || 0) + i.qtd;
-  const top = Object.entries(prod).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const todos = Object.entries(prod).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const top = todos.slice(0, 10);
+  // Rodízio (adulto e meio/criança): contagem à parte, para conferir com o caderno.
+  const rod = {};
+  for (const p of pedidos) for (const i of itensValidos(p)) { const pr = D.produtos.find((x) => x.id === i.produtoId); if ((pr?.cat || "") === "rodizio") rod[i.nome] = (rod[i.nome] || 0) + i.qtd; }
+  const rodLinhas = Object.entries(rod).sort((a, b) => b[1] - a[1]);
+  const rodTotal = rodLinhas.reduce((t, [, q]) => t + q, 0);
   const servico = pags.reduce((s, p) => s + (p.servico || 0), 0);
   const desconto = pags.reduce((s, p) => s + (p.desconto || 0), 0);
   const abertos = D.abertos.reduce((s, p) => s + (p.pago ? 0 : totalPedido(p)), 0);
@@ -306,7 +312,9 @@ export function abaRelatorio(el, { usuario }) {
         <div><span>Pagamentos a freelancers</span><span>− ${brl(saidas)}</span></div>
         <div class="t"><span>Dinheiro na gaveta</span><span>${brl(gaveta)}</span></div>
         <div><span>Recebido − pagamentos</span><span>${brl(total - saidas)}</span></div></div></div>
-      <div class="card"><b>Mais vendidos hoje</b><div class="sum">${top.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("") || `<p class="vazio">—</p>`}</div></div>
+      ${rodLinhas.length ? `<div class="card"><b>🍽️ Rodízios hoje</b><div class="sum">${rodLinhas.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("")}<div class="t"><span>Total de rodízios</span><span>${rodTotal}</span></div></div></div>` : ""}
+      <div class="card"><b>Mais vendidos hoje</b><div class="sum">${top.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("") || `<p class="vazio">—</p>`}</div>
+        ${todos.length > 10 ? `<details class="track-itens"><summary>Ver tudo o que foi vendido (${todos.length} itens)</summary><div class="sum">${todos.map(([n, q]) => `<div><span>${esc(n)}</span><span>${q}</span></div>`).join("")}</div></details>` : ""}</div>
     </div>
     <div class="linha-btn"><button class="btn pri" id="fech">Imprimir fechamento do dia</button></div>
     <div class="card"><b>Recebimentos</b>${pags.map((p) => `<div class="cl"><div class="n"><b>${p.mesa ? `Mesa ${p.mesa}` : nomesTipo[p.tipo] || ""} ${p.numeros?.length ? "#" + p.numeros.join(", #") : ""}${p.nomes?.length ? " · " + esc(p.nomes.join(", ")) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.pagamentos.map((x) => `${x.forma} ${brl(x.valor)}`).join(" + "))} · ${esc(p.por || "")}</small></div><div class="v">${brl(p.total)}<button class="btn ghost sm" data-desfaz="${p.id}">Desfazer</button></div></div>`).join("") || `<p class="vazio">Nada ainda.</p>`}</div><div id="relBairros"></div>`;
