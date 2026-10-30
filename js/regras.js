@@ -842,6 +842,25 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
   return linhas;
 }
 
+// Itens agrupados por categoria (Esfihas, Pizzas, Esfihas doces, Pastéis…), cada grupo com título em negrito e a quantidade.
+function linhasPorCategoria(its, opts) {
+  const grupos = new Map();
+  for (const i of its) {
+    const c = categoria(produto(i.produtoId)?.cat);
+    const k = c?.id || "_";
+    if (!grupos.has(k)) grupos.set(k, { nome: c?.nome || "Outros", ordem: c?.ordem ?? 999, itens: [] });
+    grupos.get(k).itens.push(i);
+  }
+  const lista = [...grupos.values()].sort((a, b) => a.ordem - b.ordem);
+  if (lista.length < 2) return linhasItens(its, opts);
+  const out = [];
+  lista.forEach((g, n) => {
+    if (n) out.push(L(""));
+    out.push(L(`${g.nome.replace(/^[^\p{L}\p{N}]+/u, "").toUpperCase()} (${g.itens.reduce((t, i) => t + i.qtd, 0)})`, { b: true, g: true }), ...linhasItens(g.itens, opts));
+  });
+  return out;
+}
+
 export function cupomEntrega(p) {
   const lj = loja();
   const c = p.cliente || {};
@@ -861,7 +880,7 @@ export function cupomEntrega(p) {
   }
   const its = itensValidos(p);
   const nItens = its.reduce((s, i) => s + i.qtd, 0);
-  linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasItens(its, { precos: true }));
+  linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasPorCategoria(its, { precos: true }));
   linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
   if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
   if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
