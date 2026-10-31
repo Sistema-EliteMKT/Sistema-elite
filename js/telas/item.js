@@ -17,11 +17,12 @@ export function itensDaEscolha(p) {
 }
 
 // inicial: escolhas de um item já montado (botão Editar), para abrir a janela preenchida.
-export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial = null } = {}) {
+// cliente: true quando quem monta é o cliente no cardápio online (sem adicionais e sem as observações rápidas).
+export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial = null, cliente = false } = {}) {
   const cat = categoria(p.cat);
-  // Adicionais só na mesa, da lista do grupo do produto (Pizza, Esfiha, Pastel…).
+  // Adicionais só para a equipe (mesa, delivery, retirada, balcão), da lista do grupo do produto (Pizza, Esfiha, Pastel…).
   const grupoAd = p.grupoAdicional ?? cat?.grupoAdicional ?? "";
-  const adicionais = onde === "mesa" && grupoAd ? (loja().adicionais || []).filter((a) => a.grupo === grupoAd) : [];
+  const adicionais = !cliente && grupoAd ? (loja().adicionais || []).filter((a) => a.grupo === grupoAd) : [];
   // Item simples sem opções: no garçom/caixa entra direto com 1 toque.
   if (rapido && !inicial && p.tipo !== "pizza" && !(p.opcoes || []).length && !p.escolha?.n && !adicionais.length) {
     aoAdicionar(criar(p, { qtd: 1 }));
@@ -60,12 +61,12 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
         <label class="opt"><input type="radio" name="tam" value="M"><span>Meia porção<br><em>${brl(p.precoMeia)}</em></span></label></div>` : ""}
     ${(p.opcoes || []).length ? `<div class="grp">Escolha</div><div class="opts dois">${p.opcoes.map((o, i) =>
       `<label class="opt"><input type="radio" name="op" value="${esc(o)}" ${i ? "" : "checked"}><span>${esc(o)}</span></label>`).join("")}</div>` : ""}
-    ${adicionais.length ? `<div class="grp">Adicionais <small>só na mesa · pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
+    ${adicionais.length ? `<div class="grp">Adicionais <small>pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
       `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>
        ${a.livre ? `<input class="in livre" data-livre="${i}" placeholder="Qual adicional? (ex.: bacon)" hidden>` : ""}`).join("")}</div>` : ""}
-    <label class="f" for="obs">Observação</label>
-    ${(loja().obsRapidas?.[setorDe(p)] || []).length ? `<div class="chips quebra obs-chips">${loja().obsRapidas[setorDe(p)].map((o) => `<button type="button" class="chip" data-oc="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>` : ""}
-    <input class="in" id="obs" placeholder="Ex.: copo com gelo, sem cebola, bem passada" maxlength="120">
+    <label class="f" for="obs">${cliente ? "Observação deste item <small>(opcional)</small>" : "Observação"}</label>
+    ${!cliente && (loja().obsRapidas?.[setorDe(p)] || []).length ? `<div class="chips quebra obs-chips">${loja().obsRapidas[setorDe(p)].map((o) => `<button type="button" class="chip" data-oc="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>` : ""}
+    <input class="in" id="obs" placeholder="${cliente ? "Escreva aqui se quiser algo diferente" : "Ex.: copo com gelo, sem cebola, bem passada"}" maxlength="120">
     <div class="addrow"><div class="qtd"><button id="qm" aria-label="Diminuir">−</button><span id="qv">1</span><button id="qp" aria-label="Aumentar">+</button></div>
       <button class="btn pri" id="add"><span>Adicionar</span><span id="ap"></span></button></div></div>`, { nivel: 2 });
 
@@ -149,10 +150,10 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
 }
 
 // Botão "Editar": reabre a janela do item com as escolhas feitas; aoSalvar recebe o item novo.
-export function editarItem(item, onde, aoSalvar) {
+export function editarItem(item, onde, aoSalvar, { cliente = false } = {}) {
   const p = produto(item.produtoId);
   if (!p) return;
-  montarItem(p, aoSalvar, { onde, inicial: { ...(item.escolhas || {}), obs: item.obs, qtd: item.qtd } });
+  montarItem(p, aoSalvar, { onde, cliente, inicial: { ...(item.escolhas || {}), obs: item.obs, qtd: item.qtd } });
 }
 
 // Editar item JÁ LANÇADO (na comanda ou no pedido): quantidade, escolhas e valor.

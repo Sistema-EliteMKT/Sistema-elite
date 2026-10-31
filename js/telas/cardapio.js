@@ -46,7 +46,7 @@ export function telaCardapio(raiz) {
     $$("[data-p]", raiz).forEach((b) => (b.onclick = () => {
       if (!statusOnline(loja()).aberto) return toast(`${statusOnline(loja()).texto}. Não estamos aceitando pedidos agora.`);
       const p = D.produtos.find((x) => x.id === b.dataset.p);
-      montarItem(p, (item) => { sacola.push(item); toast("Adicionado à sacola"); desenhar(); }, { onde: "delivery" });
+      montarItem(p, (item) => { sacola.push(item); toast("Adicionado à sacola"); desenhar(); }, { onde: "delivery", cliente: true });
     }));
     $("#verSacola", raiz) && ($("#verSacola", raiz).onclick = abrirSacola);
     desenharAcomp();
@@ -85,7 +85,6 @@ export function telaCardapio(raiz) {
       <label class="f" for="cp">Pagamento (na entrega ou retirada)</label><select class="in" id="cp">${formas.map((f) => `<option>${esc(f)}</option>`).join("")}</select>
       <div id="trocoBox" hidden><label class="f" for="cx">Troco para quanto? (deixe vazio se não precisar)</label><input class="in" id="cx" inputmode="decimal"></div>
       ${(lj.cupons || []).some((c) => c.ativo !== false) ? `<label class="f" for="ccup">Cupom de desconto</label><div class="linha-btn"><input class="in" id="ccup" autocomplete="off" autocapitalize="characters" placeholder="Digite o cupom"><button type="button" class="btn ghost" id="aplicarCup">Aplicar</button></div><small id="cupMsg" role="status"></small>` : ""}
-      <label class="f" for="co">Observação do pedido</label><input class="in" id="co" maxlength="160">
       <div class="sum" id="sum"></div>
       <div class="err" id="err"></div>
       <button class="btn pri cheio" id="enviar">Fazer pedido</button></div>`);
@@ -157,7 +156,7 @@ export function telaCardapio(raiz) {
       $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : !porRaio && taxas.length && !$("#cb", s)?.value ? "escolha o bairro" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
-      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
+      $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); }, { cliente: true })));
       $("#enviar", s).disabled = !sacola.length || (modo === "entrega" && porRaio && loc && loc.fora);
     };
     $$("[data-m]", s).forEach((b) => (b.onclick = () => { modo = b.dataset.m; atualizar(); }));
@@ -210,7 +209,7 @@ export function telaCardapio(raiz) {
       try {
         const id = await criarPedido({
           tipo: modo, origem: "online", cliente: modo === "entrega" ? c : { nome: c.nome, telefone: c.telefone },
-          itens: sacola.map((l) => ({ ...l })), taxaEntrega: t.taxa, pagamento: { forma, trocoPara }, obs: $("#co", s).value.trim(),
+          itens: sacola.map((l) => ({ ...l })), taxaEntrega: t.taxa, pagamento: { forma, trocoPara }, obs: "", // observação vai em cada item (sai junto do sabor no papel)
           ...(t.desc ? { cupom: { codigo: cupomAplicado.codigo, pct: cupomAplicado.pct }, descontoCupom: t.desc } : {}),
           ...(modo === "entrega" && porRaio && !loc ? { taxaPendente: true } : {}),
         });

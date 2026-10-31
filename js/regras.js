@@ -801,9 +801,10 @@ export function cupomProducao(p, itens, setor, quem, { cancelamento = false, alt
   linhas.push(L(titulo(p), { b: true, g: true }));
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
+  // Observação geral do pedido em destaque, antes dos itens (no fim do papel ninguém via).
+  if (p.obs && p.tipo !== "mesa") linhas.push(...[SEP, L("*** OBSERVAÇÃO DO PEDIDO ***", { b: true, c: true }), L(p.obs, { b: true, g: true, c: true })]);
   linhas.push(SEP, ...(alteracao ? [L("AGORA:", { b: true })] : []), ...linhasProducao(itens, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   if (cancelamento && itens[0]?.motivo) linhas.push(SEP, L(`Motivo: ${itens[0].motivo}`));
-  if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
   return linhas;
 }
@@ -818,11 +819,11 @@ function cupomJunto(p, grupos, quem, { cancelamento = false, alteracao = null, a
   if (p.tipo !== "mesa" && p.cliente?.nome) linhas.push(L(p.cliente.nome, { b: true }));
   if (p.taxaPendente) linhas.push(L("** TAXA DE ENTREGA A CONFIRMAR **", { b: true }));
   linhas.push(L(`${hh()}${quem?.nome ? " · " + quem.nome : ""}`));
+  if (p.obs && p.tipo !== "mesa") linhas.push(...[SEP, L("*** OBSERVAÇÃO DO PEDIDO ***", { b: true, c: true }), L(p.obs, { b: true, g: true, c: true })]);
   for (const [s, its] of grupos) {
     linhas.push(SEP, L(`== ${nomeSetor(s).toUpperCase()} ==`, { b: true, c: true }), ...linhasProducao(its, { espaco: Number(loja().espacoItens) || 0 }), ...linhasAntes(alteracao));
   }
   if (cancelamento && grupos[0]?.[1][0]?.motivo) linhas.push(SEP, L(`Motivo: ${grupos[0][1][0].motivo}`));
-  if (p.obs && p.tipo !== "mesa") linhas.push(SEP, L(`OBS DO PEDIDO: ${p.obs}`, { b: true }));
   linhas.push(...rodape());
   return linhas;
 }
@@ -904,6 +905,7 @@ export function cupomEntrega(p) {
   }
   const its = itensValidos(p);
   const nItens = its.reduce((s, i) => s + i.qtd, 0);
+  if (p.obs) linhas.push(...[SEP, L("*** OBSERVAÇÃO DO PEDIDO ***", { b: true, c: true }), L(p.obs, { b: true, g: true, c: true })]);
   linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasPorCategoria(its, { precos: true }));
   linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
   if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
@@ -915,7 +917,7 @@ export function cupomEntrega(p) {
   if (pg.forma) linhas.push(L(`Pagamento: ${pg.forma}${p.pago ? " (PAGO)" : ""}`, { b: true }));
   if (pg.trocoPara) linhas.push(L(`Troco para ${r$(pg.trocoPara)} · levar ${r$(pg.trocoPara - totalPedido(p))}`, { b: true }));
   else if (pg.forma === "Dinheiro" && !p.pago) linhas.push(L("Troco: não precisa", { b: true }));
-  if (p.obs) linhas.push(SEP, L(`OBS: ${p.obs}`, { b: true }));
+
   if (p.motoboy?.nome) linhas.push(L(`Motoboy: ${p.motoboy.nome}`));
   linhas.push(SEP, L("NÃO É DOCUMENTO FISCAL", { c: true }), ...rodape());
   return linhas;

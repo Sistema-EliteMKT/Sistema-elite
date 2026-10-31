@@ -361,7 +361,7 @@ export function abaCardapio(el) {
         <div class="v">${brl(p.preco)}${p.precoBroto ? `<small>broto ${brl(p.precoBroto)}</small>` : ""}<select class="in mini-sel" data-cn="${esc(p.id)}" aria-label="Onde vende">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select><label class="sw" title="Disponível"><input type="checkbox" data-av="${esc(p.id)}" ${p.ativo === false ? "" : "checked"}><span></span></label><button class="btn ghost sm" data-ep="${esc(p.id)}">Editar</button></div></div>`).join("") || `<p class="vazio">Nenhum produto nesta categoria.</p>`}</div>` : ""}
     <div class="grade">
       <div class="card"><div class="card-h"><b>Bordas (pizzas salgadas)</b><button class="btn ghost sm" id="edBordas">Editar</button></div>${(lj.bordas || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.preco)}</span></div>`).join("")}</div>
-      <div class="card"><div class="card-h"><b>Adicionais (só mesa)</b><button class="btn ghost sm" id="edAdic">Editar</button></div>${gruposAdicionais().map((g) => `<div class="grp">${esc(g)}</div>${(lj.adicionais || []).filter((a) => a.grupo === g).map((b) => `<div class="cl"><span>${esc(b.nome)}${b.livre ? ` <small class="muted">(garçom escreve qual)</small>` : ""}</span><span>${brl(b.preco)}</span></div>`).join("")}`).join("") || `<p class="muted pq">Nenhum adicional cadastrado.</p>`}</div>
+      <div class="card"><div class="card-h"><b>Adicionais (só a equipe lança)</b><button class="btn ghost sm" id="edAdic">Editar</button></div>${gruposAdicionais().map((g) => `<div class="grp">${esc(g)}</div>${(lj.adicionais || []).filter((a) => a.grupo === g).map((b) => `<div class="cl"><span>${esc(b.nome)}${b.livre ? ` <small class="muted">(garçom escreve qual)</small>` : ""}</span><span>${brl(b.preco)}</span></div>`).join("")}`).join("") || `<p class="muted pq">Nenhum adicional cadastrado.</p>`}</div>
       <div class="card"><div class="card-h"><b>Taxas de entrega</b><button class="btn ghost sm" id="edTaxas">Editar</button></div>${(lj.taxasEntrega || []).map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.taxa)}</span></div>`).join("")}</div>
     </div>`;
   $$("[data-cs]", el).forEach((b) => (b.onclick = () => { sessionStorage.setItem("se_cat", b.dataset.cs); abaCardapio(el); }));
@@ -454,7 +454,7 @@ function editarCategoria(c) {
 // Adicionais: grupo (Pizza, Esfiha…), nome, preço e se o garçom escreve qual é ("Outros adicionais").
 function editarAdicionais() {
   const itens = structuredClone(loja().adicionais || []);
-  const s = abrirSheet(`${cabecalhoSheet("Adicionais (só mesa)", "O grupo liga o adicional à categoria ou ao produto")}<div class="sh-b">
+  const s = abrirSheet(`${cabecalhoSheet("Adicionais (só a equipe lança)", "Mesa, delivery, retirada e balcão · o cliente do cardápio não vê · o grupo liga o adicional à categoria ou ao produto")}<div class="sh-b">
     <datalist id="dlGrupos">${gruposAdicionais().map((g) => `<option value="${esc(g)}">`).join("")}</datalist>
     <div id="ls"></div><button class="btn ghost sm" id="mais">+ Adicional</button><div class="linha-btn"><button class="btn pri" id="ok">Salvar</button></div></div>`, { largo: true });
   const des = () => {
