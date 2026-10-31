@@ -20,7 +20,7 @@ export const lojaPonto = (lj) => (Number.isFinite(Number(lj.entregaLat)) && lj.e
 // Áreas desenhadas no mapa: [{ nome, taxa, pontos: [{ lat, lng }, ...] }] (o Firestore não guarda lista dentro de lista, por isso objetos).
 export const zonasDe = (lj) => (lj.zonas || []).filter((z) => (z.pontos || []).length >= 3).map((z) => ({ nome: z.nome || "Área", taxa: Number(z.taxa) || 0, pontos: z.pontos }));
 // Usa o mapa quando há pelo menos uma área, ou raios com a pizzaria marcada.
-export const entregaPorMapa = (lj) => zonasDe(lj).length > 0 || (!!lojaPonto(lj) && raiosDe(lj).length > 0);
+export const entregaPorMapa = (lj) => lj.entregaModo !== "bairro" && (zonasDe(lj).length > 0 || (!!lojaPonto(lj) && raiosDe(lj).length > 0));
 export const entregaPorRaio = entregaPorMapa;
 
 // Ponto dentro do polígono (traçado de raio).

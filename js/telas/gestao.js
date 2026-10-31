@@ -10,6 +10,7 @@ import { lerEstacao, gravarEstacao } from "../estacao.js";
 import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
 import { cardHorario } from "./horario-ui.js";
 import { cardConsumo } from "./consumo.js";
+import { cardBairros } from "./bairros-ui.js";
 import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, zonasDe, CENTRO_PADRAO } from "../entrega.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
@@ -539,6 +540,7 @@ export function abaAjustes(el) {
 
     <div class="card inteiro" id="cardHorario"></div>
     <div class="card inteiro" id="cardCupons"></div>
+    <div class="card inteiro" id="cardBairros"></div>
 
     <div class="card inteiro" id="cardRaio"><b>Taxa de entrega pelo mapa (raios e áreas)</b>
       <p class="muted pq">Duas formas, que podem ser usadas juntas: <b>raios</b> (círculos ao redor da pizzaria, em km) e <b>áreas desenhadas</b> (você clica nos cantos no mapa, dá o nome e a taxa). O cliente informa o CEP ou usa a localização do celular e a taxa é calculada sozinha. A área desenhada vale antes do raio. Fora de tudo, o app avisa que não entrega. Sem nada cadastrado, vale a lista de bairros.</p>
@@ -560,6 +562,7 @@ export function abaAjustes(el) {
 
   cardHorario($("#cardHorario", el));
   cardCupons($("#cardCupons", el));
+  cardBairros($("#cardBairros", el));
 
   // Entrega por distância: mapa com a pizzaria e os raios desenhados
   {

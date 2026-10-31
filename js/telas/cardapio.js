@@ -79,7 +79,7 @@ export function telaCardapio(raiz) {
         <label class="f" for="ce">Rua <b class="obrig">*</b></label><input class="in" id="ce" autocomplete="address-line1" value="${esc(salvo.rua || salvo.endereco || "")}">
         <div class="opts dois"><div><label class="f" for="cnum">Número da casa <b class="obrig">*</b></label><input class="in" id="cnum" inputmode="numeric" autocomplete="off" placeholder="Ex.: 120 ou S/N" value="${esc(salvo.numero || "")}"></div>
           <div><label class="f" for="ccomp">Complemento</label><input class="in" id="ccomp" placeholder="Apto, bloco…" value="${esc(salvo.comp || "")}"></div></div>
-        ${porRaio ? "" : taxas.length ? `<label class="f" for="cb">Bairro / região</label><select class="in" id="cb">${taxas.map((t) => `<option ${t.nome === salvo.bairro ? "selected" : ""}>${esc(t.nome)}</option>`).join("")}</select>` : ""}
+        ${porRaio ? "" : taxas.length ? `<label class="f" for="cb">Seu bairro <b class="obrig">*</b></label><select class="in" id="cb"><option value="">Escolha o bairro…</option>${taxas.map((t) => `<option value="${esc(t.nome)}" ${t.nome === salvo.bairro ? "selected" : ""}>${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}</select>` : ""}
         <label class="f" for="cr">Ponto de referência</label><input class="in" id="cr" value="${esc(salvo.referencia || "")}">
       </div>
       <label class="f" for="cp">Pagamento (na entrega ou retirada)</label><select class="in" id="cp">${formas.map((f) => `<option>${esc(f)}</option>`).join("")}</select>
@@ -122,6 +122,13 @@ export function telaCardapio(raiz) {
           $("#cepMsg", s).innerHTML = `<span class="ok-txt">${esc([r.rua, r.bairro, r.cidade].filter(Boolean).join(" · ") || "CEP encontrado")}</span>`;
           const campo = $("#ce", s);
           if (r.rua && (!campo.value.trim() || !ruaEditada)) campo.value = autoEnd = r.rua;
+          // Sugere o bairro da lista que combina com o do CEP (a pessoa ainda pode trocar).
+          const cb = $("#cb", s);
+          if (cb && !cb.value && r.bairro) {
+            const sa = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const ach = taxas.find((t) => sa(t.nome) === sa(r.bairro)) || taxas.find((t) => sa(t.nome).includes(sa(r.bairro)) || sa(r.bairro).includes(sa(t.nome)));
+            if (ach) { cb.value = ach.nome; atualizar(); }
+          }
         } catch (x) {
           if (/não encontrado/i.test(x.message)) { cepAchado = false; $("#cepMsg", s).innerHTML = `<span class="ruim-txt">CEP não encontrado. Confira os números.</span>`; }
           else $("#cepMsg", s).textContent = ""; // sem internet para conferir: vale o CEP digitado
@@ -147,7 +154,7 @@ export function telaCardapio(raiz) {
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
-      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
+      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : !porRaio && taxas.length && !$("#cb", s)?.value ? "escolha o bairro" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
       $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); })));
@@ -184,6 +191,7 @@ export function telaCardapio(raiz) {
       if (modo === "entrega") {
         if (cep.length !== 8) return falta("Coloque o CEP completo (8 números). Sem o CEP não dá para entregar.", porRaio ? "[data-cep]" : "#ccep");
         if (!porRaio && cepAchado === false) return falta("CEP não encontrado. Confira os números.", "#ccep");
+        if (!porRaio && taxas.length && !$("#cb", s)?.value) return falta("Escolha o seu bairro para ver a taxa de entrega.", "#cb");
         if (!rua) return falta("Coloque o nome da rua.", "#ce");
         if (!/\d/.test(num) && !/^s\s*\/?\s*n$/i.test(num)) return falta("Coloque o número da casa (ou S/N se não tiver).", "#cnum");
         if (porRaio && loc && loc.fora) return (e.textContent = "Esse endereço está fora da nossa área de entrega.");
