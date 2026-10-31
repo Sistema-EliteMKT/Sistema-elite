@@ -239,6 +239,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
         ${p.tipo !== "mesa" ? `<button class="btn sec" id="edCli">Editar dados do cliente</button>` : ""}
+        ${(p.tipo === "entrega" || p.tipo === "retirada") && !p.pago && p.aberto !== false ? `<button class="btn sec" id="trTipo">${p.tipo === "entrega" ? "🏪 Mudar para retirada" : "🛵 Mudar para delivery"}</button>` : ""}
         ${p.tipo === "entrega" && !p.pago ? `<button class="btn ${p.taxaPendente ? "pri" : "ghost"}" id="defTaxa">${p.taxaPendente ? "Definir taxa de entrega" : "Mudar taxa de entrega"}</button>` : ""}
         ${p.status !== "novo" ? `<button class="btn sec" id="impJunto">Imprimir tudo junto (sem valores)</button>` : ""}
         ${!p.pago && p.status !== "novo" ? `<button class="btn sec" id="pagar">Receber agora</button>` : ""}
@@ -257,6 +258,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     }));
     $("#addItens", s) && ($("#addItens", s).onclick = () => adicionarNoPedido(p));
     $("#edCli", s) && ($("#edCli", s).onclick = () => editarCliente(p));
+    $("#trTipo", s) && ($("#trTipo", s).onclick = () => trocarTipo(p));
     $("#defTaxa", s) && ($("#defTaxa", s).onclick = () => definirTaxa(p).then((ok) => ok && fecharSheet()).catch(erro));
     $("#impJunto", s) && ($("#impJunto", s).onclick = () => imprimirJunto(p, usuario).then(() => toast("Enviado para impressão")).catch(erro));
     $("#pagar", s) && ($("#pagar", s).onclick = () => receber([p], usuario, { forma: p.pagamento?.forma, recebido: p.pagamento?.trocoPara }));
@@ -292,6 +294,33 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   };
 
   // -------------------------------------------------------------- Novo pedido
+  // O cliente pediu delivery e vai buscar (ou o contrário): troca o tipo do pedido já lançado.
+  async function trocarTipo(p) {
+    if (p.tipo === "entrega") {
+      if (!(await confirmar("Mudar para retirada?", `O pedido #${p.numero || ""} passa a ser retirada no balcão e a taxa de entrega (${brl(p.taxaEntrega || 0)}) sai do total.`, { ok: "Mudar para retirada" }))) return;
+      await store.salvar("pedidos", p.id, { tipo: "retirada", taxaAnterior: p.taxaEntrega || 0, taxaEntrega: 0, taxaPendente: false, motoboy: null, status: p.status === "saiu" ? "pronto" : p.status, mudouTipoEm: Date.now(), mudouTipoPor: usuario.nome });
+      toast("Agora é retirada ✓ Use \"Imprimir tudo\" se precisar de um papel novo.", "bom"); fecharSheet(); return;
+    }
+    const c = p.cliente || {};
+    const s = abrirSheet(`${cabecalhoSheet("Mudar para delivery", `Pedido #${p.numero || ""} · ${c.nome || ""}`)}<div class="sh-b">
+      <label class="f" for="mdE">Endereço de entrega <b class="obrig">*</b></label><input class="in" id="mdE" value="${esc(c.endereco || "")}" placeholder="Rua, número, complemento">
+      <label class="f" for="mdB">Bairro / taxa</label><select class="in" id="mdB">${(loja().taxasEntrega || []).map((t) => `<option value="${esc(t.nome)}" ${t.nome === c.bairro ? "selected" : ""}>${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}<option value="">Outra taxa…</option></select>
+      <input class="in" id="mdT" inputmode="decimal" placeholder="Taxa de entrega (R$)" ${(loja().taxasEntrega || []).length ? "hidden" : ""}>
+      <label class="f" for="mdR">Referência</label><input class="in" id="mdR" value="${esc(c.referencia || "")}">
+      <div class="err" id="err"></div><button class="btn ok cheio" id="mdOk">Mudar para delivery</button></div>`, { nivel: 2 });
+    $("#mdB", s).onchange = () => { $("#mdT", s).hidden = $("#mdB", s).value !== ""; };
+    $("#mdOk", s).onclick = async (ev) => {
+      const endereco = $("#mdE", s).value.trim(), nomeB = $("#mdB", s).value;
+      if (!endereco) return ($("#err", s).textContent = "Coloque o endereço de entrega.");
+      const taxa = nomeB ? (loja().taxasEntrega || []).find((t) => t.nome === nomeB)?.taxa || 0 : numero($("#mdT", s).value);
+      ev.currentTarget.disabled = true;
+      try {
+        await store.salvar("pedidos", p.id, { tipo: "entrega", cliente: { ...c, endereco, bairro: nomeB || c.bairro || "", referencia: $("#mdR", s).value.trim() }, taxaEntrega: taxa, taxaPendente: false, status: p.status === "pronto" ? "preparo" : p.status, mudouTipoEm: Date.now(), mudouTipoPor: usuario.nome });
+        fecharSheet(); fecharSheet(); toast(`Agora é delivery ✓ Taxa ${brl(taxa)}`, "bom");
+      } catch (x) { $("#err", s).textContent = x.message; ev.currentTarget.disabled = false; }
+    };
+  }
+
   // Corrige nome, telefone e endereço de um pedido já lançado (ex.: cliente do cardápio digitou errado).
   function editarCliente(p) {
     const c = p.cliente || {};
