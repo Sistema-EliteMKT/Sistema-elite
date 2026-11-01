@@ -1,5 +1,4 @@
-// Entrega por bairro: cadastro dos bairros/condomínios com a taxa de cada um e a chave que liga isso no cardápio online.
-// Enquanto a chave estiver desligada, o cardápio continua como está (taxa pelo mapa/CEP).
+// Entrega por bairro: cadastro dos bairros/condomínios com a taxa de cada um (cardápio online e caixa usam esta lista).
 import { $, $$, esc, brl, numero, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet, valorCampo } from "../ui.js";
 import { loja } from "../regras.js";
 import { store } from "../store.js";
@@ -10,21 +9,12 @@ export function cardBairros(el) {
   const desenhar = () => {
     const lj = loja();
     const lista = lj.taxasEntrega || [];
-    const ligado = lj.entregaModo === "bairro";
-    el.innerHTML = `<b>📋 Entrega por bairro (cardápio online)</b>
-      <p class="muted pq">Cadastre aqui cada bairro ou condomínio com a taxa. Quando você ligar a chave abaixo, o cliente do cardápio escolhe o bairro e a taxa já vem certa, sem depender do mapa. Enquanto estiver desligada, nada muda para o cliente.</p>
-      <div class="sum"><div><span>Bairros cadastrados</span><span>${lista.length}</span></div>
-        <div><span>No cardápio online agora</span><span>${ligado ? "✅ cliente escolhe o bairro" : "mapa / CEP (como estava)"}</span></div></div>
-      ${lista.length ? `<details class="track-itens"><summary>Ver a lista</summary>${lista.map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.taxa)}</span></div>`).join("")}</details>` : ""}
-      <div class="linha-btn wrap"><button class="btn pri" id="bcEd">${lista.length ? "Editar bairros" : "Cadastrar bairros"}</button></div>
-      <label class="opt"><input type="checkbox" id="bcLiga" ${ligado ? "checked" : ""} ${lista.length || ligado ? "" : "disabled"}><span>Usar os bairros no cardápio online <small>${lista.length ? "(o cliente escolhe o bairro e vê a taxa)" : "(cadastre pelo menos um bairro para ligar)"}</small></span></label>`;
+    el.innerHTML = `<b>📋 Bairros e taxas de entrega</b>
+      <p class="muted pq">É por esta lista que sai a taxa de entrega: no cardápio online o cliente escolhe o bairro, e no caixa você escolhe no "Novo pedido". Mantenha os valores sempre certos aqui.</p>
+      <div class="sum"><div><span>Bairros cadastrados</span><span>${lista.length}</span></div></div>
+      ${lista.length ? `<details class="track-itens"><summary>Ver a lista</summary>${lista.map((b) => `<div class="cl"><span>${esc(b.nome)}</span><span>${brl(b.taxa)}</span></div>`).join("")}</details>` : `<p class="ruim-txt pq">Nenhum bairro cadastrado: o cliente não consegue escolher a entrega no cardápio.</p>`}
+      <div class="linha-btn wrap"><button class="btn pri" id="bcEd">${lista.length ? "Editar bairros" : "Cadastrar bairros"}</button></div>`;
     $("#bcEd", el).onclick = editar;
-    $("#bcLiga", el).onchange = (e) => {
-      const ligar = e.target.checked;
-      store.salvar("config", "loja", { entregaModo: ligar ? "bairro" : "mapa" })
-        .then(() => toast(ligar ? "Pronto: o cliente agora escolhe o bairro no cardápio ✓" : "Voltou para mapa/CEP", "bom")).catch(erro);
-      setTimeout(desenhar, 300);
-    };
   };
 
   function editar() {
@@ -64,7 +54,7 @@ export function cardBairros(el) {
       if (new Set(nomes).size !== nomes.length) return ($("#err", s).textContent = "Tem bairro repetido na lista.");
       ev.currentTarget.disabled = true;
       try {
-        await store.salvar("config", "loja", { taxasEntrega: limpos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")), ...(limpos.length ? {} : { entregaModo: "mapa" }) });
+        await store.salvar("config", "loja", { taxasEntrega: limpos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")) });
         fecharSheet(); toast("Bairros salvos ✓", "bom"); setTimeout(desenhar, 300);
       } catch (e) { $("#err", s).textContent = e.message; ev.currentTarget.disabled = false; }
     };

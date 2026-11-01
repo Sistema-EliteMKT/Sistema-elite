@@ -11,7 +11,6 @@ import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
 import { cardHorario } from "./horario-ui.js";
 import { cardConsumo } from "./consumo.js";
 import { cardBairros } from "./bairros-ui.js";
-import { novoMapa, desenharRaios, buscarCep, achar, lojaPonto, raiosDe, zonasDe, CENTRO_PADRAO } from "../entrega.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
 // ----------------------------------------------------------------- Motoboys
@@ -542,18 +541,6 @@ export function abaAjustes(el) {
     <div class="card inteiro" id="cardCupons"></div>
     <div class="card inteiro" id="cardBairros"></div>
 
-    <div class="card inteiro" id="cardRaio"><b>Taxa de entrega pelo mapa (raios e áreas)</b>
-      <p class="muted pq">Duas formas, que podem ser usadas juntas: <b>raios</b> (círculos ao redor da pizzaria, em km) e <b>áreas desenhadas</b> (você clica nos cantos no mapa, dá o nome e a taxa). O cliente informa o CEP ou usa a localização do celular e a taxa é calculada sozinha. A área desenhada vale antes do raio. Fora de tudo, o app avisa que não entrega. Sem nada cadastrado, vale a lista de bairros.</p>
-      <div class="loc-cep"><input class="in" id="rBusca" placeholder="CEP ou endereço da pizzaria" value="${esc(lj.endereco || "")}"><span></span><button class="btn ghost" id="rAchar">Buscar</button></div>
-      <div class="loc-msg" id="rMsg"></div>
-      <div class="mapa-entrega grande" id="rMapa"></div>
-      <div class="grp">Raios e taxas <small>até quantos km · taxa</small></div><div id="rLin"></div>
-      <div class="linha-btn wrap"><button class="btn ghost sm" id="rMais">+ Raio</button></div>
-      <div class="grp">Áreas desenhadas no mapa <small>nome · taxa — vale antes dos raios</small></div><div id="zLin"></div>
-      <div id="zDes" class="desvio on" hidden><b>Desenhando a área:</b> toque no mapa em cada canto da área. <span id="zQtd"></span>
-        <div class="linha-btn wrap"><button class="btn ok sm" id="zFim">Concluir área</button><button class="btn ghost sm" id="zVolta">Desfazer último ponto</button><button class="btn ghost sm" id="zCancela">Cancelar</button></div></div>
-      <div class="linha-btn wrap"><button class="btn ghost sm" id="zNova">✏️ Desenhar nova área</button><button class="btn pri" id="rSalvar">Salvar entrega por distância e áreas</button></div></div>
-
     <div class="card inteiro" id="cardFiscal"><b>Nota fiscal (NFC-e) · preparação</b>
       <p class="muted pq">A emissão entra na próxima etapa. Já deixamos tudo preparado: cada recebimento guarda os itens com NCM/CFOP/CSOSN, a forma de pagamento no código da nota e o CPF. Preencha com os dados do contador. Esses dados ficam num cadastro só da equipe (o CSC não aparece para o cliente).</p>
       <div id="fiscalForm"><p class="muted">Carregando…</p></div></div>
@@ -563,92 +550,6 @@ export function abaAjustes(el) {
   cardHorario($("#cardHorario", el));
   cardCupons($("#cardCupons", el));
   cardBairros($("#cardBairros", el));
-
-  // Entrega por distância: mapa com a pizzaria e os raios desenhados
-  {
-    let ponto = lojaPonto(lj);
-    const raios = structuredClone(lj.raios || []);
-    let mp = null;
-    const zonas = structuredClone(lj.zonas || []);
-    let desenho = null; // pontos da área que está sendo desenhada
-    const atual = () => ({ entregaLat: ponto?.[0] ?? null, entregaLng: ponto?.[1] ?? null, raios: raios.filter((r) => Number(r.km) > 0), zonas });
-    const refazer = () => {
-      if (!mp) return;
-      desenharRaios(mp.L, mp.mapa, mp.grupo, atual(), { pino: false });
-      // Área em desenho: linha e pontos
-      if (desenho?.length) {
-        const ll = desenho.map((q) => [q.lat, q.lng]);
-        (desenho.length > 2 ? mp.L.polygon(ll, { color: "#B00B16", dashArray: "4 4", weight: 2 }) : mp.L.polyline(ll, { color: "#B00B16", dashArray: "4 4" })).addTo(mp.grupo);
-        ll.forEach((c) => mp.L.circleMarker(c, { radius: 5, color: "#B00B16", fillOpacity: 1 }).addTo(mp.grupo));
-      }
-      $("#zQtd", el).textContent = desenho ? `${desenho.length} ponto${desenho.length === 1 ? "" : "s"} (mínimo 3)` : "";
-    };
-    const linhasZ = () => {
-      $("#zLin", el).innerHTML = zonas.map((z, k) => `<div class="raio-lin zona-lin"><input class="in" data-zn="${k}" value="${esc(z.nome || "")}" placeholder="Nome da área" aria-label="Nome da área"><label>R$ <input class="in" data-zt="${k}" inputmode="decimal" value="${z.taxa ?? ""}" aria-label="Taxa"></label><button class="mini-x" data-zx="${k}" aria-label="Apagar área">×</button></div>`).join("") || `<p class="muted pq">Nenhuma área ainda. Use para bairros ou regiões que não são redondas.</p>`;
-      $$("[data-zn]", el).forEach((e) => (e.oninput = () => { zonas[e.dataset.zn].nome = e.value; refazer(); }));
-      $$("[data-zt]", el).forEach((e) => (e.oninput = () => { zonas[e.dataset.zt].taxa = numero(e.value); refazer(); }));
-      $$("[data-zx]", el).forEach((e) => (e.onclick = () => { zonas.splice(+e.dataset.zx, 1); linhasZ(); refazer(); }));
-    };
-    const pararDesenho = () => { desenho = null; $("#zDes", el).hidden = true; $("#zNova", el).hidden = false; refazer(); };
-    const linhas = () => {
-      $("#rLin", el).innerHTML = raios.map((r, k) => `<div class="raio-lin"><label>até <input class="in" data-rk="${k}" inputmode="decimal" value="${r.km ?? ""}" aria-label="Quilômetros"> km</label><label>R$ <input class="in" data-rt="${k}" inputmode="decimal" value="${r.taxa ?? ""}" aria-label="Taxa"></label><button class="mini-x" data-rx="${k}" aria-label="Tirar">×</button></div>`).join("") || `<p class="muted pq">Nenhum raio ainda. Ex.: até 2 km R$ 5, até 4 km R$ 8…</p>`;
-      $$("[data-rk]", el).forEach((e) => (e.oninput = () => { raios[e.dataset.rk].km = numero(e.value); refazer(); }));
-      $$("[data-rt]", el).forEach((e) => (e.oninput = () => { raios[e.dataset.rt].taxa = numero(e.value); refazer(); }));
-      $$("[data-rx]", el).forEach((e) => (e.onclick = () => { raios.splice(+e.dataset.rx, 1); linhas(); refazer(); }));
-    };
-    const colocar = (p, zoom = 14) => {
-      ponto = p;
-      if (!mp) return;
-      mp.marcador ? mp.marcador.setLatLng(p) : (mp.marcador = mp.L.marker(p, { draggable: true }).addTo(mp.mapa).on("dragend", () => { const l = mp.marcador.getLatLng(); ponto = [l.lat, l.lng]; refazer(); }));
-      mp.mapa.setView(p, zoom); refazer();
-    };
-    (async () => {
-      try {
-        const c = ponto || CENTRO_PADRAO;
-        mp = await novoMapa($("#rMapa", el), [c[0], c[1], ponto ? 13 : CENTRO_PADRAO[2]]);
-        mp.grupo = mp.L.layerGroup().addTo(mp.mapa);
-        mp.mapa.on("click", (e) => {
-          if (desenho) { desenho.push({ lat: e.latlng.lat, lng: e.latlng.lng }); return refazer(); }
-          ponto = [e.latlng.lat, e.latlng.lng]; colocar(ponto, mp.mapa.getZoom());
-        });
-        refazer();
-        if (ponto) { refazer(); mp.marcador = mp.L.marker(ponto, { draggable: true }).addTo(mp.mapa).on("dragend", () => { const l = mp.marcador.getLatLng(); ponto = [l.lat, l.lng]; refazer(); }); }
-        else if (!zonas.length) $("#rMsg", el).textContent = "Busque o endereço ou toque no mapa para marcar a pizzaria.";
-        else { const z = zonas[0].pontos[0]; mp.mapa.setView([z.lat, z.lng], 13); }
-      } catch (e) { $("#rMsg", el).innerHTML = `<span class="ruim-txt">${esc(e.message)}</span>`; }
-    })();
-    $("#rAchar", el).onclick = async () => {
-      const t = $("#rBusca", el).value.trim();
-      if (!t) return;
-      $("#rMsg", el).textContent = "Procurando…";
-      try {
-        let a;
-        if (/^\d{5}-?\d{3}$/.test(t)) { const c = await buscarCep(t); a = await achar({ ...c, numero: "" }); }
-        else a = await achar({ texto: t });
-        if (!a) return ($("#rMsg", el).innerHTML = `<span class="ruim-txt">Não achei. Toque no mapa onde fica a pizzaria.</span>`);
-        $("#rMsg", el).innerHTML = `<span class="ok-txt">Achei: ${esc(a.nome)}. Arraste o pino se precisar ajustar.</span>`;
-        colocar(a.ponto, 15);
-      } catch (e) { $("#rMsg", el).innerHTML = `<span class="ruim-txt">${esc(e.message)}</span>`; }
-    };
-    $("#rMais", el).onclick = () => { const ult = raios[raios.length - 1]; raios.push({ km: ult ? Number(ult.km) + 2 : 2, taxa: ult ? Number(ult.taxa) + 3 : 5 }); linhas(); refazer(); };
-    $("#zNova", el).onclick = () => { desenho = []; $("#zDes", el).hidden = false; $("#zNova", el).hidden = true; $("#zDes", el).scrollIntoView({ block: "nearest" }); refazer(); };
-    $("#zVolta", el).onclick = () => { desenho?.pop(); refazer(); };
-    $("#zCancela", el).onclick = pararDesenho;
-    $("#zFim", el).onclick = () => {
-      if (!desenho || desenho.length < 3) return toast("Marque pelo menos 3 pontos no mapa.");
-      zonas.push({ nome: `Área ${zonas.length + 1}`, taxa: 0, pontos: desenho });
-      pararDesenho(); linhasZ(); refazer();
-      toast("Área criada. Dê um nome e coloque a taxa na lista.", "bom");
-      setTimeout(() => $("[data-zn]:last-of-type", el)?.focus?.(), 50);
-    };
-    $("#rSalvar", el).onclick = () => {
-      if (desenho) return toast("Conclua ou cancele a área que está desenhando.");
-      if (!ponto && raios.length) return toast("Marque a pizzaria no mapa (para os raios valerem).");
-      if (zonas.some((z) => !(Number(z.taxa) >= 0) || !String(z.nome || "").trim())) return toast("Dê nome e taxa para todas as áreas.");
-      store.salvar("config", "loja", atual()).then(() => toast("Entrega por distância salva ✓", "bom")).catch(erro);
-    };
-    linhas(); linhasZ();
-  }
 
   // Nota fiscal: cadastro da empresa e tributação padrão (config/fiscal, só a equipe lê)
   {
