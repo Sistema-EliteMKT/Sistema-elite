@@ -1,5 +1,5 @@
 // Painel do caixa: pedidos (entrega/retirada/balcão), mesas, motoboys, resumo, impressoras, cardápio e ajustes.
-import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
+import { $, $$, esc, brl, hora, minutos, toast, erro, bip, pedirTexto, confirmar, buscaNaLista, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero } from "../ui.js";
 import {
   D, loja, aoMudar, ETAPAS, situacaoMesa, comandasDaMesa, subtotal, totalPedido, itensValidos, tituloPedido,
   criarPedido, aceitarPedido, mudarEtapa, cancelarPedido, concluirPedido, cancelarItem, cancelarComanda, moverItem,
@@ -309,6 +309,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <label class="f" for="mdR">Referência</label><input class="in" id="mdR" value="${esc(c.referencia || "")}">
       <div class="err" id="err"></div><button class="btn ok cheio" id="mdOk">Mudar para delivery</button></div>`, { nivel: 2 });
     $("#mdB", s).onchange = () => { $("#mdT", s).hidden = $("#mdB", s).value !== ""; };
+    buscaNaLista($("#mdB", s), { placeholder: "Buscar bairro" });
     $("#mdOk", s).onclick = async (ev) => {
       const endereco = $("#mdE", s).value.trim(), nomeB = $("#mdB", s).value;
       if (!endereco) return ($("#err", s).textContent = "Coloque o endereço de entrega.");
@@ -396,6 +397,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     seletorProdutos($("#sel", s), (item) => { itens.push(item); toast(`+ ${item.qtd}x ${item.nome}`); atualizar(); }, { onde: "delivery" });
     $$("[data-t]", s).forEach((b) => (b.onclick = () => { tipo = b.dataset.t; atualizar(); }));
     ["#bai", "#pg"].forEach((q) => ($(q, s).onchange = atualizar));
+    buscaNaLista($("#bai", s), { placeholder: "Buscar bairro (digite parte do nome)" });
     $("#taxaLivre", s).oninput = () => { geo = null; atualizar(); };
     let geo = null; // ponto calculado pelo mapa (vai junto no pedido)
     $("#porMapa", s) && ($("#porMapa", s).onclick = () => {

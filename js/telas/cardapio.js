@@ -1,5 +1,5 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
-import { $, $$, esc, brl, hora, toast, erro, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
+import { $, $$, esc, brl, hora, toast, erro, confirmar, buscaNaLista, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
 import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos } from "../regras.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
@@ -174,6 +174,7 @@ export function telaCardapio(raiz) {
       atualizar();
     });
     $$("select", s).forEach((x) => (x.onchange = atualizar));
+    buscaNaLista($("#cb", s), { placeholder: "Digite seu bairro para achar mais rápido" });
     $("#enviar", s).onclick = async () => {
       const st = statusOnline(loja());
       if (!st.aberto) return ($("#err", s).textContent = `${st.texto}. Não estamos aceitando pedidos agora.`);

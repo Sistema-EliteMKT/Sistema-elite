@@ -140,3 +140,28 @@ export function avisoDesfazer(texto, aoClicar, { botao = "Desfazer", ms = 15000 
   document.body.appendChild(el);
   setTimeout(() => el.remove(), ms);
 }
+
+// Campo de busca em cima de uma lista de escolha (ex.: bairros): digita parte do nome e a lista filtra.
+// Opções com valor vazio ("Escolha…", "Outra taxa…") ficam sempre. Com um só resultado, ele já fica escolhido.
+export function buscaNaLista(select, { placeholder = "Buscar…" } = {}) {
+  if (!select || select.dataset.busca) return;
+  select.dataset.busca = "1";
+  const sem = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const todas = [...select.options].map((o) => ({ value: o.value, text: o.textContent, fixo: o.value === "" }));
+  const inp = document.createElement("input");
+  inp.className = "in busca-lista"; inp.type = "search"; inp.placeholder = placeholder; inp.autocomplete = "off";
+  inp.setAttribute("aria-label", placeholder);
+  select.before(inp);
+  inp.oninput = () => {
+    const q = sem(inp.value.trim()), antes = select.value;
+    const vis = todas.filter((o) => o.fixo || !q || sem(o.text).includes(q));
+    select.innerHTML = vis.map((o) => `<option value="${esc(o.value)}">${esc(o.text)}</option>`).join("");
+    const achados = vis.filter((o) => !o.fixo);
+    let novo;
+    if (q && achados.length === 1) novo = achados[0].value; // só um bairro bate: já escolhe
+    else if (vis.some((o) => o.value === antes)) novo = antes; // o escolhido continua na lista
+    else novo = (q && achados[0]?.value) || vis[0]?.value || "";
+    select.value = novo;
+    if (select.value !== antes) select.dispatchEvent(new Event("change"));
+  };
+}

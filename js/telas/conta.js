@@ -13,11 +13,20 @@ export function abrirConta(cs, { origem = "caixa", titulo = "Imprimir conta", ao
   const caixa = lj.impressoraConta;
   const opcoes = [["salao", salao, "Salão"], ["caixa", caixa, "Caixa"]].filter((o, i, a) => a.findIndex((x) => x[1] === o[1]) === i);
   const s = abrirSheet(`${cabecalhoSheet(titulo, cs[0].tipo === "mesa" ? `Mesa ${cs[0].mesa}` : "")}<div class="sh-b">
-    ${cs.length > 1 ? `<div class="grp">Comandas <small>marque as que entram na conta</small></div><div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" name="cm" value="${c.id}" checked><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>` : ""}
+    ${cs.length > 1 ? `<div class="grp">Comandas <small>marque as que entram na conta</small></div><div class="opts">${cs.map((c) => `<label class="opt"><input type="checkbox" name="cm" value="${c.id}"><span>${esc(rotuloComanda(c))}${c.nome ? " · " + esc(c.nome) : ""}</span><em>${brl(subtotal(c))}</em></label>`).join("")}</div>` : ""}
+    ${cs.length > 1 ? `<div class="linha-btn wrap"><button class="btn ghost sm" id="cmTodas">Marcar todas</button><span class="muted" id="cmSoma"></span></div>` : ""}
     <div class="grp">Imprimir em <small>use a outra se uma impressora estiver com problema</small></div>
     <div class="opts">${opcoes.map(([k, id, rot]) => `<label class="opt"><input type="radio" name="dest" value="${esc(id)}" ${k === origem ? "checked" : ""}><span><b>${rot}</b> · ${esc(nome(id))}${k === origem ? " <small>(padrão)</small>" : ""}</span></label>`).join("")}</div>
     <div class="err" id="err"></div>
     <button class="btn or cheio grande" id="ok">Imprimir conta</button></div>`);
+  // Nenhuma comanda vem marcada: quem fecha escolhe quais entram na conta.
+  const somar = () => {
+    const marc = cs.filter((c) => $$('input[name="cm"]:checked', s).some((i) => i.value === c.id));
+    $("#cmSoma", s) && ($("#cmSoma", s).textContent = marc.length ? `${marc.length} marcada${marc.length > 1 ? "s" : ""} · ${brl(marc.reduce((t, c) => t + subtotal(c), 0))}` : "nenhuma marcada");
+  };
+  $$('input[name="cm"]', s).forEach((i) => (i.onchange = somar));
+  $("#cmTodas", s) && ($("#cmTodas", s).onclick = () => { $$('input[name="cm"]', s).forEach((i) => (i.checked = true)); somar(); });
+  somar();
   $("#ok", s).onclick = async (ev) => {
     const sel = cs.length > 1 ? cs.filter((c) => $$('input[name="cm"]:checked', s).some((i) => i.value === c.id)) : cs;
     if (!sel.length) return ($("#err", s).textContent = "Marque pelo menos uma comanda.");
