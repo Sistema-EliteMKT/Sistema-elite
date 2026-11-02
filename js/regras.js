@@ -414,6 +414,10 @@ export async function registrarPagamento(pedidos, valores, quem) {
   };
   // Comanda paga fecha na hora; pedido de entrega/retirada continua aberto até ser concluído.
   const fim = (p) => (p.tipo === "mesa" ? { status: "fechada", aberto: false } : {});
+  // Delivery/retirada: a forma que o cliente escolheu no pedido passa a ser a que foi paga de verdade
+  // (ex.: pediu débito e pagou no crédito). A escolhida fica guardada em formaPedida para o "desfazer".
+  const formaPaga = [...new Set(pag.pagamentos.map((x) => x.forma))].join(" + ");
+  const formaReal = (p) => (p.tipo === "mesa" || !formaPaga ? {} : { pagamento: { ...(p.pagamento || {}), forma: formaPaga, formaPedida: p.pagamento?.formaPedida ?? p.pagamento?.forma ?? "" } });
   const conv = pag.pagamentos.map((x, i) => ({ x, i })).filter(({ x }) => x.forma === FORMA_CONVENIO);
   if (conv.some(({ x }) => !x.funcionario)) throw new Error("Escolha o funcionário do convênio.");
   const itensConv = pedidos.flatMap((p) => (p.itens || []).filter((i) => !i.cancelado).map((i) => ({ nome: i.nome, qtd: i.qtd, unit: i.unit, det: i.det || [], obs: i.obs || "" })));
@@ -423,7 +427,7 @@ export async function registrarPagamento(pedidos, valores, quem) {
       tipo: "consumo", origem: "convenio", funcionario: x.funcionario, funcionarioId: "", itens: itensConv, subtotal: x.valor, descontoPct: 0, total: x.valor,
       pagamentoId: pid, pedidoNumeros: pag.numeros, dia: pag.dia, mes: pag.dia.slice(0, 7), criadoEm: agora, por: quem?.nome || "" } })),
     { tipo: "criar", col: "pagamentos", id: pid, dados: pag },
-    ...pedidos.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { pago: true, pagamentoId: pid, pagoEm: agora, ...fim(p) } })),
+    ...pedidos.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { pago: true, pagamentoId: pid, pagoEm: agora, ...fim(p), ...formaReal(p) } })),
     ...liberarComandas(pedidos),
   ]);
   return { id: pid, ...pag };
@@ -444,7 +448,8 @@ export async function desfazerPagamento(pag, quem) {
       }
       ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, aberto: true, status: "conta" } });
     } else {
-      ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, ...(p.aberto === false ? { aberto: true, status: p.tipo === "entrega" ? "saiu" : "pronto", concluidoEm: null } : {}) } });
+      const volta = p.pagamento?.formaPedida != null ? { pagamento: { ...p.pagamento, forma: p.pagamento.formaPedida } } : {};
+      ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, ...volta, ...(p.aberto === false ? { aberto: true, status: p.tipo === "entrega" ? "saiu" : "pronto", concluidoEm: null } : {}) } });
     }
   }
   ops.push({ tipo: "apagar", col: "pagamentos", id: pag.id });
