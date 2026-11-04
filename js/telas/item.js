@@ -136,11 +136,14 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
   $$("input,select", s).forEach((i) => i.addEventListener("change", atualizar));
   $("#qm", s).onclick = () => { if (qtd > 1) { qtd--; atualizar(); } };
   $("#qp", s).onclick = () => { qtd++; atualizar(); };
+  let adicionou = false;
   $("#add", s).onclick = () => {
     const n = p.escolha?.n;
     if (n && $$('input[name="es"]:checked', s).length !== n) return toast(`Marque ${n} ${n > 1 ? "opções" : "opção"} para a promoção.`);
     const semNome = $$("[data-livre]", s).find((t) => !t.hidden && !t.value.trim());
     if (semNome) { semNome.focus(); semNome.placeholder = "Escreva qual é o adicional"; semNome.classList.add("falta"); return; }
+    if (adicionou) return; // toque duplo no celular: adiciona uma vez só
+    adicionou = true; $("#add", s).disabled = true;
     const novo = criar(p, ler());
     fecharSheet(); // fecha antes: quem recebe pode abrir outra janela (ex.: Alterar item)
     aoAdicionar(novo);
