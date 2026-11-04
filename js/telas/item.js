@@ -2,7 +2,7 @@
 // Usada pelo cardápio do cliente, pelo garçom e pelo caixa.
 // onde: "mesa" (garçom/comanda) ou "delivery" (cardápio online, entrega, retirada, balcão).
 import { $, $$, esc, brl, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo, toast, erro } from "../ui.js";
-import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem, naoImprime, naoCobraServico } from "../regras.js";
+import { D, loja, categoria, setorDe, produto, vendeEm, alterarItem, naoImprime, naoCobraServico, leveJunto } from "../regras.js";
 
 const grupo = (p) => categoria(p.cat)?.grupoPizza || "";
 const saboresPossiveis = (p, onde) =>
@@ -64,6 +64,8 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     ${adicionais.length ? `<div class="grp">Adicionais <small>pode marcar vários</small></div><div class="opts">${adicionais.map((a, i) =>
       `<label class="opt"><input type="checkbox" name="ad" value="${i}"><span>${esc(a.nome)}</span><em>+ ${brl(a.preco)}</em></label>
        ${a.livre ? `<input class="in livre" data-livre="${i}" placeholder="Qual adicional? (ex.: bacon)" hidden>` : ""}`).join("")}</div>` : ""}
+    ${!inicial && leveJunto(p).length ? `<div class="grp">Leve junto <small>só com esta promoção</small></div><div class="opts">${leveJunto(p).map((x, i) =>
+      `<label class="opt"><input type="checkbox" name="lj" value="${i}"><span>${esc(x.p.nome)}</span><em>+ ${brl(x.preco)}</em></label>`).join("")}</div>` : ""}
     <label class="f" for="obs">${cliente ? "Observação deste item <small>(opcional)</small>" : "Observação"}</label>
     ${!cliente && (loja().obsRapidas?.[setorDe(p)] || []).length ? `<div class="chips quebra obs-chips">${loja().obsRapidas[setorDe(p)].map((o) => `<button type="button" class="chip" data-oc="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join("")}</div>` : ""}
     <input class="in" id="obs" placeholder="${cliente ? "Escreva aqui se quiser algo diferente" : "Ex.: copo com gelo, sem cebola, bem passada"}" maxlength="120">
@@ -145,8 +147,12 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
     if (adicionou) return; // toque duplo no celular: adiciona uma vez só
     adicionou = true; $("#add", s).disabled = true;
     const novo = criar(p, ler());
+    // "Leve junto" marcado: entra como item próprio (sai no papel do setor dele), com o preço da promoção e a mesma quantidade.
+    const juntos = $$('input[name="lj"]:checked', s).map((i) => leveJunto(p)[+i.value]).filter(Boolean)
+      .map((x) => ({ ...criar(x.p, { qtd: novo.qtd }), unit: Number(x.preco), unitFixo: true, det: [`junto da promoção ${p.nome}`] }));
     fecharSheet(); // fecha antes: quem recebe pode abrir outra janela (ex.: Alterar item)
     aoAdicionar(novo);
+    for (const j of juntos) aoAdicionar(j);
   };
   if (inicial) $("#add span", s).textContent = "Salvar alteração";
   atualizar();
@@ -156,7 +162,9 @@ export function montarItem(p, aoAdicionar, { onde = "", rapido = false, inicial 
 export function editarItem(item, onde, aoSalvar, { cliente = false } = {}) {
   const p = produto(item.produtoId);
   if (!p) return;
-  montarItem(p, aoSalvar, { onde, cliente, inicial: { ...(item.escolhas || {}), obs: item.obs, qtd: item.qtd } });
+  // Item com preço da promoção ("Leve junto"): editar não volta para o preço normal do produto.
+  const salvar = item.unitFixo ? (novo) => aoSalvar({ ...novo, unit: item.unit, unitFixo: true, det: item.det }) : aoSalvar;
+  montarItem(p, salvar, { onde, cliente, inicial: { ...(item.escolhas || {}), obs: item.obs, qtd: item.qtd } });
 }
 
 // Editar item JÁ LANÇADO (na comanda ou no pedido): quantidade, escolhas e valor.

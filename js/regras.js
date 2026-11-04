@@ -111,7 +111,9 @@ export function promoValida(p, d = new Date()) {
   if (r.fim && dia > r.fim) return false;
   return true;
 }
-export const vendeEm = (p, onde) => p.ativo !== false && promoValida(p) && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
+export const vendeEm = (p, onde) => p.ativo !== false && !p.soPromo && promoValida(p) && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
+// "Leve junto" de uma promoção: produtos com preço especial que só se compram com ela (ex.: refrigerante + R$ 10).
+export const leveJunto = (promo) => (promo?.leveJunto || []).map((x) => ({ ...x, p: D.produtos.find((y) => y.id === x.id) })).filter((x) => x.p && x.p.ativo !== false && Number(x.preco) >= 0);
 
 // Primeira vez: grava loja, cardápio e equipe iniciais.
 export async function semearSePreciso() {

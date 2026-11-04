@@ -398,6 +398,7 @@ function editarProduto(p) {
     <label class="opt"><input type="checkbox" id="pz" ${p.tipo === "pizza" ? "checked" : ""}><span>É pizza (tamanho, meio a meio, borda)</span></label>
     <label class="opt"><input type="checkbox" id="pv" ${p.veg ? "checked" : ""}><span>Vegetariano</span></label>
     <label class="opt"><input type="checkbox" id="pss" ${p.semServico ? "checked" : ""}><span>Não cobrar taxa de serviço (10%) neste item <small>(ex.: rodízio)</small></span></label>
+    <label class="opt"><input type="checkbox" id="psp" ${p.soPromo ? "checked" : ""}><span>Vender só junto de uma promoção <small>(não aparece sozinho no cardápio; entra como "Leve junto" nas promoções)</small></span></label>
     <label class="opt"><input type="checkbox" id="psi" ${p.semImpressao ? "checked" : ""}><span>Não imprimir quando lançar <small>(só entra na conta, ex.: rodízio)</small></span></label>
     <label class="f" for="pe">Onde vende</label><select class="in" id="pe">${CANAIS.map(([v, l]) => `<option value="${v}" ${canalDe(p) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
     <label class="opt"><input type="checkbox" id="pa" ${p.ativo === false ? "" : "checked"}><span>Disponível</span></label>
@@ -408,7 +409,7 @@ function editarProduto(p) {
     const preco = numero($("#pp", s).value);
     if (!nome || !preco) return toast("Coloque nome e preço.");
     const dados = {
-      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null, precoMeia: numero($("#pm", s).value) || null, semImpressao: $("#psi", s).checked, semServico: $("#pss", s).checked,
+      nome, desc: $("#pd", s).value.trim(), cat: $("#pc", s).value, preco, precoBroto: numero($("#pb", s).value) || null, precoMeia: numero($("#pm", s).value) || null, semImpressao: $("#psi", s).checked, semServico: $("#pss", s).checked, soPromo: $("#psp", s).checked,
       opcoes: $("#po", s).value.split(",").map((x) => x.trim()).filter(Boolean), setor: $("#ps", s).value || null, grupoAdicional: $("#pad", s).value === "__cat" ? null : $("#pad", s).value,
       tipo: $("#pz", s).checked ? "pizza" : "simples", veg: $("#pv", s).checked, canal: $("#pe", s).value, semEntrega: $("#pe", s).value === "mesa", ativo: $("#pa", s).checked,
       ordem: p.ordem ?? D.produtos.filter((x) => x.cat === $("#pc", s).value).length + 1,

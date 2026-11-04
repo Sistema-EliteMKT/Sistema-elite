@@ -62,8 +62,22 @@ function editar(p) {
       <label class="f" for="prei">Opções (uma por linha)</label><textarea class="in" id="prei" rows="4" placeholder="Abobrinha&#10;Baiana">${esc((e.itens || []).join("\n"))}</textarea>
       <div class="grp">Ou puxar tudo destas abas do cardápio</div>
       <div class="opts dois">${cats.map((c) => `<label class="opt"><input type="checkbox" name="prcat" value="${esc(c.id)}" ${(e.cats || []).includes(c.id) ? "checked" : ""}><span>${esc(c.nome)}</span></label>`).join("")}</div></div>
+    <div class="grp">Leve junto <small>opcional · ex.: refrigerante por + R$ 10 só com esta promoção</small></div>
+    <div id="prlj"></div><button type="button" class="btn ghost sm" id="prljMais">+ Produto para levar junto</button>
     <label class="opt"><input type="checkbox" id="pra" ${p.ativo === false ? "" : "checked"}><span>Promoção ligada</span></label>
     <div class="err" id="err"></div><div class="linha-btn"><button class="btn pri" id="ok">Salvar</button></div></div>`);
+  // Produtos que podem ir junto: primeiro os marcados "só junto de promoção" (★), depois o resto do cardápio.
+  const lj = (p.leveJunto || []).map((x) => ({ ...x }));
+  const prods = D.produtos.filter((x) => x.cat !== CAT).sort((a, b) => (b.soPromo ? 1 : 0) - (a.soPromo ? 1 : 0) || a.nome.localeCompare(b.nome));
+  const ljLinhas = () => {
+    $("#prlj", s).innerHTML = lj.map((x, i) => `<div class="forma"><select class="in" data-lji="${i}" aria-label="Produto">${prods.map((y) => `<option value="${esc(y.id)}" ${y.id === x.id ? "selected" : ""}>${esc(y.nome)}${y.soPromo ? " ★" : ""}</option>`).join("")}</select>
+      <input class="in" data-ljp="${i}" inputmode="decimal" value="${x.preco != null ? valorCampo(x.preco) : ""}" placeholder="+ R$" aria-label="Preço junto da promoção"><button type="button" class="mini-x" data-ljx="${i}" aria-label="Tirar">×</button></div>`).join("") || `<p class="muted pq">Nenhum. ★ = produto marcado "vender só junto de promoção".</p>`;
+    $$("[data-lji]", s).forEach((e) => (e.onchange = () => { lj[e.dataset.lji].id = e.value; }));
+    $$("[data-ljp]", s).forEach((e) => (e.oninput = () => { lj[e.dataset.ljp].preco = e.value.trim() === "" ? null : numero(e.value); }));
+    $$("[data-ljx]", s).forEach((e) => (e.onclick = () => { lj.splice(+e.dataset.ljx, 1); ljLinhas(); }));
+  };
+  $("#prljMais", s).onclick = () => { lj.push({ id: prods[0]?.id || "", preco: null }); ljLinhas(); };
+  ljLinhas();
   $$("[data-d]", s).forEach((b) => (b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true")));
   $("#pre", s).onchange = () => { $("#preBox", s).hidden = !$("#pre", s).checked; };
   $("#ok", s).onclick = async () => {
@@ -84,6 +98,8 @@ function editar(p) {
         itens: $("#prei", s).value.split("\n").map((x) => x.trim()).filter(Boolean), cats: $$('input[name="prcat"]:checked', s).map((i) => i.value),
       } : null,
     };
+    if (lj.some((x) => !x.id || x.preco == null || !(Number(x.preco) >= 0))) return ($("#err", s).textContent = "No “Leve junto”, escolha o produto e coloque o preço de cada um.");
+    dados.leveJunto = lj.map((x) => ({ id: x.id, preco: Number(x.preco) }));
     if (dados.escolha && !dados.escolha.itens.length && !dados.escolha.cats.length) return ($("#err", s).textContent = "Escreva as opções ou marque abas do cardápio.");
     try {
       // A aba "Promoções" é criada na primeira promoção e vem antes de todas as outras.
