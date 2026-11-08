@@ -39,12 +39,16 @@ export function conectar({ publico = false } = {}) {
   desligar = []; desligarPesados = [];
   ultimoPublico = publico;
   desligar = [
-    store.ouvirDoc("config", "loja", (d) => { D.loja = d; avisar(); }),
+    store.ouvirDoc("config", "loja", (d) => {
+      D.loja = d; avisar();
+      if (!ultimoPublico && conectar._dia && diaOperacional() !== conectar._dia) setTimeout(() => conectar({ publico: false }), 0);
+    }),
     store.ouvir("categorias", (docs) => { D.categorias = docs.sort(ordem); avisar(); }),
     store.ouvir("produtos", (docs) => { D.produtos = docs.sort(ordem); avisar(); }),
   ];
   if (publico) return;
-  const dia = hoje();
+  const dia = diaOperacional();
+  conectar._dia = dia;
   desligar.push(
     store.ouvir("usuarios", (docs) => { D.usuarios = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.abertos = docs; avisar(); }, ["aberto", "==", true]),
@@ -78,11 +82,17 @@ export function modoLeve(sim) {
   leve = sim;
   D.leve = sim;
   if (sim) { desligarPesados.forEach((f) => f()); desligarPesados = []; }
-  else ligarPesados(hoje());
+  else ligarPesados(diaOperacional());
   avisar();
 }
 
 export const loja = () => ({ ...LOJA_INICIAL, ...(D.loja || {}) });
+// Dia de trabalho: com o caixa aberto, vale o dia em que ele abriu (o que passa da meia-noite continua no mesmo dia);
+// vira o dia só quando o caixa fecha. Caixa esquecido aberto há mais de um dia não segura o dia.
+export function diaOperacional() {
+  const d = loja().diaAberto, h = hoje();
+  return d && d <= h && d >= hoje(Date.now() - 36 * 3600e3) ? d : h;
+}
 export const produto = (id) => D.produtos.find((p) => p.id === id);
 export const categoria = (id) => D.categorias.find((c) => c.id === id);
 export const setorDe = (prod) => prod?.setor || categoria(prod?.cat)?.setor || "cozinha";
@@ -166,7 +176,7 @@ export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "",
   if (!/^\d{1,5}$/.test(numero)) throw new Error("O número da comanda tem que ser só números.");
   const travaId = `comanda-${numero}`;
   const id = novoId();
-  const trava = { aberta: true, pedido: id, mesa, dia: hoje(), em: Date.now() };
+  const trava = { aberta: true, pedido: id, mesa, dia: diaOperacional(), em: Date.now() };
   let ocupada = null;
   try {
     if (!temInternet()) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
@@ -192,7 +202,7 @@ export async function abrirComanda(mesa, numero, nome, garcom, { atendente = "",
   }
   await store.salvar("pedidos", id, {
     tipo: "mesa", mesa, numero, nome: (nome || "").trim(), aberto: true, status: "aberta",
-    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
+    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: diaOperacional(),
   });
   return id;
 }
@@ -204,7 +214,7 @@ async function abrirSemComanda(mesa, nome, garcom, { atendente = "", pessoas = 0
   const id = novoId();
   await store.salvar("pedidos", id, {
     tipo: "mesa", mesa, numero: "", nome: (nome || "").trim(), aberto: true, status: "aberta",
-    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: hoje(),
+    itens: [], garcom: atendente || garcom?.nome || "", pessoas: Number(pessoas) || 0, abertoPor: garcom?.nome || "", criadoEm: Date.now(), dia: diaOperacional(),
   });
   return id;
 }
@@ -318,7 +328,7 @@ export const ETAPAS = {
 async function numeroDoPedido() {
   try {
     if (!temInternet()) throw Object.assign(new Error("Sem conexão com a internet."), { offline: true });
-    return await store.proximoNumero(hoje());
+    return await store.proximoNumero(diaOperacional());
   }
   catch (e) {
     if (!e.offline) throw e;
@@ -329,7 +339,7 @@ async function numeroDoPedido() {
 export async function criarPedido(dados, quem) {
   const online = dados.origem === "online";
   const base = {
-    ...dados, aberto: true, criadoEm: Date.now(), dia: hoje(),
+    ...dados, aberto: true, criadoEm: Date.now(), dia: diaOperacional(),
     status: online ? "novo" : "preparo",
     itens: dados.itens.map((i) => ({ ...i, key: i.key || novoId(), enviadoEm: online ? null : Date.now() })),
   };
@@ -357,11 +367,14 @@ export async function imprimirViaOnline(p) {
   if (!p || p.origem !== "online" || p.status !== "novo" || p.viaImpressa || viaOnline.has(p.id)) return false;
   viaOnline.add(p.id);
   try {
-    const numero = p.numero || (await numeroDoPedido());
     const comCozinha = loja().imprimirCozinhaAoChegar !== false;
-    const pegou = await store.transacao("pedidos", p.id, (d) => (d && !d.viaImpressa && d.status === "novo" ? { viaImpressa: Date.now(), numero: d.numero || numero, ...(comCozinha ? { producaoImpressa: true } : {}) } : null));
+    // Primeiro garante que só esta tela vai imprimir; o número é pego depois, uma vez só.
+    let jaTinha = null;
+    const pegou = await store.transacao("pedidos", p.id, (d) => { if (!d || d.viaImpressa || d.status !== "novo") return null; jaTinha = d.numero || null; return { viaImpressa: Date.now(), ...(comCozinha ? { producaoImpressa: true } : {}) }; });
     if (!pegou) return false;
-    const novo = { ...p, numero: pegou.numero };
+    const numero = jaTinha || p.numero || (await numeroDoPedido());
+    if (!jaTinha) await store.salvar("pedidos", p.id, { numero });
+    const novo = { ...p, numero };
     await store.lote([filaImpressao(loja().impressoraConta, `NOVO ONLINE ${titulo(novo)}`, [
       { t: "*** PEDIDO NOVO PELO APP ***", b: true, c: true }, { t: comCozinha ? "papéis da cozinha saem em seguida" : "aguardando aceite no caixa", c: true }, { sep: true },
       ...cupomEntrega(novo),
@@ -405,7 +418,7 @@ export async function registrarPagamento(pedidos, valores, quem) {
   const agora = Date.now();
   const mesa = pedidos[0].tipo === "mesa" ? pedidos[0].mesa : null;
   const pag = {
-    dia: hoje(), criadoEm: agora, por: quem?.nome || "", mesa, tipo: pedidos[0].tipo,
+    dia: diaOperacional(), criadoEm: agora, por: quem?.nome || "", mesa, tipo: pedidos[0].tipo,
     pedidos: pedidos.map((p) => p.id), numeros: pedidos.map((p) => p.numero).filter(Boolean),
     nomes: pedidos.map((p) => p.nome || p.cliente?.nome || "").filter(Boolean),
     subtotal: sub, servico: dinheiro(valores.servico), desconto: dinheiro(valores.desconto), total,
@@ -446,7 +459,7 @@ export async function desfazerPagamento(pag, quem) {
       if (p.numero) {
         const t = await store.obter("travas", `comanda-${p.numero}`);
         if (t?.aberta && t.pedido !== p.id) throw new Error(`A comanda ${p.numero} já foi aberta de novo${t.mesa ? " na mesa " + t.mesa : ""}. Feche essa antes de desfazer.`);
-        ops.push({ tipo: "salvar", col: "travas", id: `comanda-${p.numero}`, dados: { aberta: true, pedido: p.id, mesa: p.mesa, dia: p.dia || hoje(), em: Date.now() } });
+        ops.push({ tipo: "salvar", col: "travas", id: `comanda-${p.numero}`, dados: { aberta: true, pedido: p.id, mesa: p.mesa, dia: p.dia || diaOperacional(), em: Date.now() } });
       }
       ops.push({ tipo: "salvar", col: "pedidos", id: p.id, dados: { ...marca, aberto: true, status: "conta" } });
     } else {
@@ -519,14 +532,18 @@ export const TIPOS_MOV = { sangria: "Sangria (retirada)", suprimento: "Reforço 
 export async function abrirCaixa(fundo, quem) {
   if (D.caixa) throw new Error("O caixa já está aberto.");
   const id = novoId();
-  await store.salvar("caixas", id, { status: "aberto", dia: hoje(), abertoEm: Date.now(), abertoPor: quem?.nome || "", fundo: dinheiro(fundo) });
+  const dia = hoje();
+  await store.lote([
+    { tipo: "salvar", col: "caixas", id, dados: { status: "aberto", dia, abertoEm: Date.now(), abertoPor: quem?.nome || "", fundo: dinheiro(fundo) } },
+    { tipo: "salvar", col: "config", id: "loja", dados: { diaAberto: dia } },
+  ]);
   return id;
 }
 
 export async function movimentoCaixa(tipo, valor, motivo, quem) {
   if (!D.caixa) throw new Error("Abra o caixa primeiro.");
   if (!(Number(valor) > 0)) throw new Error("Coloque o valor.");
-  const mov = { tipo, valor: dinheiro(valor), motivo: motivo || "", caixa: D.caixa.id, dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" };
+  const mov = { tipo, valor: dinheiro(valor), motivo: motivo || "", caixa: D.caixa.id, dia: diaOperacional(), criadoEm: Date.now(), por: quem?.nome || "" };
   await store.lote([
     { tipo: "criar", col: "movimentos", dados: mov },
     ...(tipo === "sangria" ? [filaImpressao(loja().impressoraConta, "Comprovante de sangria", cupomMovimento(mov))] : []),
@@ -565,6 +582,8 @@ export async function fecharCaixa(cx, contado, obs, quem, conferencia = {}) {
   await store.lote([
     { tipo: "salvar", col: "caixas", id: cx.id, dados: fechamento },
     filaImpressao(loja().impressoraConta, "Fechamento de caixa", cupomFechamentoCaixa({ ...cx, ...fechamento }, r)),
+    // Caixa fechado: o dia de trabalho acaba aqui (o próximo começa no dia do calendário).
+    { tipo: "salvar", col: "config", id: "loja", dados: { diaAberto: "" } },
   ]);
   return { ...cx, ...fechamento };
 }
@@ -610,7 +629,7 @@ export async function lancarConsumo({ nome, funcionarioId = "", itens, descontoP
   const subtotalItens = dinheiro(itens.reduce((t, i) => t + i.unit * i.qtd, 0));
   const pct = Math.min(100, Math.max(0, Number(descontoPct) || 0));
   const total = dinheiro(subtotalItens * (1 - pct / 100));
-  const agora = Date.now(), dia = hoje();
+  const agora = Date.now(), dia = diaOperacional();
   const reg = { tipo: "consumo", funcionario: nome, funcionarioId, itens: itens.map((i) => ({ nome: i.nome, qtd: i.qtd, unit: i.unit, det: i.det || [], obs: i.obs || "" })),
     subtotal: subtotalItens, descontoPct: pct, total, dia, mes: dia.slice(0, 7), criadoEm: agora, por: quem?.nome || "" };
   const id = await store.criar("movimentos", reg);
@@ -642,9 +661,9 @@ export const imprimirExtratoConsumo = (nome, mes, regs) => store.lote([filaImpre
 // ---------------------------------------------------------------------------
 const cacheEntregas = new Map(); // a aba se redesenha a cada mudança: dias passados ficam em cache; o dia de hoje vem do que já está na tela
 async function pedidosEntregaPeriodo(ini, fim) {
-  const h = hoje();
+  const h = diaOperacional();
   let ps = [];
-  const fimPassado = fim >= h ? hoje(Date.now() - 86400000) : fim;
+  const fimPassado = fim >= h ? hoje(new Date(h + "T12:00:00").getTime() - 86400000) : fim;
   if (ini <= fimPassado) {
     const k = `${ini}|${fimPassado}`, c = cacheEntregas.get(k);
     if (c && Date.now() - c.t < 120000) ps = c.ps;
@@ -690,7 +709,7 @@ export const imprimirRelatorioMotoboy = (nome, ini, fim, es) => store.lote([fila
 
 // Pagamento a freelancer/equipe: sai do caixa e entra no fechamento. Devolve o registro (com id) para imprimir o recibo.
 export async function pagarEquipe(dados, quem) {
-  const reg = { ...dados, valor: dinheiro(dados.valor), dia: hoje(), criadoEm: Date.now(), por: quem?.nome || "" };
+  const reg = { ...dados, valor: dinheiro(dados.valor), dia: diaOperacional(), criadoEm: Date.now(), por: quem?.nome || "" };
   const id = await store.criar("saidas", reg);
   return { id, ...reg };
 }
@@ -965,7 +984,7 @@ export function filaImpressao(impressora, tituloJob, linhas, extra = {}) {
     tamanho: imp.tamanho || "medio", fonte: imp.fonte || "arial", corte: imp.corte || "total", avanco: Number(imp.avanco ?? 4), entrelinhas: imp.entrelinhas || "normal",
     ...(imp.colunas ? { colunas: Number(imp.colunas) } : {}),
   };
-  const dados = { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: hoje(), ...extra };
+  const dados = { impressora, titulo: tituloJob, linhas, estilo, status: "pendente", criadoEm: ultimoCupom, dia: diaOperacional(), ...extra };
   // Já sai impresso daqui: quando a internet voltar, o agente não imprime de novo.
   if (imprimirLocal?.(dados)) Object.assign(dados, { status: "impresso", por: "navegador", impressoEm: Date.now() });
   return { tipo: "criar", col: "impressoes", dados };

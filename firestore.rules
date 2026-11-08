@@ -27,7 +27,7 @@ service cloud.firestore {
         && request.resource.data.tipo in ['entrega', 'retirada']
         && !('numero' in request.resource.data)
         && !('pago' in request.resource.data)
-        && (request.resource.data.tipo != 'entrega' || (request.resource.data.cliente.cep is string && request.resource.data.cliente.cep.size() == 8 && request.resource.data.cliente.numero is string && request.resource.data.cliente.numero.size() > 0))
+        && (request.resource.data.tipo != 'entrega' || (request.resource.data.cliente.endereco is string && request.resource.data.cliente.endereco.size() > 0 && request.resource.data.cliente.numero is string && request.resource.data.cliente.numero.size() > 0 && (!('cep' in request.resource.data.cliente) || request.resource.data.cliente.cep == '' || (request.resource.data.cliente.cep is string && request.resource.data.cliente.cep.size() == 8))))
         && request.resource.data.cliente.nome is string && request.resource.data.cliente.nome.size() > 0
         && request.resource.data.cliente.telefone is string && request.resource.data.cliente.telefone.size() >= 10
         && request.resource.data.itens is list

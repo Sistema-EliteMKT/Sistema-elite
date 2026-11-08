@@ -8,7 +8,7 @@ const dataHora = (t) => new Date(t).toLocaleString("pt-BR", { day: "2-digit", mo
 export function abaFluxo(el, { usuario }) {
   const cx = D.caixa;
   if (!cx) return desenharFechado(el, usuario);
-  const velho = cx.dia !== hoje();
+  const velho = cx.dia < hoje(Date.now() - 36 * 3600e3); // aberto de ontem para hoje é normal (passou da meia-noite); mais que isso, avisa
   el.innerHTML = `${velho ? `<div class="aviso-desvio" role="alert"><span>⚠️ Este caixa abriu em ${esc(dataHora(cx.abertoEm))} e ainda não foi fechado. Feche para começar o dia certo.</span></div>` : ""}
     <div class="card"><div class="card-h"><div><b>🟢 Caixa aberto</b><small>desde ${esc(dataHora(cx.abertoEm))} · ${esc(cx.abertoPor || "")} · fundo de troco ${brl(cx.fundo)}</small></div>
       <button class="btn pri" id="fecharCx">Fechar caixa</button></div>

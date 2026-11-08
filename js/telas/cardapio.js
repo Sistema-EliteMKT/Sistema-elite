@@ -75,7 +75,7 @@ export function telaCardapio(raiz) {
       <label class="f" for="cn">Seu nome</label><input class="in" id="cn" autocomplete="name" value="${esc(salvo.nome || "")}">
       <label class="f" for="ct">WhatsApp</label><input class="in" id="ct" type="tel" autocomplete="tel" inputmode="tel" value="${esc(salvo.telefone || "")}">
       <div id="end">
-        ${porRaio ? `<div id="loc"></div>` : `<label class="f" for="ccep">CEP <b class="obrig">*</b></label><input class="in" id="ccep" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000" value="${esc(fmtCep(salvo.cep))}"><small class="muted" id="cepMsg" role="status"></small>`}
+        ${porRaio ? `<div id="loc"></div>` : `<label class="f" for="ccep">CEP <small>(opcional)</small></label><input class="in" id="ccep" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000" value="${esc(fmtCep(salvo.cep))}"><small class="muted" id="cepMsg" role="status"></small>`}
         <label class="f" for="ce">Rua <b class="obrig">*</b></label><input class="in" id="ce" autocomplete="address-line1" value="${esc(salvo.rua || salvo.endereco || "")}">
         <div class="opts dois"><div><label class="f" for="cnum">Número da casa <b class="obrig">*</b></label><input class="in" id="cnum" inputmode="numeric" autocomplete="off" placeholder="Ex.: 120 ou S/N" value="${esc(salvo.numero || "")}"></div>
           <div><label class="f" for="ccomp">Complemento</label><input class="in" id="ccomp" placeholder="Apto, bloco…" value="${esc(salvo.comp || "")}"></div></div>
@@ -189,8 +189,8 @@ export function telaCardapio(raiz) {
       if (c.telefone.replace(/\D/g, "").length < 10) return falta("Coloque um WhatsApp com DDD.", "#ct");
       // Entrega: CEP (8 números), rua e número da casa são obrigatórios. "S/N" vale para casa sem número.
       if (modo === "entrega") {
-        if (cep.length !== 8) return falta("Coloque o CEP completo (8 números). Sem o CEP não dá para entregar.", porRaio ? "[data-cep]" : "#ccep");
-        if (!porRaio && cepAchado === false) return falta("CEP não encontrado. Confira os números.", "#ccep");
+        // CEP é opcional (tem cliente que não sabe); se começou a digitar, tem que estar completo.
+        if (cep.length && cep.length !== 8) return falta("O CEP tem 8 números. Complete ou apague o CEP.", porRaio ? "[data-cep]" : "#ccep");
         if (!porRaio && taxas.length && !$("#cb", s)?.value) return falta("Escolha o seu bairro para ver a taxa de entrega.", "#cb");
         if (!rua) return falta("Coloque o nome da rua.", "#ce");
         if (!/\d/.test(num) && !/^s\s*\/?\s*n$/i.test(num)) return falta("Coloque o número da casa (ou S/N se não tiver).", "#cnum");
@@ -198,7 +198,7 @@ export function telaCardapio(raiz) {
       }
       // Última conferência: a pessoa vê exatamente o endereço que vai no pedido.
       if (modo === "entrega") {
-        const qual = `${rua}, ${num}${comp ? " - " + comp : ""}${c.bairro ? " · " + c.bairro : ""} · CEP ${fmtCep(cep)}`;
+        const qual = `${rua}, ${num}${comp ? " - " + comp : ""}${c.bairro ? " · " + c.bairro : ""}${cep ? " · CEP " + fmtCep(cep) : ""}`;
         if (!(await confirmar("O endereço está certo?", qual, { ok: "Está certo, enviar pedido" }))) return;
       }
       const t = total();

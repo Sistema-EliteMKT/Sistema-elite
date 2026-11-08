@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, hoje, dataHora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy, pedidosPorBairro, imprimirRelatorioBairros } from "../regras.js";
+import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy, pedidosPorBairro, imprimirRelatorioBairros, diaOperacional } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -17,7 +17,7 @@ import { htmlCupom } from "../imprimir-navegador.js";
 // Período do relatório (fica lembrado enquanto o painel está aberto).
 let perMb = { tipo: "hoje", de: "", ate: "" };
 const periodoDe = (perMb) => {
-  const d = new Date(), h = hoje(), dia = (n) => hoje(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime());
+  const h = diaOperacional(), d = new Date(h + "T12:00:00"), dia = (n) => hoje(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime());
   const mes = (n) => { const a = new Date(d.getFullYear(), d.getMonth() + n, 1), b = new Date(d.getFullYear(), d.getMonth() + n + 1, 0); return [hoje(a.getTime()), hoje(b.getTime())]; };
   return { hoje: [h, h], ontem: [dia(-1), dia(-1)], semana: [dia(-6), h], mes: mes(0), mespassado: mes(-1), outro: [perMb.de || h, perMb.ate || perMb.de || h] }[perMb.tipo];
 };
