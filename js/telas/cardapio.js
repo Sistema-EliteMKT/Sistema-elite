@@ -222,7 +222,14 @@ export function telaCardapio(raiz) {
         acompanhar(id);
         desenhar();
         window.scrollTo({ top: 0, behavior: "smooth" });
-      } catch (x) { erro(x); btn.disabled = false; btn.textContent = "Fazer pedido"; }
+      } catch (x) {
+        btn.disabled = false; btn.textContent = "Fazer pedido";
+        // Enquanto as regras novas do banco não forem publicadas, o servidor ainda exige o CEP na entrega.
+        if (modo === "entrega" && !cep && /permission|insufficient|permiss/i.test(String(x?.code || "") + " " + String(x?.message || ""))) {
+          return falta("Para enviar a entrega, coloque o CEP (8 números). Se não souber, chame a gente no WhatsApp.", porRaio ? "[data-cep]" : "#ccep");
+        }
+        erro(x);
+      }
     };
     atualizar();
   };
