@@ -944,7 +944,8 @@ export function cupomEntrega(p) {
   linhas.push(SEP, L(lado("TOTAL R$", r$(totalPedido(p))), { b: true, g: true }));
   const pg = p.pagamento || {};
   if (pg.forma) linhas.push(L(`Pagamento: ${pg.forma}${p.pago ? " (PAGO)" : ""}`, { b: true }));
-  if (pg.trocoPara) linhas.push(L(`Troco para ${r$(pg.trocoPara)} · levar ${r$(pg.trocoPara - totalPedido(p))}`, { b: true }));
+  // Troco em letra grande: o motoboy precisa ver de longe quanto levar.
+  if (pg.trocoPara) linhas.push(L(`TROCO PARA ${r$(pg.trocoPara)}`, { b: true, g: true }), L(`LEVAR ${r$(pg.trocoPara - totalPedido(p))} DE TROCO`, { b: true, g: true }));
   else if (pg.forma === "Dinheiro" && !p.pago) linhas.push(L("Troco: não precisa", { b: true }));
 
   if (p.motoboy?.nome) linhas.push(L(`Motoboy: ${p.motoboy.nome}`));
