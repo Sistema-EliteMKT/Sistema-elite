@@ -81,6 +81,7 @@ function criarStoreLocal() {
       ler(col)[id] = { ...(ler(col)[id] || {}), ...structuredClone(dados) };
       gravar(col);
     },
+    async criarConfirmado(col, dados) { return this.criar(col, dados); },
     async criar(col, dados) {
       const id = novoId();
       ler(col)[id] = structuredClone(dados);
@@ -214,6 +215,14 @@ function criarStoreFirebase() {
     criar: (col, dados) => tentar(() => {
       const r = fb.doc(fb.collection(db, col));
       semEsperar(fb.setDoc(r, dados));
+      return r.id;
+    }),
+    // Cria e ESPERA o servidor aceitar (pedido do cardápio online: se o banco recusar, o cliente precisa saber na hora).
+    criarConfirmado: (col, dados) => tentar(async () => {
+      const r = fb.doc(fb.collection(db, col));
+      // Recusa do banco (regra) volta rápido e vira erro. Internet lenta: depois de 15 s segue em frente,
+      // o Firestore continua tentando enviar (não pode mandar de novo, senão o pedido duplica).
+      await Promise.race([fb.setDoc(r, dados), new Promise((ok) => setTimeout(ok, 15000))]);
       return r.id;
     }),
     apagar: (col, id) => tentar(() => fb.deleteDoc(ref(col, id))),

@@ -344,13 +344,16 @@ export async function criarPedido(dados, quem) {
     itens: dados.itens.map((i) => ({ ...i, key: i.key || novoId(), enviadoEm: online ? null : Date.now() })),
   };
   if (!online) base.numero = await numeroDoPedido();
-  const id = await store.criar("pedidos", base);
+  // Pedido do cliente (online) espera o servidor confirmar: se for recusado, o cliente vê o erro em vez de achar que foi.
+  const id = online ? await store.criarConfirmado("pedidos", base) : await store.criar("pedidos", base);
   if (!online) await imprimirNovoPedido({ id, ...base }, quem);
   return id;
 }
 
 export async function aceitarPedido(p, quem) {
-  const numero = p.numero || (await numeroDoPedido());
+  // Lê o número mais novo: a via do pedido online pode ter acabado de pegar um (não gasta outro número).
+  const atual = p.numero ? null : await store.obter("pedidos", p.id).catch(() => null);
+  const numero = p.numero || atual?.numero || (await numeroDoPedido());
   const itens = p.itens.map((i) => ({ ...i, enviadoEm: Date.now() }));
   await store.salvar("pedidos", p.id, { status: "preparo", numero, itens, aceitoEm: Date.now(), aceitoPor: quem?.nome || "" });
   // A via com tudo já saiu quando o pedido chegou; ao aceitar saem só os papéis dos setores.
