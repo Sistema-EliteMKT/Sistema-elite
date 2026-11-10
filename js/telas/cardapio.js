@@ -1,6 +1,7 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
 import { $, $$, esc, brl, hora, toast, erro, confirmar, buscaNaLista, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
-import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos } from "../regras.js";
+import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos, cupomNoPrazo, baseDoCupom } from "../regras.js";
+import { hoje } from "../ui.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
 import { statusOnline, previsao } from "../horario.js";
@@ -91,7 +92,7 @@ export function telaCardapio(raiz) {
     const total = () => {
       const sub = sacola.reduce((x, l) => x + l.unit * l.qtd, 0);
       const t = modo !== "entrega" ? 0 : porRaio ? (loc && !loc.fora ? loc.taxa : 0) : taxas.find((t) => t.nome === $("#cb", s)?.value)?.taxa || 0;
-      const desc = cupomAplicado ? Math.round(sub * cupomAplicado.pct) / 100 : 0;
+      const desc = cupomAplicado ? Math.round(baseDoCupom(cupomAplicado, sacola) * cupomAplicado.pct) / 100 : 0;
       return { sub, taxa: t, desc, total: Math.max(0, sub - desc + t) };
     };
     // Entrega por raio: mapa + CEP/localização calculam a taxa e preenchem o endereço.
@@ -153,7 +154,7 @@ export function telaCardapio(raiz) {
       $("#linhas", s).innerHTML = sacola.map((l, i) => `<div class="cl"><div class="n"><b>${esc(l.nome)}</b>${l.det.map((d) => `<small>${esc(d)}</small>`).join("")}${l.obs ? `<small>Obs: ${esc(l.obs)}</small>` : ""}<small>${brl(l.unit * l.qtd)}</small></div>
         <div class="mini"><button class="ed" data-ed="${i}">Editar</button><button data-menos="${i}" aria-label="Diminuir">−</button><span>${l.qtd}</span><button data-mais="${i}" aria-label="Aumentar">+</button></div></div>`).join("") || `<p class="vazio">Sacola vazia.</p>`;
       const t = total();
-      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%)</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : !porRaio && taxas.length && !$("#cb", s)?.value ? "escolha o bairro" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
+      $("#sum", s).innerHTML = `<div><span>Itens</span><span>${brl(t.sub)}</span></div>${t.desc ? `<div><span>Cupom ${esc(cupomAplicado.codigo)} (${cupomAplicado.pct}%${cupomAplicado.alvo === "pizzas" ? " nas pizzas" : ""})</span><span>- ${brl(t.desc)}</span></div>` : ""}${modo === "entrega" ? `<div><span>Entrega${porRaio && loc ? ` (${loc.area || kmTxt(loc.km)})` : ""}</span><span>${porRaio && !loc ? "a confirmar pela pizzaria" : !porRaio && taxas.length && !$("#cb", s)?.value ? "escolha o bairro" : brl(t.taxa)}</span></div>` : ""}<div class="t"><span>Total</span><span>${brl(t.total)}</span></div>${modo === "entrega" && $("#ce", s).value.trim() ? `<div class="addr-conf"><span>📍 Entregar em</span><span>${esc($("#ce", s).value.trim())}${$("#cnum", s).value.trim() ? ", " + esc($("#cnum", s).value.trim()) : ""}${$("#ccomp", s).value.trim() ? " - " + esc($("#ccomp", s).value.trim()) : ""}</span></div>` : ""}`;
       $$("[data-menos]", s).forEach((b) => (b.onclick = () => { const l = sacola[b.dataset.menos]; if (--l.qtd <= 0) sacola.splice(b.dataset.menos, 1); atualizar(); desenhar(); }));
       $$("[data-mais]", s).forEach((b) => (b.onclick = () => { sacola[b.dataset.mais].qtd++; atualizar(); desenhar(); }));
       $$("[data-ed]", s).forEach((b) => (b.onclick = () => editarItem(sacola[b.dataset.ed], "delivery", (novo) => { sacola[b.dataset.ed] = novo; atualizar(); desenhar(); }, { cliente: true })));
@@ -164,13 +165,19 @@ export function telaCardapio(raiz) {
     const usados = () => { try { return JSON.parse(localStorage.getItem("se_cupons") || "[]"); } catch { return []; } };
     $("#aplicarCup", s) && ($("#aplicarCup", s).onclick = () => {
       const cod = $("#ccup", s).value.trim().toUpperCase().replace(/\s+/g, "");
-      const c = (lj.cupons || []).find((x) => x.ativo !== false && String(x.codigo || "").toUpperCase() === cod);
+      const c = (lj.cupons || []).find((x) => String(x.codigo || "").toUpperCase() === cod && cupomNoPrazo(x, hoje()));
       const msg = $("#cupMsg", s);
       cupomAplicado = null;
       if (!cod) msg.innerHTML = "";
       else if (!c) msg.innerHTML = `<span class="ruim-txt">Cupom não encontrado ou fora da validade.</span>`;
-      else if (usados().includes(c.codigo.toUpperCase())) msg.innerHTML = `<span class="ruim-txt">Esse cupom já foi usado neste aparelho.</span>`;
-      else { cupomAplicado = { codigo: c.codigo.toUpperCase(), pct: Math.min(50, Number(c.pct) || 0) }; msg.innerHTML = `<span class="ok-txt">Cupom aplicado: ${cupomAplicado.pct}% de desconto nos itens ✓</span>`; }
+      else if (c.umaVez !== false && usados().includes(c.codigo.toUpperCase())) msg.innerHTML = `<span class="ruim-txt">Esse cupom já foi usado neste aparelho.</span>`;
+      else {
+        cupomAplicado = { codigo: c.codigo.toUpperCase(), pct: Math.min(50, Number(c.pct) || 0), alvo: c.alvo || "tudo", umaVez: c.umaVez !== false };
+        const pizzas = cupomAplicado.alvo === "pizzas";
+        msg.innerHTML = pizzas && !baseDoCupom(cupomAplicado, sacola)
+          ? `<span class="ruim-txt">Cupom ${esc(cupomAplicado.codigo)} guardado: ele dá ${cupomAplicado.pct}% de desconto só nas pizzas. Coloque uma pizza na sacola.</span>`
+          : `<span class="ok-txt">Cupom aplicado: ${cupomAplicado.pct}% de desconto ${pizzas ? "nas pizzas" : "nos itens"} ✓</span>`;
+      }
       atualizar();
     });
     $$("select", s).forEach((x) => (x.onchange = atualizar));
@@ -215,7 +222,7 @@ export function telaCardapio(raiz) {
           ...(modo === "entrega" && porRaio && !loc ? { taxaPendente: true } : {}),
         });
         gravarLocal({ ...c, modo, ultimo: id });
-        if (cupomAplicado) try { localStorage.setItem("se_cupons", JSON.stringify([...usados(), cupomAplicado.codigo])); } catch {}
+        if (cupomAplicado?.umaVez) try { localStorage.setItem("se_cupons", JSON.stringify([...usados(), cupomAplicado.codigo])); } catch {}
         sacola.length = 0;
         fecharSheet();
         toast("Pedido enviado! Acompanhe aqui em cima.");

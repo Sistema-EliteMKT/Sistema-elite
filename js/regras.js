@@ -121,6 +121,12 @@ export function promoValida(p, d = new Date()) {
   if (r.fim && dia > r.fim) return false;
   return true;
 }
+// Cupom de desconto do cardápio online: { codigo, pct, ativo, de, ate (AAAA-MM-DD), alvo: "tudo" | "pizzas", umaVez }.
+export const cupomNoPrazo = (c, dia = hoje()) => c.ativo !== false && (!c.de || dia >= c.de) && (!c.ate || dia <= c.ate);
+export const itemEhPizza = (i) => produto(i.produtoId)?.tipo === "pizza";
+// Valor sobre o qual o desconto vale: todos os itens, ou só as pizzas.
+export const baseDoCupom = (c, itens) => itens.filter((i) => c?.alvo !== "pizzas" || itemEhPizza(i)).reduce((t, i) => t + i.unit * i.qtd, 0);
+
 export const vendeEm = (p, onde) => p.ativo !== false && !p.soPromo && promoValida(p) && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
 // "Leve junto" de uma promoção: produtos com preço especial que só se compram com ela (ex.: refrigerante + R$ 10).
 export const leveJunto = (promo) => (promo?.leveJunto || []).map((x) => ({ ...x, p: D.produtos.find((y) => y.id === x.id) })).filter((x) => x.p && x.p.ativo !== false && Number(x.preco) >= 0);

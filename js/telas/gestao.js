@@ -105,17 +105,31 @@ export function abaMotoboys(el) {
 function cardCupons(el) {
   const lista = () => (loja().cupons || []).map((c) => ({ ...c }));
   const salvar = (l) => store.salvar("config", "loja", { cupons: l }).catch(erro);
+  const dm = (d) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "");
+  const quando = (c) => (c.de && c.ate ? (c.de === c.ate ? `só em ${dm(c.de)}` : `de ${dm(c.de)} a ${dm(c.ate)}`) : c.de ? `a partir de ${dm(c.de)}` : c.ate ? `até ${dm(c.ate)}` : "todos os dias");
+  const situacao = (c) => (c.ativo === false ? "desligado" : c.ate && hoje() > c.ate ? "já passou" : c.de && hoje() < c.de ? "ainda vai começar" : "valendo agora");
   const desenhar = () => {
     const cs = lista();
-    el.innerHTML = `<b>🏷️ Cupons de desconto (cardápio online)</b><p class="muted pq">O cliente digita o cupom na sacola e o desconto vale sobre os itens (não sobre a entrega). Cada celular usa o mesmo cupom uma vez só. Confira no pedido se é mesmo a primeira compra da pessoa.</p>
-      ${cs.map((c, i) => `<div class="cl"><div class="n"><b>${esc(c.codigo)}</b><small>${Number(c.pct) || 0}% de desconto · ${c.ativo === false ? "desligado" : "valendo"}</small></div>
+    el.innerHTML = `<b>🏷️ Cupons de desconto (cardápio online)</b><p class="muted pq">O cliente digita o cupom na sacola. O desconto vale sobre os itens (nunca sobre a entrega): em todos, ou só nas pizzas. Dá para limitar por datas (ex.: só no feriado).</p>
+      ${cs.map((c, i) => `<div class="cl"><div class="n"><b>${esc(c.codigo)}</b><small>${Number(c.pct) || 0}% ${c.alvo === "pizzas" ? "só nas pizzas" : "em todos os itens"} · ${esc(quando(c))} · ${c.umaVez === false ? "pode usar sempre" : "1 vez por celular"} · <b>${situacao(c)}</b></small></div>
         <div class="v"><button class="btn ghost sm" data-liga="${i}">${c.ativo === false ? "Ligar" : "Desligar"}</button><button class="mini-x" data-rm="${i}" aria-label="Remover">×</button></div></div>`).join("") || `<p class="vazio">Nenhum cupom ainda.</p>`}
-      <div class="linha-btn wrap"><input class="in" id="cuc" placeholder="Código (ex.: PRIMEIRO10)" autocapitalize="characters"><input class="in" id="cup" type="number" min="1" max="50" placeholder="%" style="max-width:90px"><button class="btn pri" id="cua">Criar cupom</button></div>`;
+      <div class="grp">Novo cupom</div>
+      <div class="opts dois"><div><label class="f" for="cuc">Código</label><input class="in" id="cuc" placeholder="Ex.: FERIADO15" autocapitalize="characters"></div>
+        <div><label class="f" for="cup">Desconto (%)</label><input class="in" id="cup" type="number" min="1" max="50" placeholder="15"></div>
+        <div><label class="f" for="cude">Vale de</label><input class="in" id="cude" type="date"></div>
+        <div><label class="f" for="cuat">até</label><input class="in" id="cuat" type="date"></div></div>
+      <small class="muted">Deixe as datas em branco para valer todo dia.</small>
+      <div class="opts dois"><label class="opt"><input type="radio" name="cualvo" value="tudo" checked><span>Em todos os itens</span></label>
+        <label class="opt"><input type="radio" name="cualvo" value="pizzas"><span>Só nas pizzas</span></label></div>
+      <label class="opt"><input type="checkbox" id="cuuma" checked><span>Cada celular usa uma vez só <small>(desmarque para cupom de feriado, que vale em todo pedido)</small></span></label>
+      <div class="linha-btn wrap"><button class="btn pri" id="cua">Criar cupom</button></div>`;
     $("#cua", el).onclick = async () => {
       const codigo = $("#cuc", el).value.trim().toUpperCase().replace(/\s+/g, ""), pct = Math.min(50, Number($("#cup", el).value) || 0);
+      const de = $("#cude", el).value, ate = $("#cuat", el).value;
       if (!codigo || !pct) return toast("Coloque o código e a porcentagem.");
+      if (de && ate && ate < de) return toast("A data final é antes da inicial.");
       const l = lista().filter((c) => String(c.codigo).toUpperCase() !== codigo);
-      l.push({ codigo, pct, ativo: true });
+      l.push({ codigo, pct, ativo: true, de, ate, alvo: $('input[name="cualvo"]:checked', el).value, umaVez: $("#cuuma", el).checked });
       await salvar(l); toast("Cupom criado ✓", "bom"); setTimeout(desenhar, 300);
     };
     $$("[data-liga]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l[b.dataset.liga].ativo = l[b.dataset.liga].ativo === false; await salvar(l); setTimeout(desenhar, 300); }));
