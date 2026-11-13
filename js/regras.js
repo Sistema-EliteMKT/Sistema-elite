@@ -266,7 +266,8 @@ export async function alterarItem(pedidoId, key, novo, quem) {
     await store.salvar("pedidos", pedidoId, { itens: (p.itens || []).map((i) => (i.key === key ? item : i)) });
   }
   const assinatura = (i) => JSON.stringify([i.qtd, i.nome, i.det || [], i.obs || ""]);
-  if (antes.enviadoEm && assinatura(antes) !== assinatura(item)) {
+  // Editar item já lançado só fica registrado no sistema; papel "ALTERADO" só se a loja ligar em Ajustes.
+  if (loja().imprimirAlteracao === true && antes.enviadoEm && assinatura(antes) !== assinatura(item)) {
     await imprimirProducao({ ...p, itens: [item] }, quem, { alteracao: antes });
   }
   return item;

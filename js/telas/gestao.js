@@ -535,6 +535,7 @@ export function abaAjustes(el) {
       <label class="f" for="acol">Largura da bobina</label><select class="in" id="acol"><option value="48" ${lj.colunas == 48 ? "selected" : ""}>80 mm</option><option value="32" ${lj.colunas == 32 ? "selected" : ""}>58 mm</option></select>
       <label class="f" for="aei">Espaço entre os itens nos papéis da cozinha <small>(para riscar com caneta)</small></label>
       <select class="in" id="aei">${[[0, "Sem espaço"], [1, "1 linha em branco entre os itens"], [2, "2 linhas em branco entre os itens"]].map(([v, l]) => `<option value="${v}" ${Number(lj.espacoItens ?? 1) === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <label class="opt"><input type="checkbox" id="aalt" ${lj.imprimirAlteracao === true ? "checked" : ""}><span>Imprimir papel "ALTERADO" quando editar um item já lançado <small>(desmarcado: a edição só fica registrada no sistema)</small></span></label>
       <label class="opt"><input type="checkbox" id="aic2" ${lj.imprimirCancelamento ? "checked" : ""}><span>Avisar o setor no papel quando cancelar item ou comanda (desmarcado: só cancela no sistema)</span></label>
       <label class="opt"><input type="checkbox" id="aco" ${lj.imprimirCozinhaAoChegar !== false ? "checked" : ""}><span>Pedido do cardápio online: imprimir a via completa <b>e</b> os papéis da cozinha assim que chegar (sem esperar aceitar)</span></label>
       <label class="opt"><input type="checkbox" id="aps" ${lj.papelPorSetor ? "checked" : ""}><span>Um papel separado para cada setor (desmarcado: tudo junto, dividido por setor)</span></label>
@@ -645,7 +646,7 @@ export function abaAjustes(el) {
     const usados = new Set([...D.categorias.map((c) => c.setor), ...D.produtos.map((p) => p.setor).filter(Boolean)]);
     const falta = [...usados].filter((u) => !sets.some((s) => s.id === u));
     if (falta.length) return toast(`O setor "${falta[0]}" ainda é usado no cardápio. Mude as categorias antes de tirar.`);
-    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked, espacoItens: Number($("#aei", el).value) || 0, imprimirCozinhaAoChegar: $("#aco", el).checked })
+    store.salvar("config", "loja", { impressoras: imps, setores: sets, impressoraConta: $("#aic", el).value, impressoraContaGarcom: $("#aig", el).value, colunas: Number($("#acol", el).value), papelPorSetor: $("#aps", el).checked, imprimirCancelamento: $("#aic2", el).checked, imprimirAlteracao: $("#aalt", el).checked, espacoItens: Number($("#aei", el).value) || 0, imprimirCozinhaAoChegar: $("#aco", el).checked })
       .then(() => toast("Impressoras salvas ✓")).catch(erro);
   };
   des();
