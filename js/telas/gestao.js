@@ -513,6 +513,7 @@ export function abaAjustes(el) {
     <div class="card"><b>Loja</b>
       <label class="f" for="an">Nome</label><input class="in" id="an" value="${esc(lj.nome)}">
       <label class="f" for="at">Telefone</label><input class="in" id="at" value="${esc(lj.telefone || "")}">
+      <label class="f" for="awz">WhatsApp da loja <small>(o cliente manda a confirmação do pedido para este número; vazio = usa o telefone)</small></label><input class="in" id="awz" type="tel" inputmode="tel" placeholder="(19) 99999-9999" value="${esc(lj.whatsapp || "")}">
       <label class="f" for="ae">Endereço (sai na conta)</label><input class="in" id="ae" value="${esc(lj.endereco || "")}">
       <label class="f" for="as">Frase do cardápio</label><input class="in" id="as" value="${esc(lj.slogan || "")}">
       <div class="opts dois"><div><label class="f" for="am">Número de mesas</label><input class="in" id="am" type="number" min="1" max="200" value="${lj.nMesas}"></div>
@@ -604,7 +605,7 @@ export function abaAjustes(el) {
 
   // Loja
   $("#salvarLoja", el).onclick = () => store.salvar("config", "loja", {
-    nome: $("#an", el).value.trim() || lj.nome, telefone: $("#at", el).value.trim(), endereco: $("#ae", el).value.trim(), slogan: $("#as", el).value.trim(),
+    nome: $("#an", el).value.trim() || lj.nome, telefone: $("#at", el).value.trim(), whatsapp: $("#awz", el).value.trim(), endereco: $("#ae", el).value.trim(), slogan: $("#as", el).value.trim(),
     nMesas: Math.max(1, Math.min(200, Number($("#am", el).value) || lj.nMesas)), taxaServico: Math.max(0, Number($("#asv", el).value) || 0),
     formasPagamento: $("#af", el).value.split(",").map((x) => x.trim()).filter(Boolean),
     meiaPorcaoMesa: $("#amm", el).checked, meiaPorcaoDelivery: $("#amd", el).checked,

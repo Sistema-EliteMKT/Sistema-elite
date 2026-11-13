@@ -86,6 +86,8 @@ export function modoLeve(sim) {
   avisar();
 }
 
+// Número do WhatsApp da loja (com 55 na frente), ou "" se não houver.
+export const whatsLoja = () => { const n = String(loja().whatsapp || loja().telefone || "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, ""); return n.length >= 10 ? "55" + n : ""; };
 export const loja = () => ({ ...LOJA_INICIAL, ...(D.loja || {}) });
 // Dia de trabalho: com o caixa aberto, vale o dia em que ele abriu (o que passa da meia-noite continua no mesmo dia);
 // vira o dia só quando o caixa fecha. Caixa esquecido aberto há mais de um dia não segura o dia.
@@ -483,11 +485,14 @@ export async function desfazerPagamento(pag, quem) {
 }
 
 // Texto do pedido para copiar/colar ou mandar no WhatsApp do cliente.
-export function textoPedido(p) {
+// paraLoja: mensagem que o CLIENTE manda para o WhatsApp da loja confirmando o pedido.
+export function textoPedido(p, { paraLoja = false } = {}) {
   const lj = loja(), c = p.cliente || {};
   const real = (v) => "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
   const tipo = { entrega: "Entrega", retirada: "Retirada", balcao: "Balcão", mesa: "Mesa" }[p.tipo] || "";
-  const linhas = [`*${lj.nome}*${p.numero ? ` · Pedido #${p.numero}` : ""}`, tipo + (c.nome ? ` · ${c.nome}` : "")];
+  const linhas = paraLoja
+    ? [`Olá, ${lj.nome}! Acabei de fazer um pedido pelo cardápio online${p.numero ? ` (pedido #${p.numero})` : ""}:`, "", `*${tipo}*${c.nome ? ` · ${c.nome}` : ""}${c.telefone ? ` · ${c.telefone}` : ""}`]
+    : [`*${lj.nome}*${p.numero ? ` · Pedido #${p.numero}` : ""}`, tipo + (c.nome ? ` · ${c.nome}` : "")];
   if (p.tipo === "entrega" && c.endereco) linhas.push(`Endereço: ${c.endereco}${c.bairro ? " - " + c.bairro : ""}${c.cep ? " · CEP " + String(c.cep).replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""}`);
   linhas.push("", "*Itens:*");
   for (const i of itensValidos(p)) {
@@ -504,7 +509,8 @@ export function textoPedido(p) {
   const min = Number(lj[p.tipo === "entrega" ? "tempoEntregaMin" : "tempoRetiradaMin"]), max = Number(lj[p.tipo === "entrega" ? "tempoEntregaMax" : "tempoRetiradaMax"]);
   if (min > 0 && (p.tipo === "entrega" || p.tipo === "retirada")) linhas.push(`Previsão: ${max > min ? `${min} a ${max} min` : `${min} min`}`);
   if (p.obs) linhas.push(`Obs do pedido: ${p.obs}`);
-  linhas.push("", "Obrigado pela preferência! 🍕");
+  if (paraLoja) { if (c.referencia) linhas.push(`Referência: ${c.referencia}`); linhas.push("", "Podem confirmar, por favor? 🙂"); }
+  else linhas.push("", "Obrigado pela preferência! 🍕");
   return linhas.join("\n");
 }
 
