@@ -1,6 +1,8 @@
 // Emissão de NFC-e pelo Focus NFe. Funções puras (montar o JSON) + chamadas HTTP.
 // O token do Focus fica só no config.json do caixa (nunca no repositório).
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// Horário de Brasília (sem horário de verão), no formato que a SEFAZ espera.
+const agoraBrasil = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 19) + "-03:00";
 const so = (v) => String(v || "").replace(/\D/g, "");
 
 // Monta o JSON da NFC-e a partir de um documento de "pagamentos" (com itensFiscais e pagamentos).
@@ -37,7 +39,7 @@ export function montarNFCe(pag, fiscal) {
     return f;
   }).filter((f) => f.valor_pagamento > 0);
   const nota = {
-    natureza_operacao: "Venda ao Consumidor", data_emissao: new Date(pag.criadoEm || Date.now()).toISOString().replace(/\.\d+Z$/, "-00:00"),
+    natureza_operacao: "Venda ao Consumidor", data_emissao: agoraBrasil(), // hora do envio: a SEFAZ recusa nota com horário de emissão atrasado
     presenca_comprador: 1, modalidade_frete: 9, local_destino: 1, consumidor_final: 1,
     cnpj_emitente: so(fiscal.cnpj), itens: det, formas_pagamento: formas,
   };
