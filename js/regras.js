@@ -63,7 +63,11 @@ export function conectar({ publico = false } = {}) {
 // O que só o caixa/administrador usa: relatórios, fila de impressão, caixa aberto, equipe de motoboys…
 function ligarPesados(dia) {
   desligarPesados = [
-    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d || {}; avisar(); }),
+    store.ouvirDoc("config", "fiscal", (d, m) => {
+      // Primeira resposta vinda só da cópia local, sem o documento: espera o servidor (senão a tela mostraria tudo vazio).
+      if (!d && m?.cache) return;
+      D.fiscal = d || {}; D.fiscalErro = ""; avisar();
+    }, (msg) => { D.fiscalErro = String(msg || "erro"); avisar(); }),
     store.ouvir("motoboys", (docs) => { D.motoboys = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.doDia = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("impressoes", (docs) => { D.impressoes = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),

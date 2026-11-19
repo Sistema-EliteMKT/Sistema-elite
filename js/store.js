@@ -191,7 +191,7 @@ function criarStoreFirebase() {
       });
     },
     ouvirDoc(col, id, cb, aoErro) {
-      return fb.onSnapshot(ref(col, id), (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null), (e) => {
+      return fb.onSnapshot(ref(col, id), (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null, { cache: !!s.metadata?.fromCache }), (e) => {
         console.error(col, id, e);
         aoErro?.(traduzir(e));
       });

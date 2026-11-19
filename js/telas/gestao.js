@@ -591,7 +591,7 @@ export function abaAjustes(el) {
   };
   let formFeito = false;
   const desenharFiscal = () => {
-    if (D.fiscal === undefined) { $("#fiscalForm", el).innerHTML = `<p class="muted">Carregando os dados fiscais…</p>`; return; }
+    if (D.fiscal === undefined) { $("#fiscalForm", el).innerHTML = D.fiscalErro ? `<p class="falta">Não consegui carregar os dados fiscais: ${esc(D.fiscalErro)}</p><p class="muted pq">Os dados não foram apagados. Atualize a página (Ctrl+F5). Se continuar, me mande um print desta mensagem.</p>` : `<p class="muted">Carregando os dados fiscais…</p>`; return; }
     formFeito = true;
     const f = D.fiscal;
     const pd = { ...FISCAL_PADRAO, ...(f.padrao || {}) };
@@ -633,7 +633,8 @@ export function abaAjustes(el) {
   desenharFiscal();
   const pararFiscal = aoMudar(() => {
     if (!el.isConnected) return pararFiscal();
-    if (!formFeito && D.fiscal !== undefined) desenharFiscal(); // os dados chegaram depois de abrir a tela
+    if (D.fiscal === undefined) desenharFiscal(); // atualiza a mensagem de carregando/erro
+    else if (!formFeito) desenharFiscal(); // os dados chegaram depois de abrir a tela
     else if (formFeito) desenharNotas();           // notas novas, erros, canceladas…
   });
 
