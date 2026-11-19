@@ -11,7 +11,7 @@ import { fiscalDoItem, tPagDe } from "./fiscal.js";
 // ---------------------------------------------------------------------------
 export const D = {
   loja: null, categorias: [], produtos: [], usuarios: [], motoboys: [],
-  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [], caixa: null, caixasDia: [], movimentos: [], fiscal: null, leve: true,
+  abertos: [], doDia: [], impressoes: [], pagamentos: [], saidas: [], caixa: null, caixasDia: [], movimentos: [], fiscal: undefined, leve: true,
   get pedidos() {
     const m = new Map();
     for (const p of [...this.doDia, ...this.abertos]) m.set(p.id, p);
@@ -63,7 +63,7 @@ export function conectar({ publico = false } = {}) {
 // O que só o caixa/administrador usa: relatórios, fila de impressão, caixa aberto, equipe de motoboys…
 function ligarPesados(dia) {
   desligarPesados = [
-    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d; avisar(); }),
+    store.ouvirDoc("config", "fiscal", (d) => { D.fiscal = d || {}; avisar(); }),
     store.ouvir("motoboys", (docs) => { D.motoboys = docs.sort((a, b) => a.nome.localeCompare(b.nome)); avisar(); }),
     store.ouvir("pedidos", (docs) => { D.doDia = docs; avisar(); }, ["dia", "==", dia]),
     store.ouvir("impressoes", (docs) => { D.impressoes = docs.sort((a, b) => b.criadoEm - a.criadoEm); avisar(); }, ["dia", "==", dia]),

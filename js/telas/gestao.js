@@ -1,6 +1,6 @@
 // Abas de gestão do caixa: motoboys, impressão, relatório do dia, cardápio e ajustes.
 import { $, $$, esc, brl, hora, hoje, dataHora, toast, erro, pedirTexto, confirmar, abrirSheet, fecharSheet, cabecalhoSheet, numero, valorCampo } from "../ui.js";
-import { D, loja, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy, pedidosPorBairro, imprimirRelatorioBairros, diaOperacional } from "../regras.js";
+import { D, loja, aoMudar, desvioDe, desviarImpressora, totalPedido, itensValidos, tituloPedido, reimprimir, filaImpressao, canalDe, vendasPorGarcom, pagarEquipe, imprimirReciboEquipe, desfazerPagamento, entregasPeriodo, resumoMotoboy, imprimirRelatorioMotoboy, pedidosPorBairro, imprimirRelatorioBairros, diaOperacional } from "../regras.js";
 
 const gruposAdicionais = () => [...new Set((loja().adicionais || []).map((a) => a.grupo).filter(Boolean))];
 const opcoesGrupo = (atual, vazio) => `<option value="">${vazio}</option>${gruposAdicionais().map((g) => `<option ${g === atual ? "selected" : ""}>${esc(g)}</option>`).join("")}`;
@@ -573,8 +573,27 @@ export function abaAjustes(el) {
   cardBairros($("#cardBairros", el));
 
   // Nota fiscal: cadastro da empresa e tributação padrão (config/fiscal, só a equipe lê)
-  {
+  const desenharNotas = () => {
     const f = D.fiscal || {};
+    if (!$("#notasHoje", el)) return;
+    const notas = D.pagamentos.filter((p) => p.nfce && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
+    const rot = { pendente: "aguardando", enviando: "enviando…", autorizado: "autorizada ✓", erro: "ERRO", cancelar: "cancelando…", cancelado: "cancelada" };
+    $("#notasHoje", el).innerHTML = notas.sort((a, b) => b.criadoEm - a.criadoEm).map((p) => { const n = p.nfce; return `<div class="cl"><div class="n"><b>${n.numero ? `NFC-e ${esc(n.numero)}` : "Pagamento"} · ${brl(p.total)}</b><small>${esc(rot[n.status] || n.status)}${n.ambiente === "homologacao" ? " · teste" : ""}${n.erro ? ` · ${esc(n.erro)}` : ""}${n.erroCancelamento ? ` · não cancelou: ${esc(n.erroCancelamento)}` : ""}</small></div>
+      <div class="v">${n.status === "erro" ? `<button class="btn ghost sm" data-nre="${esc(p.id)}">Tentar de novo</button>` : ""}${n.status === "autorizado" ? `<button class="btn ghost sm" data-ncx="${esc(p.id)}">Cancelar nota</button>` : ""}</div></div>`; }).join("") || `<p class="vazio">Nenhuma nota hoje.</p>`;
+    $$("[data-nre]", el).forEach((b) => (b.onclick = () => { const p = D.pagamentos.find((x) => x.id === b.dataset.nre); store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "pendente", erro: "", tentativas: 0, proxTentativa: 0 } }).then(() => toast("Vai tentar de novo")).catch(erro); }));
+    $$("[data-ncx]", el).forEach((b) => (b.onclick = () => {
+      const p = D.pagamentos.find((x) => x.id === b.dataset.ncx);
+      const motivo = (prompt("Motivo do cancelamento (mínimo 15 letras):", "Venda cancelada a pedido do cliente") || "").trim();
+      if (!motivo) return;
+      if (motivo.length < 15) return toast("O motivo precisa ter pelo menos 15 letras.");
+      store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "cancelar", cancelarMotivo: motivo, erroCancelamento: "" } }).then(() => toast("Cancelando a nota…")).catch(erro);
+    }));
+  };
+  let formFeito = false;
+  const desenharFiscal = () => {
+    if (D.fiscal === undefined) { $("#fiscalForm", el).innerHTML = `<p class="muted">Carregando os dados fiscais…</p>`; return; }
+    formFeito = true;
+    const f = D.fiscal;
     const pd = { ...FISCAL_PADRAO, ...(f.padrao || {}) };
     const campo = (id, rot, v, extra = "") => `<div><label class="f" for="${id}">${rot}</label><input class="in" id="${id}" value="${esc(v ?? "")}" ${extra}></div>`;
     const falta = faltaParaEmitir(f);
@@ -597,29 +616,26 @@ export function abaAjustes(el) {
       <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
       <div class="grp">Notas de hoje</div>
       <div id="notasHoje"></div>`;
-    const notas = D.pagamentos.filter((p) => p.nfce && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
-    const rot = { pendente: "aguardando", enviando: "enviando…", autorizado: "autorizada ✓", erro: "ERRO", cancelar: "cancelando…", cancelado: "cancelada" };
-    $("#notasHoje", el).innerHTML = notas.sort((a, b) => b.criadoEm - a.criadoEm).map((p) => { const n = p.nfce; return `<div class="cl"><div class="n"><b>${n.numero ? `NFC-e ${esc(n.numero)}` : "Pagamento"} · ${brl(p.total)}</b><small>${esc(rot[n.status] || n.status)}${n.ambiente === "homologacao" ? " · teste" : ""}${n.erro ? ` · ${esc(n.erro)}` : ""}${n.erroCancelamento ? ` · não cancelou: ${esc(n.erroCancelamento)}` : ""}</small></div>
-      <div class="v">${n.status === "erro" ? `<button class="btn ghost sm" data-nre="${esc(p.id)}">Tentar de novo</button>` : ""}${n.status === "autorizado" ? `<button class="btn ghost sm" data-ncx="${esc(p.id)}">Cancelar nota</button>` : ""}</div></div>`; }).join("") || `<p class="vazio">Nenhuma nota hoje.</p>`;
-    $$("[data-nre]", el).forEach((b) => (b.onclick = () => { const p = D.pagamentos.find((x) => x.id === b.dataset.nre); store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "pendente", erro: "", tentativas: 0, proxTentativa: 0 } }).then(() => toast("Vai tentar de novo")).catch(erro); }));
-    $$("[data-ncx]", el).forEach((b) => (b.onclick = () => {
-      const p = D.pagamentos.find((x) => x.id === b.dataset.ncx);
-      const motivo = (prompt("Motivo do cancelamento (mínimo 15 letras):", "Venda cancelada a pedido do cliente") || "").trim();
-      if (!motivo) return;
-      if (motivo.length < 15) return toast("O motivo precisa ter pelo menos 15 letras.");
-      store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "cancelar", cancelarMotivo: motivo, erroCancelamento: "" } }).then(() => toast("Cancelando a nota…")).catch(erro);
-    }));
+    desenharNotas();
     $("#salvarFiscal", el).onclick = () => {
+      const atual = D.fiscal;
+      if (atual === undefined) return toast("Os dados fiscais ainda não carregaram. Aguarde e tente de novo.");
       const v = (id) => $("#" + id, el).value.trim(), dig = (id) => v(id).replace(/\D/g, "");
       store.salvar("config", "fiscal", {
         ambiente: v("fAmb"), crt: v("fCrt"), cnpj: dig("fCnpj"), ie: v("fIe"), razaoSocial: v("fRaz"), fantasia: v("fFan"),
         logradouro: v("fLog"), numero: v("fNum"), bairro: v("fBai"), cidade: v("fCid"), uf: v("fUf").toUpperCase(), cep: dig("fCep"), cMun: dig("fMun"),
         serie: Number(dig("fSer")) || 1, proximoNumero: Number(dig("fPro")) || 1, cscId: v("fCid2"), csc: v("fCsc"), certificadoOk: $("#fCert", el).checked,
         padrao: { ncm: dig("fNcm"), cfop: dig("fCfop"), csosn: v("fCso"), origem: v("fOri") },
-        emitir: $("#fEmit", el).checked, emitirDesde: $("#fEmit", el).checked ? (f.emitir && f.emitirDesde ? f.emitirDesde : Date.now()) : f.emitirDesde || 0,
+        emitir: $("#fEmit", el).checked, emitirDesde: $("#fEmit", el).checked ? (atual.emitir && atual.emitirDesde ? atual.emitirDesde : Date.now()) : atual.emitirDesde || 0,
       }).then(() => toast("Dados fiscais salvos ✓", "bom")).catch(erro);
     };
-  }
+  };
+  desenharFiscal();
+  const pararFiscal = aoMudar(() => {
+    if (!el.isConnected) return pararFiscal();
+    if (!formFeito && D.fiscal !== undefined) desenharFiscal(); // os dados chegaram depois de abrir a tela
+    else if (formFeito) desenharNotas();           // notas novas, erros, canceladas…
+  });
 
   $("#salvarObs", el).onclick = () => store.salvar("config", "loja", { obsRapidas: Object.fromEntries($$("[data-or]", el).map((i) => [i.dataset.or, i.value.split(",").map((x) => x.trim()).filter(Boolean)])) })
     .then(() => toast("Observações salvas ✓", "bom")).catch(erro);
