@@ -11,14 +11,16 @@ export function montarNFCe(pag, fiscal) {
   const itens = pag.itensFiscais || [];
   if (!itens.length) throw new Error("pagamento sem itens fiscais");
   const bruto = r2(itens.reduce((t, i) => t + i.vTotal, 0));
-  const ajuste = r2((pag.servico || 0) - (pag.desconto || 0)); // +serviço −desconto
+  // Tudo o que foi cobrado além dos itens (serviço, taxa de entrega) entra como outras despesas, e o desconto abate:
+  // assim os itens fecham com o total pago (a SEFAZ recusa nota em que os pagamentos passam do total).
+  const ajuste = r2((pag.total != null ? pag.total : bruto + (pag.servico || 0) - (pag.desconto || 0)) - bruto);
   let sobra = ajuste;
   const det = itens.map((i, n) => {
     const ult = n === itens.length - 1;
     const parte = ult ? sobra : r2(bruto ? (ajuste * i.vTotal) / bruto : 0);
     sobra = r2(sobra - parte);
     const it = {
-      numero_item: n + 1, codigo_produto: String(i.cod || n + 1), descricao: String(i.desc).slice(0, 120),
+      numero_item: n + 1, codigo_produto: String(i.cod || n + 1).slice(0, 60), descricao: String(i.desc).slice(0, 120),
       codigo_ncm: so(i.ncm) || "19059090", cfop: so(i.cfop) || "5102",
       unidade_comercial: i.unidade || "UN", quantidade_comercial: i.qtd, valor_unitario_comercial: r2(i.vUnit),
       unidade_tributavel: i.unidade || "UN", quantidade_tributavel: i.qtd, valor_unitario_tributavel: r2(i.vUnit),

@@ -82,7 +82,8 @@ export function iniciarEmissor({ db, cfg, log, aoLimpar }) {
         log(`NFC-e ${r.numero} autorizada (${fx.ambiente}) · pagamento ${id}`);
         await imprimirDanfe(pag, nfce, fx.ambiente !== "producao").catch((e) => log("NFC-e: erro ao imprimir o DANFE:", e.message));
       } else {
-        const msg = r.mensagem_sefaz || r.mensagem || r.codigo || `resposta ${r.http}`;
+        const det = Array.isArray(r.erros) ? r.erros.map((e) => e.mensagem || e.campo).filter(Boolean).join("; ") : "";
+        const msg = [r.mensagem_sefaz || r.mensagem || r.codigo || `resposta ${r.http}`, det].filter(Boolean).join(" · ");
         await salvar(id, { status: "erro", erro: String(msg).slice(0, 300), tentativas: (pag.nfce?.tentativas || 0) + 1, ambiente: fx.ambiente });
         log("NFC-e REJEITADA:", msg);
       }
