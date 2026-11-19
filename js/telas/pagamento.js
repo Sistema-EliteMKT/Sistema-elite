@@ -25,6 +25,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       <div class="dividir"><span class="muted">Dividir igual por</span>${[2, 3, 4, 5, 6].map((n) => `<button class="chip" data-div="${n}">${n}</button>`).join("")}<span id="divTxt" class="muted"></span></div>
       <label class="f" for="cpf">CPF ou CNPJ na nota (opcional)</label><input class="in" id="cpf" inputmode="numeric" placeholder="Só números: CPF (11) ou CNPJ (14)">
       <div class="sum" id="sum"></div>
+      ${D.fiscal?.emitir ? `<label class="opt"><input type="checkbox" id="nota" ${D.fiscal.nfcePadrao ? "checked" : ""}><span>Emitir cupom fiscal eletrônico <small>(NFC-e${D.fiscal.ambiente === "producao" ? "" : " · TESTE, sem valor fiscal"})</small></span></label>` : ""}
       <label class="opt"><input type="checkbox" id="comp"><span>Imprimir comprovante</span></label>
       <label class="opt"><input type="checkbox" id="rec"><span>Imprimir recibo para o cliente assinar <small>(a loja guarda)</small></span></label>
       <div class="err" id="err"></div>
@@ -70,7 +71,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
         if (doc && doc.length !== 11 && doc.length !== 14) throw new Error("CPF tem 11 números e CNPJ tem 14. Confira ou deixe em branco.");
         const pag = await registrarPagamento(pedidos, {
           servico: valorServ(), desconto: numero($("#desc", s).value),
-          pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""),
+          pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""), emitirNota: D.fiscal?.emitir ? !!$("#nota", s)?.checked : undefined,
         }, quem);
         if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag, { salao });
         if ($("#rec", s).checked) await imprimirRecibo(pedidos, pag, { salao });

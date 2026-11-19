@@ -441,7 +441,7 @@ export async function registrarPagamento(pedidos, valores, quem) {
     pagamentos: valores.pagamentos.filter((x) => Number(x.valor) > 0).map((x) => ({ forma: x.forma, valor: dinheiro(x.valor), tPag: tPagDe(x.forma), ...(x.forma === FORMA_CONVENIO ? { funcionario: x.func || "" } : {}) })),
     troco, cpf: valores.cpf || "", caixa: D.caixa?.id || null,
     // Dados para a nota fiscal (NFC-e), que será emitida depois a partir daqui.
-    nfce: { status: "pendente" }, itensFiscais: itensFiscais(pedidos),
+    nfce: { status: valores.emitirNota === false ? "nenhuma" : "pendente" }, itensFiscais: itensFiscais(pedidos),
   };
   // Comanda paga fecha na hora; pedido de entrega/retirada continua aberto até ser concluído.
   const fim = (p) => (p.tipo === "mesa" ? { status: "fechada", aberto: false } : {});
@@ -513,8 +513,7 @@ export function textoPedido(p, { paraLoja = false } = {}) {
   const min = Number(lj[p.tipo === "entrega" ? "tempoEntregaMin" : "tempoRetiradaMin"]), max = Number(lj[p.tipo === "entrega" ? "tempoEntregaMax" : "tempoRetiradaMax"]);
   if (min > 0 && (p.tipo === "entrega" || p.tipo === "retirada")) linhas.push(`Previsão: ${max > min ? `${min} a ${max} min` : `${min} min`}`);
   if (p.obs) linhas.push(`Obs do pedido: ${p.obs}`);
-  if (paraLoja) { if (c.referencia) linhas.push(`Referência: ${c.referencia}`); linhas.push("", "Podem confirmar, por favor? 🙂"); }
-  else linhas.push("", "Obrigado pela preferência! 🍕");
+  if (paraLoja) { if (c.referencia) linhas.push(`Referência: ${c.referencia}`); linhas.push("", "Já fiz o pedido pelo cardápio, podem preparar. Obrigado! 🍕"); }
   return linhas.join("\n");
 }
 

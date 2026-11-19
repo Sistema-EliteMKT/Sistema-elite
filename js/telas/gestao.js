@@ -576,7 +576,11 @@ export function abaAjustes(el) {
   const desenharNotas = () => {
     const f = D.fiscal || {};
     if (!$("#notasHoje", el)) return;
-    const notas = D.pagamentos.filter((p) => p.nfce && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
+    const notas = D.pagamentos.filter((p) => p.nfce && p.nfce.status !== "nenhuma" && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
+    const ok = D.pagamentos.filter((p) => p.nfce?.status === "autorizado");
+    const val = ok.filter((p) => p.nfce.ambiente === "producao"), tst = ok.filter((p) => p.nfce.ambiente !== "producao");
+    const soma = (l) => l.reduce((t, p) => t + (Number(p.total) || 0), 0);
+    if ($("#notasTotal", el)) $("#notasTotal", el).innerHTML = `<div class="sum"><div class="t"><span>Cupons fiscais emitidos hoje</span><span>${val.length}</span></div><div><span>Valor total dos cupons</span><span>${brl(soma(val))}</span></div>${tst.length ? `<div><span>Cupons de teste (sem valor fiscal)</span><span>${tst.length}</span></div>` : ""}</div>`;
     const rot = { pendente: "aguardando", enviando: "enviando…", autorizado: "autorizada ✓", erro: "ERRO", cancelar: "cancelando…", cancelado: "cancelada" };
     $("#notasHoje", el).innerHTML = notas.sort((a, b) => b.criadoEm - a.criadoEm).map((p) => { const n = p.nfce; return `<div class="cl"><div class="n"><b>${n.numero ? `NFC-e ${esc(n.numero)}` : "Pagamento"} · ${brl(p.total)}</b><small>${esc(rot[n.status] || n.status)}${n.ambiente === "homologacao" ? " · teste" : ""}${n.erro ? ` · ${esc(n.erro)}` : ""}${n.erroCancelamento ? ` · não cancelou: ${esc(n.erroCancelamento)}` : ""}</small></div>
       <div class="v">${n.status === "erro" ? `<button class="btn ghost sm" data-nre="${esc(p.id)}">Tentar de novo</button>` : ""}${n.status === "autorizado" ? `<button class="btn ghost sm" data-ncx="${esc(p.id)}">Cancelar nota</button>` : ""}</div></div>`; }).join("") || `<p class="vazio">Nenhuma nota hoje.</p>`;
@@ -612,9 +616,11 @@ export function abaAjustes(el) {
       <div class="opts dois">${campo("fNcm", "NCM", pd.ncm)}${campo("fCfop", "CFOP", pd.cfop)}${campo("fCso", "CSOSN / CST", pd.csosn)}${campo("fOri", "Origem", pd.origem)}</div>
       <div class="grp">Emissão automática</div>
       <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Emitir a NFC-e quando o pagamento for registrado <small>(o agente de impressão do caixa envia ao Focus NFe e imprime o DANFE com QR code. Vale só para recebimentos feitos depois de ligar. Em "Homologação" a nota é de teste, sem valor fiscal)</small></span></label>
+      <label class="opt"><input type="checkbox" id="fNfcePad" ${f.nfcePadrao ? "checked" : ""}><span>Já vir <b>marcado</b> "Emitir cupom fiscal" na tela de receber <small>(desmarcado = quem recebe marca só nas vendas que precisam de cupom)</small></span></label>
       ${f.emitir && f.ambiente !== "producao" ? `<p class="muted pq">⚠️ Emissão ligada em <b>HOMOLOGAÇÃO</b>: as notas são de teste. Para valer, troque o ambiente para Produção quando o contador liberar.</p>` : ""}
       <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
       <div class="grp">Notas de hoje</div>
+      <div id="notasTotal"></div>
       <div id="notasHoje"></div>`;
     desenharNotas();
     $("#salvarFiscal", el).onclick = () => {
@@ -626,7 +632,7 @@ export function abaAjustes(el) {
         logradouro: v("fLog"), numero: v("fNum"), bairro: v("fBai"), cidade: v("fCid"), uf: v("fUf").toUpperCase(), cep: dig("fCep"), cMun: dig("fMun"),
         serie: Number(dig("fSer")) || 1, proximoNumero: Number(dig("fPro")) || 1, cscId: v("fCid2"), csc: v("fCsc"), certificadoOk: $("#fCert", el).checked,
         padrao: { ncm: dig("fNcm"), cfop: dig("fCfop"), csosn: v("fCso"), origem: v("fOri") },
-        emitir: $("#fEmit", el).checked, emitirDesde: $("#fEmit", el).checked ? (atual.emitir && atual.emitirDesde ? atual.emitirDesde : Date.now()) : atual.emitirDesde || 0,
+        emitir: $("#fEmit", el).checked, nfcePadrao: $("#fNfcePad", el).checked, emitirDesde: $("#fEmit", el).checked ? (atual.emitir && atual.emitirDesde ? atual.emitirDesde : Date.now()) : atual.emitirDesde || 0,
       }).then(() => toast("Dados fiscais salvos ✓", "bom")).catch(erro);
     };
   };
