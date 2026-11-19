@@ -1111,7 +1111,7 @@ export function cupomRecibo(pedidos, pag, via = "VIA DA LOJA") {
   linhas.push(L(lado("TOTAL PAGO R$", r$(pag.total)), { b: true, g: true }), SEP,
     L(`Declaro que paguei o valor de R$ ${r$(pag.total)} referente ao consumo acima.`),
     L(""), L(""), L("______________________________", { c: true }), L("Assinatura do cliente", { c: true }), L(""),
-    L("Nome: ______________________________"), L(pag.cpf ? `CPF: ${pag.cpf}` : "CPF: ______________________________"), ...(pag.por ? [L(`Recebido por: ${pag.por}`)] : []),
+    L("Nome: ______________________________"), L(pag.cpf ? `${String(pag.cpf).length === 14 ? "CNPJ" : "CPF"}: ${pag.cpf}` : "CPF: ______________________________"), ...(pag.por ? [L(`Recebido por: ${pag.por}`)] : []),
     SEP, L("NÃO É DOCUMENTO FISCAL", { c: true }), ...rodape());
   return linhas;
 }

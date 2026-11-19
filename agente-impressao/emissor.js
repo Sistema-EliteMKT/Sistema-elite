@@ -38,7 +38,7 @@ export function linhasDanfe(pag, nfce, f, homolog) {
     L(`Protocolo ${nfce.protocolo || ""}`, { c: true }),
     L("Chave de acesso", { b: true, c: true }),
     L(chave.replace(/(\d{4})(?=\d)/g, "$1 "), { c: true }),
-    L(pag.cpf ? `Consumidor CPF ${String(pag.cpf).replace(/\D/g, "").replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")}` : "CONSUMIDOR NÃO IDENTIFICADO", { c: true }),
+    L((() => { const d = String(pag.cpf || "").replace(/\D/g, ""); return d.length === 11 ? `Consumidor CPF ${d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")}` : d.length === 14 ? `Consumidor CNPJ ${d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}` : "CONSUMIDOR NÃO IDENTIFICADO"; })(), { c: true }),
     ...(nfce.qrcode ? [{ qr: nfce.qrcode }] : []),
     ...(urlConsulta ? [L("Consulte pela chave de acesso em:", { c: true }), L(urlConsulta, { c: true })] : []),
     L("Obrigado pela preferência!", { c: true }),

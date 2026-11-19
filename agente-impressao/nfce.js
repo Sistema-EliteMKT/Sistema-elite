@@ -43,7 +43,9 @@ export function montarNFCe(pag, fiscal) {
     presenca_comprador: 1, modalidade_frete: 9, local_destino: 1, consumidor_final: 1,
     cnpj_emitente: so(fiscal.cnpj), itens: det, formas_pagamento: formas,
   };
-  if (so(pag.cpf).length === 11) nota.cpf_destinatario = so(pag.cpf);
+  const doc = so(pag.cpf); // o campo "cpf" do pagamento aceita CPF (11) ou CNPJ (14)
+  if (doc.length === 11) nota.cpf_destinatario = doc;
+  else if (doc.length === 14) nota.cnpj_destinatario = doc;
   return nota;
 }
 

@@ -23,7 +23,7 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       <div id="formas"></div>
       <button class="btn ghost sm" id="maisForma">+ Outra forma</button>
       <div class="dividir"><span class="muted">Dividir igual por</span>${[2, 3, 4, 5, 6].map((n) => `<button class="chip" data-div="${n}">${n}</button>`).join("")}<span id="divTxt" class="muted"></span></div>
-      <label class="f" for="cpf">CPF na nota (opcional)</label><input class="in" id="cpf" inputmode="numeric" placeholder="Só números">
+      <label class="f" for="cpf">CPF ou CNPJ na nota (opcional)</label><input class="in" id="cpf" inputmode="numeric" placeholder="Só números: CPF (11) ou CNPJ (14)">
       <div class="sum" id="sum"></div>
       <label class="opt"><input type="checkbox" id="comp"><span>Imprimir comprovante</span></label>
       <label class="opt"><input type="checkbox" id="rec"><span>Imprimir recibo para o cliente assinar <small>(a loja guarda)</small></span></label>
@@ -66,6 +66,8 @@ export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Rece
       const btn = ev.currentTarget;
       btn.disabled = true;
       try {
+        const doc = $("#cpf", s).value.replace(/\D/g, "");
+        if (doc && doc.length !== 11 && doc.length !== 14) throw new Error("CPF tem 11 números e CNPJ tem 14. Confira ou deixe em branco.");
         const pag = await registrarPagamento(pedidos, {
           servico: valorServ(), desconto: numero($("#desc", s).value),
           pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""),
