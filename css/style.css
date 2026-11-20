@@ -391,5 +391,5 @@ html,body{max-width:100%;overflow-x:clip}
 .busca-lista{margin-bottom:6px}
 .zap-conf{margin:10px 0 4px;text-decoration:none;display:flex;justify-content:center;background:#25D366;color:#fff}
 
-.c-hero .promo-dia{margin:12px auto 4px;padding:10px 14px;border-radius:12px;background:#fff3c4;color:#3d2600;font-weight:800;font-size:15px;line-height:1.35;max-width:34ch}
+.c-hero .promo-dia{margin:12px auto 4px;padding:10px 14px;border-radius:12px;background:#fff3c4;color:#000;font-weight:800;font-size:15px;line-height:1.35;max-width:34ch}
 .cupom-eq-t{font-size:20px;font-weight:900;margin-bottom:6px}
