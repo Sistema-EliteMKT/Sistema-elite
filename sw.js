@@ -1,6 +1,6 @@
 // Service worker mínimo: permite instalar o sistema como app no celular/tablet.
 // Sempre busca a versão mais nova na internet; o cache é só para abrir sem rede.
-const CACHE = "sistema-elite-v1";
+const CACHE = "sistema-elite-v2";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", (e) => {
