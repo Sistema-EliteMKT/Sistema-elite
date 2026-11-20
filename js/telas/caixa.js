@@ -12,6 +12,7 @@ import { editarItem, editarLancado } from "./item.js";
 import { receber } from "./pagamento.js";
 import { abaFluxo } from "./fluxo.js";
 import { abrirConta, trocarMesaUI } from "./conta.js";
+import { garantirCupomNovo } from "./cupom-equipe.js";
 import { abaPromocoes } from "./promocoes.js";
 import { barraOnline } from "./horario-ui.js";
 import { entregaPorRaio, localizador, kmTxt } from "../entrega.js";
@@ -441,6 +442,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ev.currentTarget.disabled = true;
       try {
         const dados = { tipo, origem: "caixa", cliente, itens, taxaEntrega: taxa(), pagamento: { forma, trocoPara: forma === "Dinheiro" ? numero($("#troco", s).value) : 0 }, obs: $("#obs", s).value.trim(), criadoPor: usuario.nome };
+        await garantirCupomNovo(dados); // cupom do dia: pergunta antes de lançar, e o desconto já sai no papel
         await criarPedido(dados, usuario);
         salvarCliente(dados);
         fecharSheet();

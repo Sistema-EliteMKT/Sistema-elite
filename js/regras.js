@@ -134,6 +134,7 @@ export const itemEhPizza = (i) => produto(i.produtoId)?.tipo === "pizza";
 export const baseDoCupom = (c, itens) => itens.filter((i) => c?.alvo !== "pizzas" || itemEhPizza(i)).reduce((t, i) => t + i.unit * i.qtd, 0);
 
 // Cupom "automático" (auto): vale sozinho no cardápio e a equipe é perguntada, ao fechar cada conta, se aplica.
+export const rotuloCupom = (p) => { const c = p.cupom || {}; return `Cupom ${c.codigo || ""}${c.pct ? ` (${c.pct}%${c.alvo === "pizzas" ? " nas pizzas" : ""})` : ""}`; };
 export const cuponsAuto = (dia = hoje()) => (loja().cupons || []).filter((c) => c.auto && cupomNoPrazo(c, dia));
 export const descontoDoCupom = (p, c) => Math.round(baseDoCupom(c, itensValidos(p)) * Math.min(50, Number(c.pct) || 0)) / 100;
 // Primeiro cupom automático ainda sem resposta em alguma das contas (pedidos que já têm cupom do cliente ficam de fora).
@@ -525,7 +526,7 @@ export function textoPedido(p, { paraLoja = false } = {}) {
     for (const d of i.det || []) linhas.push(`    ${d}`);
     if (i.obs) linhas.push(`    Obs: ${i.obs}`);
   }
-  if (p.descontoCupom) linhas.push(`Cupom ${p.cupom?.codigo || ""}: -${real(p.descontoCupom)}`);
+  if (p.descontoCupom) linhas.push(`${rotuloCupom(p)}: -${real(p.descontoCupom)}`);
   if (p.taxaEntrega) linhas.push(`Entrega: ${real(p.taxaEntrega)}`);
   if (p.taxaPendente) linhas.push("Entrega: a confirmar (vamos te avisar o valor)");
   linhas.push(`*Total: ${real(totalPedido(p))}*`);
@@ -929,7 +930,7 @@ export function cupomConta(pedidos, { servico = 0, desconto = 0, pagamento = nul
     if (pedidos.length > 1 || (p.tipo === "mesa" && p.nome && p.nome !== "Mesa inteira")) linhas.push(SEP, L(p.tipo === "mesa" ? `${rotuloComanda(p)}${p.nome ? " · " + p.nome : ""}` : p.nome || titulo(p), { b: true }));
     else linhas.push(SEP);
     linhas.push(...linhasItens(itensValidos(p), { precos: true }));
-    if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
+    if (p.descontoCupom) linhas.push(L(lado(rotuloCupom(p), "-" + r$(p.descontoCupom)), { b: true }));
     if (p.taxaEntrega) linhas.push(L(lado("Taxa de entrega", r$(p.taxaEntrega))));
   }
   const sub = pedidos.reduce((s, p) => s + totalPedido(p), 0);
@@ -993,10 +994,11 @@ export function cupomEntrega(p) {
   const its = itensValidos(p);
   const nItens = its.reduce((s, i) => s + i.qtd, 0);
   if (p.obs) linhas.push(...[SEP, L("*** OBSERVAÇÃO DO PEDIDO ***", { b: true, c: true }), L(p.obs, { b: true, g: true, c: true })]);
+  if (p.descontoCupom) linhas.push(SEP, L(`*** ${rotuloCupom(p).toUpperCase()} ***`, { b: true, c: true }), L(`DESCONTO DE ${r$(p.descontoCupom)}`, { b: true, g: true, c: true }));
   linhas.push(SEP, L(`ITENS (${nItens})`, { b: true }), ...linhasPorCategoria(its, { precos: true }));
   linhas.push(SEP, L(lado(`Itens (${nItens})`, r$(subtotal(p)))));
   if (p.desconto) linhas.push(L(lado("Desconto", "-" + r$(p.desconto))));
-  if (p.descontoCupom) linhas.push(L(lado(`Cupom ${p.cupom?.codigo || ""}`, "-" + r$(p.descontoCupom))));
+  if (p.descontoCupom) linhas.push(L(lado(rotuloCupom(p), "-" + r$(p.descontoCupom)), { b: true }));
   if (p.taxaEntrega) linhas.push(L(lado(`Entrega${p.cliente?.area ? " (" + p.cliente.area + ")" : ""}`, r$(p.taxaEntrega))));
   if (p.taxaPendente) linhas.push(L("TAXA DE ENTREGA A CONFIRMAR", { b: true, g: true }));
   linhas.push(SEP, L(lado("TOTAL R$", r$(totalPedido(p))), { b: true, g: true }));

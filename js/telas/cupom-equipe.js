@@ -36,3 +36,21 @@ export async function garantirCupomEquipe(pedidos) {
     await responderCupomEquipe(pedidos, c, r);
   }
 }
+
+// Pedido novo ainda não gravado (delivery, retirada ou balcão lançado pelo caixa): pergunta antes de criar,
+// e o desconto já sai escrito no papel que imprime ao lançar.
+export async function garantirCupomNovo(dados) {
+  for (;;) {
+    const c = cupomPendente([dados]);
+    if (!c) return;
+    const valor = descontoDoCupom(dados, c);
+    if (!(valor > 0)) return;
+    const r = await perguntar(c, valor);
+    if (r === undefined) continue;
+    dados.cupomPerguntado = c.codigo;
+    if (r) {
+      dados.cupom = { codigo: String(c.codigo).toUpperCase(), pct: Math.min(50, Number(c.pct) || 0), alvo: c.alvo || "tudo", equipe: true };
+      dados.descontoCupom = valor;
+    }
+  }
+}

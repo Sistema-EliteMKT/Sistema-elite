@@ -222,7 +222,7 @@ export function telaCardapio(raiz) {
         const id = await criarPedido({
           tipo: modo, origem: "online", cliente: modo === "entrega" ? c : { nome: c.nome, telefone: c.telefone },
           itens: sacola.map((l) => ({ ...l })), taxaEntrega: t.taxa, pagamento: { forma, trocoPara }, obs: "", // observação vai em cada item (sai junto do sabor no papel)
-          ...(t.desc ? { cupom: { codigo: cupomAplicado.codigo, pct: cupomAplicado.pct }, descontoCupom: t.desc } : {}),
+          ...(t.desc ? { cupom: { codigo: cupomAplicado.codigo, pct: cupomAplicado.pct, alvo: cupomAplicado.alvo || "tudo" }, descontoCupom: t.desc } : {}),
           ...(modo === "entrega" && porRaio && !loc ? { taxaPendente: true } : {}),
         });
         gravarLocal({ ...c, modo, ultimo: id });
