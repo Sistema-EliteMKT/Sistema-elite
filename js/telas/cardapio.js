@@ -1,6 +1,6 @@
 // Cardápio do cliente: escolhe, monta a sacola e faz o pedido (entrega ou retirada).
 import { $, $$, esc, brl, hora, toast, erro, confirmar, buscaNaLista, abrirSheet, fecharSheet, cabecalhoSheet, rodapeMarca, numero, setasRolagem } from "../ui.js";
-import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos, cupomNoPrazo, baseDoCupom, textoPedido, whatsLoja } from "../regras.js";
+import { D, loja, aoMudar, criarPedido, ETAPAS, totalPedido, vendeEm, itensValidos, cupomNoPrazo, baseDoCupom, textoPedido, whatsLoja, cuponsAuto } from "../regras.js";
 import { hoje } from "../ui.js";
 import { store } from "../store.js";
 import { entregaPorRaio, taxaDoPonto, localizador, kmTxt } from "../entrega.js";
@@ -28,6 +28,7 @@ export function telaCardapio(raiz) {
       <header class="c-hero"><div class="pat" aria-hidden="true"></div><div class="c-hero-in">
         ${lj.logoClaro ? `<img src="${esc(lj.logoClaro)}" alt="${esc(lj.nome)}">` : `<h1>${esc(lj.nome)}</h1>`}
         ${lj.slogan ? `<p>${esc(lj.slogan)}</p>` : ""}
+        ${(() => { const a = cuponsAuto()[0]; return a ? `<p class="promo-dia">🎉 Hoje: ${Number(a.pct) || 0}% de desconto ${a.alvo === "pizzas" ? "em todas as pizzas" : "no pedido"}! O desconto já vem aplicado na sacola.</p>` : ""; })()}
         <div class="facts"><span id="statusOnline" class="${statusOnline(lj).aberto ? "st-aberto" : "st-fechado"}">${statusOnline(lj).aberto ? "🟢" : "🔴"} ${esc(statusOnline(lj).texto)}</span>${previsao(lj, "entrega") ? `<span>🛵 Entrega ${esc(previsao(lj, "entrega"))}</span>` : ""}${previsao(lj, "retirada") ? `<span>🥡 Retirada ${esc(previsao(lj, "retirada"))}</span>` : ""}${lj.telefone ? `<span>${esc(lj.telefone)}</span>` : ""}</div>
       </div></header>
       <div class="c-wrap">
@@ -180,6 +181,9 @@ export function telaCardapio(raiz) {
       }
       atualizar();
     });
+    // Cupom automático do dia (ex.: feriado): já vem aplicado, o cliente não precisa digitar nada.
+    const auto = cuponsAuto().find((x) => !(x.umaVez !== false && usados().includes(String(x.codigo).toUpperCase())));
+    if (auto && $("#ccup", s) && $("#aplicarCup", s)) { $("#ccup", s).value = auto.codigo; $("#aplicarCup", s).click(); }
     $$("select", s).forEach((x) => (x.onchange = atualizar));
     buscaNaLista($("#cb", s), { placeholder: "Digite seu bairro para achar mais rápido" });
     $("#enviar", s).onclick = async () => {

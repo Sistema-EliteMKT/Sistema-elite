@@ -133,6 +133,27 @@ export const itemEhPizza = (i) => produto(i.produtoId)?.tipo === "pizza";
 // Valor sobre o qual o desconto vale: todos os itens, ou só as pizzas.
 export const baseDoCupom = (c, itens) => itens.filter((i) => c?.alvo !== "pizzas" || itemEhPizza(i)).reduce((t, i) => t + i.unit * i.qtd, 0);
 
+// Cupom "automático" (auto): vale sozinho no cardápio e a equipe é perguntada, ao fechar cada conta, se aplica.
+export const cuponsAuto = (dia = hoje()) => (loja().cupons || []).filter((c) => c.auto && cupomNoPrazo(c, dia));
+export const descontoDoCupom = (p, c) => Math.round(baseDoCupom(c, itensValidos(p)) * Math.min(50, Number(c.pct) || 0)) / 100;
+// Primeiro cupom automático ainda sem resposta em alguma das contas (pedidos que já têm cupom do cliente ficam de fora).
+export const cupomPendente = (pedidos) => cuponsAuto().find((c) => pedidos.some((p) => (!p.cupom || p.cupom.equipe) && p.cupomPerguntado !== c.codigo)) || null;
+export async function responderCupomEquipe(pedidos, c, aplicar) {
+  const dados = (p) => (aplicar
+    ? { cupom: { codigo: String(c.codigo).toUpperCase(), pct: Math.min(50, Number(c.pct) || 0), alvo: c.alvo || "tudo", equipe: true }, descontoCupom: descontoDoCupom(p, c), cupomPerguntado: c.codigo }
+    : { cupomPerguntado: c.codigo });
+  const alvo = pedidos.filter((p) => !p.cupom || p.cupom.equipe);
+  await store.lote(alvo.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: dados(p) })));
+  alvo.forEach((p) => Object.assign(p, dados(p)));
+}
+// Itens lançados depois de aplicar o cupom: o desconto acompanha.
+export async function atualizarCupomEquipe(pedidos) {
+  const mud = pedidos.filter((p) => p.cupom?.equipe && descontoDoCupom(p, p.cupom) !== (Number(p.descontoCupom) || 0));
+  if (!mud.length) return;
+  await store.lote(mud.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { descontoCupom: descontoDoCupom(p, p.cupom) } })));
+  mud.forEach((p) => (p.descontoCupom = descontoDoCupom(p, p.cupom)));
+}
+
 export const vendeEm = (p, onde) => p.ativo !== false && !p.soPromo && promoValida(p) && (!onde || canalDe(p) === "todos" || canalDe(p) === onde);
 // "Leve junto" de uma promoção: produtos com preço especial que só se compram com ela (ex.: refrigerante + R$ 10).
 export const leveJunto = (promo) => (promo?.leveJunto || []).map((x) => ({ ...x, p: D.produtos.find((y) => y.id === x.id) })).filter((x) => x.p && x.p.ativo !== false && Number(x.preco) >= 0);

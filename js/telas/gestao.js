@@ -111,8 +111,8 @@ function cardCupons(el) {
   const desenhar = () => {
     const cs = lista();
     el.innerHTML = `<b>🏷️ Cupons de desconto (cardápio online)</b><p class="muted pq">O cliente digita o cupom na sacola. O desconto vale sobre os itens (nunca sobre a entrega): em todos, ou só nas pizzas. Dá para limitar por datas (ex.: só no feriado).</p>
-      ${cs.map((c, i) => `<div class="cl"><div class="n"><b>${esc(c.codigo)}</b><small>${Number(c.pct) || 0}% ${c.alvo === "pizzas" ? "só nas pizzas" : "em todos os itens"} · ${esc(quando(c))} · ${c.umaVez === false ? "pode usar sempre" : "1 vez por celular"} · <b>${situacao(c)}</b></small></div>
-        <div class="v"><button class="btn ghost sm" data-liga="${i}">${c.ativo === false ? "Ligar" : "Desligar"}</button><button class="mini-x" data-rm="${i}" aria-label="Remover">×</button></div></div>`).join("") || `<p class="vazio">Nenhum cupom ainda.</p>`}
+      ${cs.map((c, i) => `<div class="cl"><div class="n"><b>${esc(c.codigo)}</b><small>${Number(c.pct) || 0}% ${c.alvo === "pizzas" ? "só nas pizzas" : "em todos os itens"} · ${esc(quando(c))} · ${c.umaVez === false ? "pode usar sempre" : "1 vez por celular"} · <b>${situacao(c)}</b>${c.auto ? " · <b>automático</b>" : ""}</small></div>
+        <div class="v"><button class="btn ghost sm" data-auto="${i}">${c.auto ? "Tirar do automático" : "Tornar automático"}</button><button class="btn ghost sm" data-liga="${i}">${c.ativo === false ? "Ligar" : "Desligar"}</button><button class="mini-x" data-rm="${i}" aria-label="Remover">×</button></div></div>`).join("") || `<p class="vazio">Nenhum cupom ainda.</p>`}
       <div class="grp">Novo cupom</div>
       <div class="opts dois"><div><label class="f" for="cuc">Código</label><input class="in" id="cuc" placeholder="Ex.: FERIADO15" autocapitalize="characters"></div>
         <div><label class="f" for="cup">Desconto (%)</label><input class="in" id="cup" type="number" min="1" max="50" placeholder="15"></div>
@@ -122,6 +122,7 @@ function cardCupons(el) {
       <div class="opts dois"><label class="opt"><input type="radio" name="cualvo" value="tudo" checked><span>Em todos os itens</span></label>
         <label class="opt"><input type="radio" name="cualvo" value="pizzas"><span>Só nas pizzas</span></label></div>
       <label class="opt"><input type="checkbox" id="cuuma" checked><span>Cada celular usa uma vez só <small>(desmarque para cupom de feriado, que vale em todo pedido)</small></span></label>
+      <label class="opt"><input type="checkbox" id="cuauto"><span>Automático <small>(o cardápio já aplica o desconto e o garçom/caixa recebe um aviso, ao fechar a conta, perguntando se aplica. Bom para feriado e promoção do dia)</small></span></label>
       <div class="linha-btn wrap"><button class="btn pri" id="cua">Criar cupom</button></div>`;
     $("#cua", el).onclick = async () => {
       const codigo = $("#cuc", el).value.trim().toUpperCase().replace(/\s+/g, ""), pct = Math.min(50, Number($("#cup", el).value) || 0);
@@ -129,9 +130,10 @@ function cardCupons(el) {
       if (!codigo || !pct) return toast("Coloque o código e a porcentagem.");
       if (de && ate && ate < de) return toast("A data final é antes da inicial.");
       const l = lista().filter((c) => String(c.codigo).toUpperCase() !== codigo);
-      l.push({ codigo, pct, ativo: true, de, ate, alvo: $('input[name="cualvo"]:checked', el).value, umaVez: $("#cuuma", el).checked });
+      l.push({ codigo, pct, ativo: true, de, ate, alvo: $('input[name="cualvo"]:checked', el).value, umaVez: $("#cuuma", el).checked, auto: $("#cuauto", el).checked });
       await salvar(l); toast("Cupom criado ✓", "bom"); setTimeout(desenhar, 300);
     };
+    $$("[data-auto]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l[b.dataset.auto].auto = !l[b.dataset.auto].auto; await salvar(l); setTimeout(desenhar, 300); }));
     $$("[data-liga]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l[b.dataset.liga].ativo = l[b.dataset.liga].ativo === false; await salvar(l); setTimeout(desenhar, 300); }));
     $$("[data-rm]", el).forEach((b) => (b.onclick = async () => { const l = lista(); l.splice(+b.dataset.rm, 1); await salvar(l); setTimeout(desenhar, 300); }));
   };

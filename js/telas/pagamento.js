@@ -1,10 +1,17 @@
 // Janela de receber pagamento (fecha mesa ou pedido). Aceita dividir em várias formas.
 import { store } from "../store.js";
+import { garantirCupomEquipe } from "./cupom-equipe.js";
 import { $, $$, esc, brl, numero, valorCampo, toast, erro, avisoDesfazer, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
 import { D, loja, totalPedido, registrarPagamento, dinheiro, imprimirComprovante, imprimirRecibo, baseServico, desfazerPagamento, FORMA_CONVENIO } from "../regras.js";
 
 // Resolve com o pagamento registrado, ou null se fechou sem receber.
-export function receber(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
+// Antes de abrir, se houver cupom do dia, pergunta se aplica (e atualiza o desconto se entraram itens depois).
+export async function receber(pedidos, quem, opcoes = {}) {
+  await garantirCupomEquipe(pedidos).catch(erro);
+  return receberSheet(pedidos, quem, opcoes);
+}
+
+function receberSheet(pedidos, quem, { servico = 0, forma = "", titulo = "Receber", recebido = 0, salao = false } = {}) {
   return new Promise((res) => {
     const lj = loja();
     const formas = [...(lj.formasPagamento || ["Dinheiro"]).filter((f) => f !== FORMA_CONVENIO), FORMA_CONVENIO];

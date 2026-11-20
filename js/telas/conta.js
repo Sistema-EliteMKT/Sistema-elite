@@ -2,6 +2,7 @@
 // O garçom abre com o salão (Print iD) marcado; o caixa abre com o caixa (Bematech). Dá para trocar
 // na hora, caso uma das impressoras pare de funcionar.
 import { $, $$, esc, brl, toast, erro, abrirSheet, fecharSheet, cabecalhoSheet } from "../ui.js";
+import { garantirCupomEquipe } from "./cupom-equipe.js";
 import { loja, subtotal, rotuloComanda, pedirConta, imprimirConta, baseServico, trocarMesa, comandasDaMesa } from "../regras.js";
 
 const servico = (cs) => Math.round(baseServico(cs) * (Number(loja().taxaServico) || 0)) / 100;
@@ -33,6 +34,7 @@ export function abrirConta(cs, { origem = "caixa", titulo = "Imprimir conta", ao
     const alvo = $('input[name="dest"]:checked', s)?.value;
     ev.currentTarget.disabled = true;
     try {
+      await garantirCupomEquipe(sel);
       await pedirConta(sel.map((c) => c.id));
       await imprimirConta(sel, { servico: servico(sel) }, { impressora: alvo });
       fecharSheet();

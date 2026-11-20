@@ -390,3 +390,6 @@ html,body{max-width:100%;overflow-x:clip}
 .s2opt{min-width:0}.s2opt span{min-width:0;flex:1;overflow-wrap:anywhere}
 .busca-lista{margin-bottom:6px}
 .zap-conf{margin:10px 0 4px;text-decoration:none;display:flex;justify-content:center;background:#25D366;color:#fff}
+
+.promo-dia{margin:8px 0 2px;padding:8px 12px;border-radius:12px;background:#fff3c4;color:#5a3b00;font-weight:800;font-size:14.5px}
+.cupom-eq-t{font-size:20px;font-weight:900;margin-bottom:6px}
