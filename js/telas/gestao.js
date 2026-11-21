@@ -617,7 +617,7 @@ export function abaAjustes(el) {
       <div class="grp">Tributação padrão dos produtos <small>o contador confirma · cada categoria/produto pode ter a sua</small></div>
       <div class="opts dois">${campo("fNcm", "NCM", pd.ncm)}${campo("fCfop", "CFOP", pd.cfop)}${campo("fCso", "CSOSN / CST", pd.csosn)}${campo("fOri", "Origem", pd.origem)}</div>
       <div class="grp">Emissão automática</div>
-      <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Perguntar, ao fechar cada conta, se emite o cupom fiscal (NFC-e) <small>(só emite quando quem recebe escolher Emitir cupom fiscal; o agente de impressão do caixa envia ao Focus NFe e imprime o cupom com QR code. Em "Homologação" a nota é de teste, sem valor fiscal)</small></span></label>
+      <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Emitir a NFC-e quando o pagamento for registrado <small>(na tela de receber a caixinha "Emitir cupom fiscal" já vem marcada; quem recebe desmarca nas vendas sem cupom. O agente de impressão do caixa envia ao Focus NFe e imprime o cupom com QR code. Vale só para recebimentos feitos depois de ligar.)</small></span></label>
       ${f.emitir && f.ambiente !== "producao" ? `<p class="muted pq">⚠️ Emissão ligada em <b>HOMOLOGAÇÃO</b>: as notas são de teste. Para valer, troque o ambiente para Produção quando o contador liberar.</p>` : ""}
       <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
       <div class="grp">Notas de hoje</div>
