@@ -575,25 +575,56 @@ export function abaAjustes(el) {
   cardBairros($("#cardBairros", el));
 
   // Nota fiscal: cadastro da empresa e tributação padrão (config/fiscal, só a equipe lê)
+  // "Notas de hoje" só traz o dia do caixa e zera à meia-noite; aqui dá para escolher um dia anterior.
+  let diaNotas = "";
+  let outroDia = { dia: "", lista: [], carregando: false, erro: "" };
+  const fonteNotas = () => (diaNotas ? outroDia.lista : D.pagamentos);
+  const dm = (d) => d.split("-").reverse().join("/");
+  const carregarDia = async (dia) => {
+    outroDia = { dia, lista: [], carregando: true, erro: "" };
+    desenharNotas();
+    try {
+      const lista = await store.consultar("pagamentos", ["dia", "==", dia]);
+      if (diaNotas === dia) outroDia = { dia, lista, carregando: false, erro: "" };
+    } catch (e) { if (diaNotas === dia) outroDia = { dia, lista: [], carregando: false, erro: e.message || String(e) }; }
+    desenharNotas();
+  };
+  const irParaDia = (d) => {
+    diaNotas = d && d !== diaOperacional() ? d : "";
+    if ($("#notasDia", el)) $("#notasDia", el).value = diaNotas || diaOperacional();
+    diaNotas ? carregarDia(diaNotas) : desenharNotas();
+  };
   const desenharNotas = () => {
     const f = D.fiscal || {};
     if (!$("#notasHoje", el)) return;
-    const notas = D.pagamentos.filter((p) => p.nfce && p.nfce.status !== "nenhuma" && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
-    const ok = D.pagamentos.filter((p) => p.nfce?.status === "autorizado");
+    const fonte = fonteNotas();
+    const quando = diaNotas ? `em ${dm(diaNotas)}` : "hoje";
+    const notas = fonte.filter((p) => p.nfce && p.nfce.status !== "nenhuma" && (p.nfce.status !== "pendente" || (f.emitir && p.criadoEm >= (f.emitirDesde || Infinity))));
+    const ok = fonte.filter((p) => p.nfce?.status === "autorizado");
     const val = ok.filter((p) => p.nfce.ambiente === "producao"), tst = ok.filter((p) => p.nfce.ambiente !== "producao");
     const soma = (l) => l.reduce((t, p) => t + (Number(p.total) || 0), 0);
-    if ($("#notasTotal", el)) $("#notasTotal", el).innerHTML = `<div class="sum"><div class="t"><span>Cupons fiscais emitidos hoje</span><span>${val.length}</span></div><div><span>Valor total dos cupons</span><span>${brl(soma(val))}</span></div>${tst.length ? `<div><span>Cupons de teste (sem valor fiscal)</span><span>${tst.length}</span></div>` : ""}</div>`;
+    if ($("#notasTotal", el)) $("#notasTotal", el).innerHTML = `<div class="sum"><div class="t"><span>Cupons fiscais emitidos ${quando}</span><span>${val.length}</span></div><div><span>Valor total dos cupons</span><span>${brl(soma(val))}</span></div>${tst.length ? `<div><span>Cupons de teste (sem valor fiscal)</span><span>${tst.length}</span></div>` : ""}</div>`;
+    if (diaNotas && outroDia.carregando) { $("#notasHoje", el).innerHTML = `<p class="muted">Buscando as notas de ${dm(diaNotas)}…</p>`; return; }
+    if (diaNotas && outroDia.erro) { $("#notasHoje", el).innerHTML = `<p class="falta">Não consegui buscar as notas de ${dm(diaNotas)}: ${esc(outroDia.erro)}</p>`; return; }
     const rot = { pendente: "aguardando", enviando: "enviando…", autorizado: "autorizada ✓", erro: "ERRO", cancelar: "cancelando…", cancelado: "cancelada" };
     $("#notasHoje", el).innerHTML = notas.sort((a, b) => b.criadoEm - a.criadoEm).map((p) => { const n = p.nfce; return `<div class="cl"><div class="n"><b>${n.numero ? `NFC-e ${esc(n.numero)}` : "Pagamento"} · ${brl(p.total)}</b><small>${esc(rot[n.status] || n.status)}${n.ambiente === "homologacao" ? " · teste" : ""}${n.erro ? ` · ${esc(n.erro)}` : ""}${n.erroCancelamento ? ` · não cancelou: ${esc(n.erroCancelamento)}` : ""}</small></div>
-      <div class="v">${n.status === "erro" ? `<button class="btn ghost sm" data-nre="${esc(p.id)}">Tentar de novo</button>` : ""}${n.status === "autorizado" ? `<button class="btn ghost sm" data-ncx="${esc(p.id)}">Cancelar nota</button>` : ""}</div></div>`; }).join("") || `<p class="vazio">Nenhuma nota hoje.</p>`;
-    $$("[data-nre]", el).forEach((b) => (b.onclick = () => { const p = D.pagamentos.find((x) => x.id === b.dataset.nre); store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "pendente", erro: "", tentativas: 0, proxTentativa: 0 } }).then(() => toast("Vai tentar de novo")).catch(erro); }));
+      <div class="v">${n.status === "erro" ? `<button class="btn ghost sm" data-nre="${esc(p.id)}">Tentar de novo</button>` : ""}${n.status === "autorizado" ? `<button class="btn ghost sm" data-ncx="${esc(p.id)}">Cancelar nota</button>` : ""}</div></div>`; }).join("") || `<p class="vazio">Nenhuma nota ${quando}.</p>`;
+    $$("[data-nre]", el).forEach((b) => (b.onclick = () => { const p = fonteNotas().find((x) => x.id === b.dataset.nre); store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "pendente", erro: "", tentativas: 0, proxTentativa: 0 } }).then(() => { toast("Vai tentar de novo"); atualizarDiaAnterior(p, "pendente"); }).catch(erro); }));
     $$("[data-ncx]", el).forEach((b) => (b.onclick = () => {
-      const p = D.pagamentos.find((x) => x.id === b.dataset.ncx);
+      const p = fonteNotas().find((x) => x.id === b.dataset.ncx);
       const motivo = (prompt("Motivo do cancelamento (mínimo 15 letras):", "Venda cancelada a pedido do cliente") || "").trim();
       if (!motivo) return;
       if (motivo.length < 15) return toast("O motivo precisa ter pelo menos 15 letras.");
-      store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "cancelar", cancelarMotivo: motivo, erroCancelamento: "" } }).then(() => toast("Cancelando a nota…")).catch(erro);
+      store.salvar("pagamentos", p.id, { nfce: { ...p.nfce, status: "cancelar", cancelarMotivo: motivo, erroCancelamento: "" } }).then(() => { toast("Cancelando a nota…"); atualizarDiaAnterior(p, "cancelar"); }).catch(erro);
     }));
+  };
+  // Num dia anterior a lista não é ao vivo: mostra o novo estado e busca de novo em seguida.
+  const atualizarDiaAnterior = (p, status) => {
+    if (!diaNotas) return;
+    p.nfce = { ...p.nfce, status };
+    desenharNotas();
+    const d = diaNotas;
+    setTimeout(() => diaNotas === d && carregarDia(d), 9000);
   };
   let formFeito = false;
   const desenharFiscal = () => {
@@ -620,10 +651,17 @@ export function abaAjustes(el) {
       <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Emitir a NFC-e quando o pagamento for registrado <small>(na tela de receber a caixinha "Emitir cupom fiscal" já vem marcada; quem recebe desmarca nas vendas sem cupom. O agente de impressão do caixa envia ao Focus NFe e imprime o cupom com QR code. Vale só para recebimentos feitos depois de ligar.)</small></span></label>
       ${f.emitir && f.ambiente !== "producao" ? `<p class="muted pq">⚠️ Emissão ligada em <b>HOMOLOGAÇÃO</b>: as notas são de teste. Para valer, troque o ambiente para Produção quando o contador liberar.</p>` : ""}
       <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
-      <div class="grp">Notas de hoje</div>
+      <div class="grp">Notas fiscais por dia</div>
+      <div class="opts dois"><div><label class="f" for="notasDia">Dia</label><input class="in" id="notasDia" type="date" value="${esc(diaNotas || diaOperacional())}"></div>
+        <div class="linha-btn wrap"><button class="btn ghost sm" data-ndia="-1">◀ Dia anterior</button><button class="btn ghost sm" data-ndia="1">Dia seguinte ▶</button><button class="btn ghost sm" data-ndia="0">Hoje</button></div></div>
       <div id="notasTotal"></div>
       <div id="notasHoje"></div>`;
     desenharNotas();
+    $("#notasDia", el).onchange = (e) => irParaDia(e.target.value);
+    $$("[data-ndia]", el).forEach((b) => (b.onclick = () => {
+      const n = Number(b.dataset.ndia), base = $("#notasDia", el).value || diaOperacional();
+      irParaDia(n === 0 ? diaOperacional() : hoje(new Date(base + "T12:00:00").getTime() + n * 86400000));
+    }));
     $("#salvarFiscal", el).onclick = () => {
       const atual = D.fiscal;
       if (atual === undefined) return toast("Os dados fiscais ainda não carregaram. Aguarde e tente de novo.");
