@@ -650,7 +650,7 @@ export function abaAjustes(el) {
       <div class="grp">Emissão automática</div>
       <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Emitir a NFC-e quando o pagamento for registrado <small>(na tela de receber a caixinha "Emitir cupom fiscal" já vem marcada; quem recebe desmarca nas vendas sem cupom. O agente de impressão do caixa envia ao Focus NFe e imprime o cupom com QR code. Vale só para recebimentos feitos depois de ligar.)</small></span></label>
       ${f.emitir && f.ambiente !== "producao" ? `<p class="muted pq">⚠️ Emissão ligada em <b>HOMOLOGAÇÃO</b>: as notas são de teste. Para valer, troque o ambiente para Produção quando o contador liberar.</p>` : ""}
-      <button class="btn pri" id="salvarFiscal">Salvar dados fiscais</button>
+      <button class="btn pri" id="salvarFiscal">Salvar</button>
       <div class="grp">Notas fiscais por dia</div>
       <div class="opts dois"><div><label class="f" for="notasDia">Dia</label><input class="in" id="notasDia" type="date" value="${esc(diaNotas || diaOperacional())}"></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-ndia="-1">◀ Dia anterior</button><button class="btn ghost sm" data-ndia="1">Dia seguinte ▶</button><button class="btn ghost sm" data-ndia="0">Hoje</button></div></div>
