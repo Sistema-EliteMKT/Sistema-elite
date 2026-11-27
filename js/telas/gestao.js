@@ -11,6 +11,7 @@ import { FISCAL_PADRAO, REGIMES, faltaParaEmitir } from "../fiscal.js";
 import { cardHorario } from "./horario-ui.js";
 import { cardConsumo } from "./consumo.js";
 import { cardBairros } from "./bairros-ui.js";
+import { cardRelatorioContabil } from "./relatorio-contabil.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
 // ----------------------------------------------------------------- Motoboys
@@ -655,8 +656,10 @@ export function abaAjustes(el) {
       <div class="opts dois"><div><label class="f" for="notasDia">Dia</label><input class="in" id="notasDia" type="date" value="${esc(diaNotas || diaOperacional())}"></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-ndia="-1">◀ Dia anterior</button><button class="btn ghost sm" data-ndia="1">Dia seguinte ▶</button><button class="btn ghost sm" data-ndia="0">Hoje</button></div></div>
       <div id="notasTotal"></div>
-      <div id="notasHoje"></div>`;
+      <div id="notasHoje"></div>
+      <div id="relContab"></div>`;
     desenharNotas();
+    cardRelatorioContabil($("#relContab", el));
     $("#notasDia", el).onchange = (e) => irParaDia(e.target.value);
     $$("[data-ndia]", el).forEach((b) => (b.onclick = () => {
       const n = Number(b.dataset.ndia), base = $("#notasDia", el).value || diaOperacional();
