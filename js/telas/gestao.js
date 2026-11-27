@@ -12,6 +12,7 @@ import { cardHorario } from "./horario-ui.js";
 import { cardConsumo } from "./consumo.js";
 import { cardBairros } from "./bairros-ui.js";
 import { cardRelatorioContabil } from "./relatorio-contabil.js";
+import { abrirNfeEmpresa, cardNfeLista } from "./nfe-empresa.js";
 import { htmlCupom } from "../imprimir-navegador.js";
 
 // ----------------------------------------------------------------- Motoboys
@@ -142,7 +143,7 @@ function cardCupons(el) {
 }
 
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
-const VERSAO_AGENTE = "2026.11.19-2";
+const VERSAO_AGENTE = "2026.11.27-1";
 
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
@@ -513,7 +514,7 @@ function editarLista(titulo, campo, chave, rotulo) {
 }
 
 // ------------------------------------------------------------------ Ajustes
-export function abaAjustes(el) {
+export function abaAjustes(el, { usuario } = {}) {
   const lj = loja();
   const linkCardapio = location.href.split("#")[0] + "#/cardapio";
   el.innerHTML = `<div class="grade">
@@ -651,15 +652,18 @@ export function abaAjustes(el) {
       <div class="grp">Emissão automática</div>
       <label class="opt"><input type="checkbox" id="fEmit" ${f.emitir ? "checked" : ""}><span>Emitir a NFC-e quando o pagamento for registrado <small>(na tela de receber a caixinha "Emitir cupom fiscal" já vem marcada; quem recebe desmarca nas vendas sem cupom. O agente de impressão do caixa envia ao Focus NFe e imprime o cupom com QR code. Vale só para recebimentos feitos depois de ligar.)</small></span></label>
       ${f.emitir && f.ambiente !== "producao" ? `<p class="muted pq">⚠️ Emissão ligada em <b>HOMOLOGAÇÃO</b>: as notas são de teste. Para valer, troque o ambiente para Produção quando o contador liberar.</p>` : ""}
-      <button class="btn pri" id="salvarFiscal">Salvar</button>
+      <div class="linha-btn wrap"><button class="btn pri" id="salvarFiscal">Salvar</button><button class="btn ok" id="nfeEmpresa">Emitir NF-e para empresa</button></div>
       <div class="grp">Notas fiscais por dia</div>
       <div class="opts dois"><div><label class="f" for="notasDia">Dia</label><input class="in" id="notasDia" type="date" value="${esc(diaNotas || diaOperacional())}"></div>
         <div class="linha-btn wrap"><button class="btn ghost sm" data-ndia="-1">◀ Dia anterior</button><button class="btn ghost sm" data-ndia="1">Dia seguinte ▶</button><button class="btn ghost sm" data-ndia="0">Hoje</button></div></div>
       <div id="notasTotal"></div>
       <div id="notasHoje"></div>
+      <div id="nfeLista"></div>
       <div id="relContab"></div>`;
     desenharNotas();
     cardRelatorioContabil($("#relContab", el));
+    const recarregarNfe = cardNfeLista($("#nfeLista", el));
+    $("#nfeEmpresa", el).onclick = () => abrirNfeEmpresa({ usuario, aoEmitir: recarregarNfe });
     $("#notasDia", el).onchange = (e) => irParaDia(e.target.value);
     $$("[data-ndia]", el).forEach((b) => (b.onclick = () => {
       const n = Number(b.dataset.ndia), base = $("#notasDia", el).value || diaOperacional();

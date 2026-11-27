@@ -2,7 +2,7 @@
 // Só emite se a emissão estiver ligada em Ajustes > Nota fiscal (config/fiscal.emitir) e só para
 // recebimentos criados depois de ligar (config/fiscal.emitirDesde): nunca mexe no que já passou.
 import { collection, query, where, onSnapshot, doc, runTransaction, updateDoc } from "firebase/firestore";
-import { montarNFCe, focus } from "./nfce.js";
+import { montarNFCe, montarNFe, focus } from "./nfce.js";
 import { imprimir } from "./impressora.js";
 
 const brl = (n) => Number(n || 0).toFixed(2).replace(".", ",");
@@ -122,4 +122,90 @@ export function iniciarEmissor({ db, cfg, log, aoLimpar }) {
   };
   onSnapshot(doc(db, "config", "fiscal"), (s) => { fiscal = s.exists() ? s.data() : null; log(`NFC-e: emissão ${fiscal?.emitir ? "LIGADA" : "desligada"} (${fiscal?.ambiente || "homologacao"})`); checar(); }, (e) => log("NFC-e: erro ao ler config/fiscal:", e.message));
   onSnapshot(query(collection(db, "pagamentos"), where("nfce.status", "in", ["pendente", "cancelar"])), (snap) => { ultimos = snap.docs.map((d) => [d.id, d.data()]); checar(); }, (e) => log("NFC-e: erro ao ouvir pagamentos:", e.message));
+}
+
+// ---------------------------------------------------------------- NF-e para empresa (modelo 55)
+// Os pedidos vêm da coleção "notas" (tipo nfe), criados pelo botão "Emitir NF-e para empresa" em Ajustes.
+// O PDF (DANFE) fica no Focus: o sistema mostra o botão "Abrir PDF".
+export function iniciarEmissorNFe({ db, cfg, log }) {
+  let fiscal = null;
+  const ocupado = new Set();
+  let ultimos = [];
+
+  const salvar = (id, dados) => updateDoc(doc(db, "notas", id), dados);
+
+  async function resultado(id, nota, r, fx) {
+    if (r.status === "autorizado") {
+      await salvar(id, { status: "autorizada", ambiente: fx.ambiente, numero: r.numero, serie: r.serie, chave: r.chave_nfe, protocolo: r.protocolo || "",
+        danfe: r.caminho_danfe ? fx.base + r.caminho_danfe : "", xml: r.caminho_xml_nota_fiscal ? fx.base + r.caminho_xml_nota_fiscal : "", emitidaEm: Date.now(), erro: "" });
+      log(`NF-e ${r.numero} autorizada (${fx.ambiente}) · ${nota.destinatario?.razaoSocial || ""}`);
+    } else if (r.status === "processando_autorizacao") {
+      await salvar(id, { status: "processando", ambiente: fx.ambiente });
+    } else {
+      const det = Array.isArray(r.erros) ? r.erros.map((e) => e.mensagem || e.campo).filter(Boolean).join("; ") : "";
+      const msg = [r.mensagem_sefaz || r.mensagem || r.codigo || `resposta ${r.http}`, det].filter(Boolean).join(" · ");
+      await salvar(id, { status: "erro", erro: String(msg).slice(0, 400), ambiente: fx.ambiente });
+      log("NF-e REJEITADA:", msg);
+    }
+  }
+
+  async function enviar(id, nota) {
+    if (ocupado.has(id)) return;
+    ocupado.add(id);
+    try {
+      const pegou = await runTransaction(db, async (t) => {
+        const s = await t.get(doc(db, "notas", id));
+        if (!s.exists() || s.data().status !== "pendente") return false;
+        t.update(doc(db, "notas", id), { status: "enviando" });
+        return true;
+      });
+      if (!pegou) return;
+      const fx = focus({ ambiente: fiscal.ambiente, focus: cfg.focus });
+      if (!fx.temToken) throw new Error(`falta o token do Focus (${fx.ambiente}) no config.json`);
+      let r = await fx.enviarNFe(id, montarNFe(nota, fiscal));
+      for (let i = 0; i < 12 && (r.status === "processando_autorizacao" || (r.http === 201 && !r.status)); i++) { await espera(3000); r = await fx.consultarNFe(id); }
+      await resultado(id, nota, r, fx);
+    } catch (e) {
+      log("NF-e erro:", e.message);
+      await salvar(id, { status: "erro", erro: e.message }).catch(() => {});
+    } finally { ocupado.delete(id); }
+  }
+
+  async function consultar(id, nota) {
+    if (ocupado.has(id)) return;
+    ocupado.add(id);
+    try { const fx = focus({ ambiente: nota.ambiente || fiscal.ambiente, focus: cfg.focus }); await resultado(id, nota, await fx.consultarNFe(id), fx); }
+    catch (e) { log("NF-e consulta:", e.message); }
+    finally { ocupado.delete(id); }
+  }
+
+  async function cancelar(id, nota) {
+    if (ocupado.has(id)) return;
+    ocupado.add(id);
+    try {
+      const fx = focus({ ambiente: nota.ambiente || fiscal.ambiente, focus: cfg.focus });
+      const motivo = String(nota.cancelarMotivo || "").trim();
+      if (motivo.length < 15) throw new Error("o motivo do cancelamento precisa ter pelo menos 15 letras");
+      const r = await fx.cancelarNFe(id, motivo);
+      if (r.status === "cancelado") { await salvar(id, { status: "cancelada", canceladaEm: Date.now(), erroCancelamento: "" }); log("NF-e cancelada:", nota.numero); }
+      else throw new Error(r.mensagem_sefaz || r.mensagem || "o Focus não cancelou");
+    } catch (e) {
+      log("NF-e cancelamento falhou:", e.message);
+      await salvar(id, { status: "autorizada", erroCancelamento: String(e.message).slice(0, 300) }).catch(() => {});
+    } finally { ocupado.delete(id); }
+  }
+
+  const checar = () => {
+    if (!fiscal) return;
+    for (const [id, n] of ultimos) {
+      if (n.tipo !== "nfe") continue;
+      if (n.status === "pendente") enviar(id, n);
+      else if (n.status === "processando") consultar(id, n);
+      else if (n.status === "cancelar") cancelar(id, n);
+    }
+  };
+  onSnapshot(doc(db, "config", "fiscal"), (sn) => { fiscal = sn.exists() ? sn.data() : null; checar(); }, (e) => log("NF-e: erro ao ler config/fiscal:", e.message));
+  onSnapshot(query(collection(db, "notas"), where("status", "in", ["pendente", "processando", "cancelar"])), (snap) => { ultimos = snap.docs.map((d) => [d.id, d.data()]); checar(); }, (e) => log("NF-e: erro ao ouvir notas:", e.message));
+  // Nota que ficou "processando" (SEFAZ lenta): confere de novo a cada minuto.
+  setInterval(checar, 60000);
 }

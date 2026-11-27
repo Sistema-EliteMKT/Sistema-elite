@@ -67,5 +67,57 @@ export function focus(cfg) {
     consultar: (ref) => chamar("GET", `/v2/nfce/${encodeURIComponent(ref)}`),
     cancelar: (ref, justificativa) => chamar("DELETE", `/v2/nfce/${encodeURIComponent(ref)}`, { justificativa }),
     inutilizar: (corpo) => chamar("POST", "/v2/nfce/inutilizacoes", corpo),
+    enviarNFe: (ref, nota) => chamar("POST", `/v2/nfe?ref=${encodeURIComponent(ref)}`, nota),
+    consultarNFe: (ref) => chamar("GET", `/v2/nfe/${encodeURIComponent(ref)}`),
+    cancelarNFe: (ref, justificativa) => chamar("DELETE", `/v2/nfe/${encodeURIComponent(ref)}`, { justificativa }),
+  };
+}
+
+// ---------------------------------------------------------------- NF-e (modelo 55): nota para empresa
+// Monta o JSON da NF-e a partir de um documento de "notas" (tipo nfe): destinatário, itens e totais.
+// Tudo o que foi cobrado além dos itens (serviço) entra como outras despesas e o desconto abate, rateados nos itens,
+// para a soma dos itens fechar com o total da nota.
+export function montarNFe(nota, fiscal) {
+  const d = nota.destinatario || {}, itens = nota.itens || [];
+  if (!itens.length) throw new Error("NF-e sem itens");
+  const uf = String(d.uf || "").toUpperCase();
+  const interestadual = uf && uf !== "SP";
+  const bruto = r2(itens.reduce((t, i) => t + i.vTotal, 0));
+  const ajuste = r2((nota.total != null ? nota.total : bruto) - bruto);
+  let sobra = ajuste;
+  const cfopDe = (c) => { c = so(c) || "5102"; if (!interestadual) return c; return c === "5405" ? "6404" : c === "5102" ? "6102" : c.replace(/^5/, "6"); };
+  const nfe = fiscal.nfe || {};
+  const det = itens.map((i, n) => {
+    const ult = n === itens.length - 1;
+    const parte = ult ? sobra : r2(bruto ? (ajuste * i.vTotal) / bruto : 0);
+    sobra = r2(sobra - parte);
+    const it = {
+      numero_item: n + 1, codigo_produto: String(i.cod || n + 1).slice(0, 60), descricao: String(i.desc).slice(0, 120),
+      codigo_ncm: so(i.ncm) || "19022000", cfop: cfopDe(i.cfop),
+      unidade_comercial: i.unidade || "UN", quantidade_comercial: i.qtd, valor_unitario_comercial: Math.round(i.vUnit * 1e10) / 1e10,
+      unidade_tributavel: i.unidade || "UN", quantidade_tributavel: i.qtd, valor_unitario_tributavel: Math.round(i.vUnit * 1e10) / 1e10,
+      valor_bruto: r2(i.vTotal), icms_origem: String(i.origem ?? "0"), icms_situacao_tributaria: String(i.csosn || "102"),
+      pis_situacao_tributaria: String(nfe.pis || "07"), cofins_situacao_tributaria: String(nfe.cofins || "07"),
+    };
+    if (parte > 0) it.valor_outras_despesas = parte;
+    else if (parte < 0) it.valor_desconto = r2(-parte);
+    return it;
+  });
+  const dest = {
+    cnpj_destinatario: so(d.cnpj), nome_destinatario: String(d.razaoSocial || "").slice(0, 60),
+    indicador_inscricao_estadual_destinatario: so(d.ie) ? 1 : 9,
+    logradouro_destinatario: d.logradouro, numero_destinatario: d.numero || "S/N", bairro_destinatario: d.bairro,
+    municipio_destinatario: d.municipio, uf_destinatario: uf, cep_destinatario: so(d.cep),
+  };
+  if (so(d.ie)) dest.inscricao_estadual_destinatario = so(d.ie);
+  if (d.complemento) dest.complemento_destinatario = d.complemento;
+  if (d.email) dest.email_destinatario = d.email;
+  const quando = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 19) + "-03:00";
+  return {
+    natureza_operacao: nfe.natureza || "Venda", data_emissao: quando, data_entrada_saida: quando, tipo_documento: 1,
+    local_destino: interestadual ? 2 : 1, finalidade_emissao: 1, consumidor_final: 1, presenca_comprador: 1, modalidade_frete: 9,
+    cnpj_emitente: so(fiscal.cnpj), ...dest, itens: det,
+    formas_pagamento: [{ forma_pagamento: nfe.formaPagamento || "99", ...((nfe.formaPagamento || "99") === "99" ? { descricao_pagamento: "Outros" } : {}), valor_pagamento: r2(nota.total) }],
+    informacoes_adicionais_contribuinte: String(nota.obs || "").slice(0, 400) || undefined,
   };
 }

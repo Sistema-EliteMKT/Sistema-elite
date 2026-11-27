@@ -435,13 +435,52 @@ export async function cancelarPedido(p, motivo, quem) {
 // ---------------------------------------------------------------------------
 //  Pagamento (fecha comandas da mesa ou conclui pedido)
 // ---------------------------------------------------------------------------
-function itensFiscais(pedidos) {
+export function itensFiscais(pedidos) {
   const lj = loja();
   return pedidos.flatMap((p) => itensValidos(p)).map((i) => {
     const prod = produto(i.produtoId);
     const f = fiscalDoItem(D.fiscal, prod, categoria(prod?.cat));
     return { cod: i.produtoId || "", desc: i.nome, qtd: i.qtd, vUnit: dinheiro(i.unit), vTotal: dinheiro(i.unit * i.qtd), ...f };
   });
+}
+
+// ---------------------------------------------------------------------------
+//  NF-e para empresa (nota grande, modelo 55): pedida em Ajustes > Nota fiscal, emitida pelo agente do caixa via Focus.
+//  Os dados ficam em "notas" (tipo nfe). Os pedidos escolhidos ganham nfeEmpresa: o recebimento sabe que já tem NF-e.
+// ---------------------------------------------------------------------------
+// Quanto a NF-e vai valer: itens + taxa de serviço (se cobrada) - cupom. modo "refeicao" vira uma linha só: N refeições.
+export function calcularNfe(pedidos, { modo = "itens", pessoas = 0, comServico = true } = {}) {
+  const itens = itensFiscais(pedidos);
+  const bruto = dinheiro(itens.reduce((t, i) => t + i.vTotal, 0));
+  const servico = comServico ? dinheiro((baseServico(pedidos.filter((p) => p.tipo === "mesa")) * (Number(loja().taxaServico) || 0)) / 100) : 0; // taxa de serviço só vale na mesa
+  const desconto = dinheiro(pedidos.reduce((t, p) => t + (Number(p.descontoCupom) || 0), 0));
+  const total = dinheiro(bruto + servico - desconto);
+  let linhas = itens;
+  if (modo === "refeicao") {
+    const n = Math.max(1, Math.round(Number(pessoas) || 0));
+    const base = { ...fiscalDoItem(D.fiscal, null, null), ...(D.fiscal?.refeicao || {}) };
+    linhas = [{ cod: "refeicao", desc: "Refeição", qtd: n, vUnit: total / n, vTotal: total, ...base }];
+  }
+  return { itens: linhas, bruto, servico, desconto, total };
+}
+
+export async function criarNfeEmpresa({ pedidos, empresa, modo, pessoas, comServico }, quem) {
+  if (!pedidos.length) throw new Error("Escolha a mesa ou o pedido.");
+  const c = calcularNfe(pedidos, { modo, pessoas, comServico });
+  if (!(c.total > 0)) throw new Error("O valor da nota está zerado.");
+  const id = novoId();
+  const mesas = [...new Set(pedidos.map((p) => (p.tipo === "mesa" ? `Mesa ${p.mesa}` : p.numero ? `Pedido ${p.numero}` : "Pedido")))].join(", ");
+  const nota = {
+    tipo: "nfe", status: "pendente", dia: diaOperacional(), criadoEm: Date.now(), por: quem?.nome || "",
+    pedidos: pedidos.map((p) => p.id), origem: mesas, destinatario: empresa, modo, pessoas: modo === "refeicao" ? Math.round(Number(pessoas) || 0) : 0,
+    itens: c.itens, servico: c.servico, desconto: c.desconto, total: c.total, obs: mesas,
+  };
+  await store.lote([
+    { tipo: "criar", col: "notas", id, dados: nota },
+    ...pedidos.map((p) => ({ tipo: "salvar", col: "pedidos", id: p.id, dados: { nfeEmpresa: { nota: id, total: c.total, empresa: empresa.razaoSocial } } })),
+  ]);
+  pedidos.forEach((p) => (p.nfeEmpresa = { nota: id, total: c.total, empresa: empresa.razaoSocial }));
+  return { id, ...nota };
 }
 
 // pedidos: lista de pedidos/comandas pagos juntos; valores: {servico, desconto, pagamentos:[{forma,valor}]}

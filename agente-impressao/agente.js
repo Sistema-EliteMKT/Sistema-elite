@@ -8,13 +8,13 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, collection, query, where, onSnapshot, doc, runTransaction, updateDoc, connectFirestoreEmulator } from "firebase/firestore";
 import { imprimir } from "./impressora.js";
-import { iniciarEmissor } from "./emissor.js";
+import { iniciarEmissor, iniciarEmissorNFe } from "./emissor.js";
 
 const pasta = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(pasta, "config.json"), "utf8"));
 const log = (...a) => console.log(new Date().toLocaleTimeString("pt-BR"), ...a);
 // Versão do agente: vai gravada em cada cupom impresso, para o sistema avisar se estiver desatualizado.
-export const VERSAO = "2026.11.19-2";
+export const VERSAO = "2026.11.27-1";
 
 // ------------------------------------------------------------------ fila
 const app = initializeApp(cfg.firebase);
@@ -91,5 +91,6 @@ setInterval(() => {
 
 // NFC-e (Focus NFe): só age se a emissão estiver ligada em Ajustes e houver o token no config.json.
 iniciarEmissor({ db, cfg, log });
+iniciarEmissorNFe({ db, cfg, log }); // NF-e para empresa (botão em Ajustes > Nota fiscal)
 
 process.on("SIGINT", () => { log("Encerrando."); process.exit(0); });

@@ -16,6 +16,8 @@ function receberSheet(pedidos, quem, { servico = 0, forma = "", titulo = "Recebe
     const formas = [...(lj.formasPagamento || ["Dinheiro"]).filter((f) => f !== FORMA_CONVENIO), FORMA_CONVENIO];
     const equipe = [...D.usuarios.filter((u) => u.ativo !== false), ...D.motoboys.filter((m) => m.ativo !== false)].map((u) => u.nome);
     const sub = dinheiro(pedidos.reduce((s, p) => s + totalPedido(p), 0));
+    const nfes = pedidos.map((p) => p.nfeEmpresa).filter(Boolean);
+    const comNfe = nfes.length ? { empresa: nfes[0].empresa, total: dinheiro(nfes.reduce((t, n, i, a) => (a.findIndex((x) => x.nota === n.nota) === i ? t + n.total : t), 0)) } : null;
     const linhas = [{ forma: forma || formas[0], valor: 0 }];
     let comServico = servico > 0;
     // Serviço pela porcentagem escolhida na hora (padrão: a da loja); o valor sugerido já vem arredondado.
@@ -32,7 +34,8 @@ function receberSheet(pedidos, quem, { servico = 0, forma = "", titulo = "Recebe
       <div class="dividir"><span class="muted">Dividir igual por</span>${[2, 3, 4, 5, 6].map((n) => `<button class="chip" data-div="${n}">${n}</button>`).join("")}<span id="divTxt" class="muted"></span></div>
       <label class="f" for="cpf">CPF ou CNPJ na nota (opcional)</label><input class="in" id="cpf" inputmode="numeric" placeholder="Só números: CPF (11) ou CNPJ (14)">
       <div class="sum" id="sum"></div>
-      ${D.fiscal?.emitir ? `<label class="opt"><input type="checkbox" id="nota" checked><span>Emitir cupom fiscal eletrônico <small>(NFC-e${D.fiscal.ambiente === "producao" ? "" : " · TESTE, sem valor fiscal"}) · desmarque se o cliente não quiser</small></span></label>` : ""}
+      ${comNfe ? `<p class="ok-txt pq">NF-e para ${esc(comNfe.empresa)} já pedida (${brl(comNfe.total)}). Não emite o cupom fiscal comum desta conta.</p>${Math.abs(comNfe.total - (sub + servico)) > 0.01 ? `<p class="ruim-txt pq">⚠️ O valor desta conta (${brl(sub + servico)}) é diferente do da NF-e (${brl(comNfe.total)}). Confira com quem pediu a nota.</p>` : ""}` : ""}
+      ${D.fiscal?.emitir && !comNfe ? `<label class="opt"><input type="checkbox" id="nota" checked><span>Emitir cupom fiscal eletrônico <small>(NFC-e${D.fiscal.ambiente === "producao" ? "" : " · TESTE, sem valor fiscal"}) · desmarque se o cliente não quiser</small></span></label>` : ""}
       <label class="opt"><input type="checkbox" id="comp"><span>Imprimir comprovante</span></label>
       <label class="opt"><input type="checkbox" id="rec"><span>Imprimir recibo para o cliente assinar <small>(a loja guarda)</small></span></label>
       <div class="err" id="err"></div>
@@ -78,7 +81,7 @@ function receberSheet(pedidos, quem, { servico = 0, forma = "", titulo = "Recebe
         if (doc && doc.length !== 11 && doc.length !== 14) throw new Error("CPF tem 11 números e CNPJ tem 14. Confira ou deixe em branco.");
         const pag = await registrarPagamento(pedidos, {
           servico: valorServ(), desconto: numero($("#desc", s).value),
-          pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""), emitirNota: D.fiscal?.emitir ? !!$("#nota", s)?.checked : undefined,
+          pagamentos: linhas, cpf: $("#cpf", s).value.replace(/\D/g, ""), emitirNota: comNfe ? false : D.fiscal?.emitir ? !!$("#nota", s)?.checked : undefined,
         }, quem);
         if ($("#comp", s).checked) await imprimirComprovante(pedidos, pag, { salao });
         if ($("#rec", s).checked) await imprimirRecibo(pedidos, pag, { salao });
