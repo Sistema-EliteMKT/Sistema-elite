@@ -143,7 +143,7 @@ function cardCupons(el) {
 }
 
 // Versão do agente de impressão que esta versão do sistema espera (agente-impressao/agente.js).
-const VERSAO_AGENTE = "2026.11.27-1";
+const VERSAO_AGENTE = "2026.11.27-2";
 
 // -------------------------------------------------------------- Freelancers
 export function abaEquipe(el, { usuario, admin }) {
@@ -639,6 +639,7 @@ export function abaAjustes(el, { usuario } = {}) {
     $("#fiscalForm", el).innerHTML = `
       <div class="sum"><div class="${falta.length ? "falta" : "troco"}"><span>${falta.length ? "Falta para emitir" : "Dados completos"}</span><span>${falta.length ? esc(falta.join(", ")) : "✓"}</span></div></div>
       <div class="opts dois"><div><label class="f" for="fAmb">Ambiente</label><select class="in" id="fAmb"><option value="homologacao" ${f.ambiente !== "producao" ? "selected" : ""}>Homologação (teste)</option><option value="producao" ${f.ambiente === "producao" ? "selected" : ""}>Produção (valendo)</option></select></div>
+        <div><label class="f" for="fAmbNfe">Ambiente da NF-e para empresa</label><select class="in" id="fAmbNfe"><option value="homologacao" ${f.nfeAmbiente !== "producao" ? "selected" : ""}>Homologação (teste)</option><option value="producao" ${f.nfeAmbiente === "producao" ? "selected" : ""}>Produção (valendo)</option></select></div>
         <div><label class="f" for="fCrt">Regime tributário</label><select class="in" id="fCrt">${REGIMES.map(([v, l]) => `<option value="${v}" ${(f.crt || "1") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
         ${campo("fCnpj", "CNPJ", f.cnpj, 'inputmode="numeric"')}${campo("fIe", "Inscrição estadual", f.ie)}
         ${campo("fRaz", "Razão social", f.razaoSocial)}${campo("fFan", "Nome fantasia", f.fantasia)}
@@ -674,7 +675,7 @@ export function abaAjustes(el, { usuario } = {}) {
       if (atual === undefined) return toast("Os dados fiscais ainda não carregaram. Aguarde e tente de novo.");
       const v = (id) => $("#" + id, el).value.trim(), dig = (id) => v(id).replace(/\D/g, "");
       store.salvar("config", "fiscal", {
-        ambiente: v("fAmb"), crt: v("fCrt"), cnpj: dig("fCnpj"), ie: v("fIe"), razaoSocial: v("fRaz"), fantasia: v("fFan"),
+        ambiente: v("fAmb"), nfeAmbiente: v("fAmbNfe"), crt: v("fCrt"), cnpj: dig("fCnpj"), ie: v("fIe"), razaoSocial: v("fRaz"), fantasia: v("fFan"),
         logradouro: v("fLog"), numero: v("fNum"), bairro: v("fBai"), cidade: v("fCid"), uf: v("fUf").toUpperCase(), cep: dig("fCep"), cMun: dig("fMun"),
         serie: Number(dig("fSer")) || 1, proximoNumero: Number(dig("fPro")) || 1, cscId: v("fCid2"), csc: v("fCsc"), certificadoOk: $("#fCert", el).checked,
         padrao: { ncm: dig("fNcm"), cfop: dig("fCfop"), csosn: v("fCso"), origem: v("fOri") },

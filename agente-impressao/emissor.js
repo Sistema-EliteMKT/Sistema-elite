@@ -129,6 +129,8 @@ export function iniciarEmissor({ db, cfg, log, aoLimpar }) {
 // O PDF (DANFE) fica no Focus: o sistema mostra o botão "Abrir PDF".
 export function iniciarEmissorNFe({ db, cfg, log }) {
   let fiscal = null;
+  // A NF-e tem o seu próprio ambiente (Ajustes > Nota fiscal). Sem escolha, é teste: nunca vale por engano.
+  const amb = () => (fiscal?.nfeAmbiente === "producao" ? "producao" : "homologacao");
   const ocupado = new Set();
   let ultimos = [];
 
@@ -160,7 +162,7 @@ export function iniciarEmissorNFe({ db, cfg, log }) {
         return true;
       });
       if (!pegou) return;
-      const fx = focus({ ambiente: fiscal.ambiente, focus: cfg.focus });
+      const fx = focus({ ambiente: amb(), focus: cfg.focus });
       if (!fx.temToken) throw new Error(`falta o token do Focus (${fx.ambiente}) no config.json`);
       let r = await fx.enviarNFe(id, montarNFe(nota, fiscal));
       for (let i = 0; i < 12 && (r.status === "processando_autorizacao" || (r.http === 201 && !r.status)); i++) { await espera(3000); r = await fx.consultarNFe(id); }
@@ -174,7 +176,7 @@ export function iniciarEmissorNFe({ db, cfg, log }) {
   async function consultar(id, nota) {
     if (ocupado.has(id)) return;
     ocupado.add(id);
-    try { const fx = focus({ ambiente: nota.ambiente || fiscal.ambiente, focus: cfg.focus }); await resultado(id, nota, await fx.consultarNFe(id), fx); }
+    try { const fx = focus({ ambiente: nota.ambiente || amb(), focus: cfg.focus }); await resultado(id, nota, await fx.consultarNFe(id), fx); }
     catch (e) { log("NF-e consulta:", e.message); }
     finally { ocupado.delete(id); }
   }
@@ -183,7 +185,7 @@ export function iniciarEmissorNFe({ db, cfg, log }) {
     if (ocupado.has(id)) return;
     ocupado.add(id);
     try {
-      const fx = focus({ ambiente: nota.ambiente || fiscal.ambiente, focus: cfg.focus });
+      const fx = focus({ ambiente: nota.ambiente || amb(), focus: cfg.focus });
       const motivo = String(nota.cancelarMotivo || "").trim();
       if (motivo.length < 15) throw new Error("o motivo do cancelamento precisa ter pelo menos 15 letras");
       const r = await fx.cancelarNFe(id, motivo);
