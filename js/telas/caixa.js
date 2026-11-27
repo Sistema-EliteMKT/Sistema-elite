@@ -31,7 +31,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   let primeira = true;
   const admin = usuario.papel === "admin";
   const mbEscolhido = {}; // motoboy escolhido no cartão, antes de despachar
-  let buscaPed = "", buscaMesa = "";
+  let buscaPed = "", buscaMesa = "", filtroTipo = "todos"; // "todos" | "entrega" | "retirada"
   const sem = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   // Casa o que foi digitado com nome, telefone, número do pedido/comanda, mesa, endereço ou atendente.
   const casaPedido = (p, q) => {
@@ -139,13 +139,21 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
   };
 
   function abaPedidos(el) {
-    const ps = D.abertos.filter((p) => p.tipo !== "mesa");
+    const ps = D.abertos.filter((p) => p.tipo !== "mesa" && (filtroTipo === "todos" || p.tipo === filtroTipo));
     const por = (sts) => ps.filter((p) => sts.includes(p.status)).sort((a, b) => a.criadoEm - b.criadoEm);
-    const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
+    const feitos = D.doDia.filter((p) => p.tipo !== "mesa" && !p.aberto && (filtroTipo === "todos" || p.tipo === filtroTipo)).sort((a, b) => (b.concluidoEm || b.fechadoEm || 0) - (a.concluidoEm || a.fechadoEm || 0)).slice(0, 15);
     const col = (titulo, lista, vazio) => `<section class="coluna"><h3>${titulo}<span>${lista.length}</span></h3>${lista.length ? lista.map(cartao).join("") : `<p class="muted pq">${vazio}</p>`}</section>`;
     const q = sem(buscaPed.trim());
-    const achados = q ? D.doDia.filter((p) => !["cancelado", "cancelada"].includes(p.status) && casaPedido(p, q)).sort((a, b) => b.criadoEm - a.criadoEm) : [];
+    const achados = q ? D.doDia.filter((p) => !["cancelado", "cancelada"].includes(p.status) && (filtroTipo === "todos" || p.tipo === filtroTipo) && casaPedido(p, q)).sort((a, b) => b.criadoEm - a.criadoEm) : [];
+    const filtroLabel = filtroTipo === "entrega" ? "Delivery" : filtroTipo === "retirada" ? "Retirada" : "Todos";
+    const botoesFiltro = `<div class="filtros-tipo" style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+      <button class="btn ${filtroTipo === "todos" ? "pri" : "ghost"} sm" data-filtro="todos">Todos</button>
+      <button class="btn ${filtroTipo === "entrega" ? "pri" : "ghost"} sm" data-filtro="entrega">🛵 Delivery</button>
+      <button class="btn ${filtroTipo === "retirada" ? "pri" : "ghost"} sm" data-filtro="retirada">🥡 Retirada</button>
+    </div>`;
+
     const resultado = q ? `<div class="card"><div class="card-h"><b>${achados.length} ${achados.length === 1 ? "resultado" : "resultados"} para “${esc(buscaPed.trim())}”</b><button class="btn ghost sm" id="limparBusca">Limpar busca</button></div>
+      ${botoesFiltro}
       ${achados.map((p) => p.tipo === "mesa"
         ? `<div class="cl"><div class="n"><b>Mesa ${p.mesa} · ${esc(rotuloComanda(p))}${p.nome ? " · " + esc(p.nome) : ""}</b><small>${hora(p.criadoEm)} · ${esc(p.garcom || "")} · ${p.aberto ? (p.status === "conta" ? "pediu a conta" : "aberta") : "fechada"}</small></div><div class="v">${brl(subtotal(p))}${p.aberto ? `<button class="btn ghost sm" data-abrirmesa="${p.mesa}">Abrir mesa</button>` : ""}</div></div>`
         : cartao(p)).join("") || `<p class="vazio">Nada encontrado hoje.</p>`}</div>` : "";
@@ -154,7 +162,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       ${resultado}
       <div id="barraOnline"></div>
       <div class="novos-ped"><button class="btn pri grande" data-novo="entrega">🛵 Novo pedido · Delivery</button><button class="btn sec grande" data-novo="retirada">🥡 Novo pedido · Retirada</button><button class="btn ghost grande" data-novo="balcao">🧾 Balcão</button></div>
-      ${q ? "" : `<div class="colunas">
+      ${q ? "" : `${botoesFiltro}<div class="colunas">
       ${col("Novos", por(["novo"]), "Nenhum.")}
       ${col("Em preparo", por(["preparo"]), "Nenhum.")}
       ${col("Pronto / na rua", por(["pronto", "saiu"]), "Nenhum.")}
@@ -162,6 +170,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     barraOnline($("#barraOnline", el));
     $("#buscaPed", el).oninput = (e) => { buscaPed = e.target.value; abaPedidos(el); refocar(el, "#buscaPed"); };
     $("#limparBusca", el) && ($("#limparBusca", el).onclick = () => { buscaPed = ""; abaPedidos(el); });
+    $$("[data-filtro]", el).forEach((b) => (b.onclick = () => { filtroTipo = b.dataset.filtro; abaPedidos(el); }));
     $$("[data-abrirmesa]", el).forEach((b) => (b.onclick = () => detalheMesa(+b.dataset.abrirmesa)));
     $$("[data-novo]", el).forEach((b) => (b.onclick = () => novoPedido(b.dataset.novo)));
     $$("[data-acao]", el).forEach((b) => (b.onclick = () => acaoPedido(b.dataset.acao, D.pedidos.find((p) => p.id === b.dataset.id))));
