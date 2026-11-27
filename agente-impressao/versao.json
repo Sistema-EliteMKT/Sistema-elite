@@ -1,0 +1,54 @@
+{
+  "versao": "2026.11.27-2",
+  "criadoEm": "2026-11-27T23:26:53.783Z",
+  "arquivos": [
+    {
+      "caminho": "agente.js",
+      "sha256": "0535c6f0b99a67a30dfd25b05599536d13cc227eb0a8de6daf069f0e2603311d"
+    },
+    {
+      "caminho": "atualizador.js",
+      "sha256": "3bdb5c7fea0013511a024fd93a9f690ff08e5eb0492e2f309560270be3c755bf"
+    },
+    {
+      "caminho": "config.exemplo.json",
+      "sha256": "7381fb12fac14bc223ccdc6799432c8da2162b6f520b886e32f78913ec276cd9"
+    },
+    {
+      "caminho": "emissor.js",
+      "sha256": "c43542f55aff9ac56e4c0702447edc4454a078d0c3c3f95b87cfb94f994c0752"
+    },
+    {
+      "caminho": "fontes/LICENCA-LiberationSans.txt",
+      "sha256": "78539c2d952b50d85720e212d2e7c1aea052fbb586241530e1e8811cbf1c3afd"
+    },
+    {
+      "caminho": "fontes/LiberationSans-Bold.ttf",
+      "sha256": "3973aa5054fb467dd5627245d3dc82e37bf16fe075756156a570455871351582"
+    },
+    {
+      "caminho": "fontes/LiberationSans-Regular.ttf",
+      "sha256": "4659bc0c58c5028dd488ec928d41d9265db43d9b669fc14ca8b0832daca7b144"
+    },
+    {
+      "caminho": "imagem.js",
+      "sha256": "1a72c5ecd21a919e28cff04e9c4ff3409f2d62de374693bcdc896448ff352d1a"
+    },
+    {
+      "caminho": "impressora.js",
+      "sha256": "4b8c75721a8846a9d450a387e994c3519a918c6ca9845ad42ac5a883cb3ffb40"
+    },
+    {
+      "caminho": "nfce.js",
+      "sha256": "bef3641283d961a142a1652189186e51eda1af37776bc15ca25ded317f15d43e"
+    },
+    {
+      "caminho": "package-lock.json",
+      "sha256": "25e2a95104901dbca800821248cfff37b4b237a285af58bed63243f7bcdd3c46"
+    },
+    {
+      "caminho": "package.json",
+      "sha256": "1841bd6ff9e48b5564151f7b9c9feecf7178e5cb18afd3814c43d5e1bffd09a5"
+    }
+  ]
+}
