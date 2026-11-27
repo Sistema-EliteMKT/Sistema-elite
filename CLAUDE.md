@@ -21,3 +21,11 @@ Sistema da Pizzaria Amarílis (F.R.A COMERCIAL LTDA), feito pela Elite MKT. Est�
 - Mudanças pequenas, uma por vez. Explique o que mudou em linguagem simples.
 - Depois de mudar `js/` ou `css/`, para o aparelho pegar a versão nova: Ctrl + Shift + R.
 - Pizzaria e Restobar são sistemas separados (o Restobar tem repositório próprio). Mudança pedida só para a pizzaria não vale para o Restobar.
+
+## Atualização automática ASSINADA do agente (caixa)
+- O agente do caixa se atualiza sozinho pelo GitHub, mas **só aceita versão assinada** com a chave secreta do Thiago (que fica só no computador dele, em `C:\Users\<ele>\.elite-chave\privada.pem`, **nunca** no repositório). A chave pública é `agente-impressao/chave-publica.pem`.
+- **Nunca** crie, mude ou apague `chave-publica.pem`, `versao.json` ou `versao.json.sig` à mão. Quem gera os dois últimos é o Thiago, com `node assinatura/liberar.js`.
+- Para **liberar** uma versão nova do agente para o caixa (só o Thiago): `git pull`, depois `node assinatura/liberar.js`, depois `git add agente-impressao/versao.json agente-impressao/versao.json.sig`, `git commit` e `git push`. O caixa pega em até 30 minutos.
+- Antes de liberar: troque a `VERSAO` em `agente-impressao/agente.js` e em `js/telas/gestao.js` (juntas), faça commit e push das mudanças, e só então assine. `liberar.js` recusa se houver mudança do agente sem commit.
+- O agente nunca atualiza `config.json`, `iniciar.bat` nem a chave pública. Mudou o `iniciar.bat`? É instalação manual no caixa.
+

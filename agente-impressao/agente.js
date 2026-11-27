@@ -9,12 +9,15 @@ import { getAuth, signInWithEmailAndPassword, connectAuthEmulator } from "fireba
 import { getFirestore, collection, query, where, onSnapshot, doc, runTransaction, updateDoc, connectFirestoreEmulator } from "firebase/firestore";
 import { imprimir } from "./impressora.js";
 import { iniciarEmissor, iniciarEmissorNFe } from "./emissor.js";
+import { iniciarAtualizador, conferirInicio } from "./atualizador.js";
 
 const pasta = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(pasta, "config.json"), "utf8"));
 const log = (...a) => console.log(new Date().toLocaleTimeString("pt-BR"), ...a);
 // Versão do agente: vai gravada em cada cupom impresso, para o sistema avisar se estiver desatualizado.
 export const VERSAO = "2026.11.27-2";
+// Se a versão recém-atualizada não consegue iniciar 3 vezes, volta sozinha para a anterior.
+if (conferirInicio({ pasta, log }) === "voltou") process.exit(0);
 
 // ------------------------------------------------------------------ fila
 const app = initializeApp(cfg.firebase);
@@ -25,6 +28,9 @@ if (cfg.emulador) { // só para testes do desenvolvedor
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
 }
 await signInWithEmailAndPassword(auth, cfg.email, cfg.senha);
+// Atualização automática ASSINADA (só aceita versão carimbada pelo dono; veja atualizador.js).
+const atualizador = iniciarAtualizador({ pasta, versaoAtual: VERSAO, log, cfg });
+atualizador.confirmar();
 log(`Agente ${VERSAO} · conectado como`, cfg.email, "· impressoras:", Object.keys(cfg.impressoras).join(", "));
 
 const minhas = Object.keys(cfg.impressoras);

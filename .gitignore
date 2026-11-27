@@ -1,3 +1,7 @@
 node_modules/
 agente-impressao/config.json
 .firebase/
+
+# Chaves: a pública do agente vai para o GitHub; qualquer outra chave nunca
+*.pem
+!agente-impressao/chave-publica.pem
