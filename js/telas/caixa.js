@@ -245,7 +245,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const s = abrirSheet(`${cabecalhoSheet(`Pedido #${p.numero || ""}`, p.cliente?.nome || "")}<div class="sh-b">
       ${(p.itens || []).map((i) => linhaItem(i, { acoes: i.cancelado || p.pago ? "" : `<button class="btn ghost sm" data-edl="${i.key}">Editar</button>${p.status !== "novo" ? `<button class="mini-x" data-ci="${i.key}" title="Cancelar item">×</button>` : ""}` })).join("")}
       <div class="linha-btn wrap"><button class="btn sec" id="copiarPed">📋 Copiar pedido</button>
-        ${p.cliente?.telefone ? `<a class="btn ok" id="zapPed" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}?text=${encodeURIComponent(textoPedido(p))}">💬 Enviar para o cliente no WhatsApp</a>` : ""}</div>
+        ${p.cliente?.telefone ? `<a class="btn ok" id="zapPed" target="_blank" rel="noopener" href="https://wa.me/55${esc(p.cliente.telefone.replace(/\D/g, "").replace(/^55/, ""))}">💬 WhatsApp do cliente</a>` : ""}</div>
       <div class="linha-btn wrap">
         ${!p.pago && p.status !== "novo" ? `<button class="btn pri" id="addItens">+ Adicionar itens ao pedido</button>` : ""}
         ${p.tipo !== "mesa" ? `<button class="btn sec" id="edCli">Editar dados do cliente</button>` : ""}
@@ -374,8 +374,10 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
       <div class="np-sel" id="sel"></div>
       <div class="np-form">
         <div class="seg" id="tipo"><button data-t="entrega">Delivery</button><button data-t="retirada">Retirada</button><button data-t="balcao">Balcão</button></div>
-        <label class="f" for="tel">Telefone <b class="obrig">*</b></label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Digite e o cliente aparece">
-        <label class="f" for="nom">Nome <b class="obrig">*</b></label><input class="in" id="nom">
+        <div id="cliBox">
+          <label class="f" for="tel">Telefone <b class="obrig">*</b></label><input class="in" id="tel" type="tel" inputmode="tel" placeholder="Digite e o cliente aparece">
+          <label class="f" for="nom">Nome <b class="obrig">*</b></label><input class="in" id="nom">
+        </div>
         <div id="endBox"><label class="f" for="end">Endereço</label><input class="in" id="end">
           <label class="f" for="bai">Bairro / taxa</label><select class="in" id="bai">${(lj.taxasEntrega || []).map((t) => `<option value="${esc(t.nome)}">${esc(t.nome)} · ${brl(t.taxa)}</option>`).join("")}<option value="">Outra taxa…</option></select>
           <input class="in" id="taxaLivre" inputmode="decimal" placeholder="Taxa de entrega (R$)" hidden>
@@ -396,6 +398,7 @@ export function telaCaixa(raiz, usuario, { sair, modoGarcom }) {
     const atualizar = () => {
       $$("[data-t]", s).forEach((b) => b.setAttribute("aria-pressed", b.dataset.t === tipo));
       $("#endBox", s).hidden = tipo !== "entrega";
+      $("#cliBox", s).hidden = tipo === "balcao";
       $("#taxaLivre", s).hidden = $("#bai", s).value !== "";
       $("#troco", s).hidden = $("#pg", s).value !== "Dinheiro";
       $("#itens", s).innerHTML = itens.map((i, k) => linhaItem(i, { acoes: `<button class="btn ghost sm" data-ed="${k}">Editar</button><button class="mini-x" data-rm="${k}" aria-label="Tirar">×</button>` })).join("") || `<p class="vazio">Escolha os produtos ao lado.</p>`;
